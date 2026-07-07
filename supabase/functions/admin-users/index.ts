@@ -38,6 +38,14 @@ const BURG_JOBS_SERVICE_ROLE_KEY = Deno.env.get('BURG_JOBS_SERVICE_ROLE_KEY')
 const DEFAULT_FTE_HOURS = 40
 const DEFAULT_SENIORITY_LEVELS = ['medior']
 
+function getBurgJobsAdmin() {
+  if (!BURG_JOBS_URL || !BURG_JOBS_SERVICE_ROLE_KEY) {
+    console.warn('[admin-users] BURG_JOBS_URL/BURG_JOBS_SERVICE_ROLE_KEY ontbreken, employees-rij niet gewijzigd.')
+    return null
+  }
+  return createClient(BURG_JOBS_URL, BURG_JOBS_SERVICE_ROLE_KEY)
+}
+
 /**
  * Zet best-effort (nooit blokkerend voor account-aanmaak) een rij in de
  * burg-jobs `employees`-tabel, zodat een nieuw v2-account meteen meedoet in
@@ -46,12 +54,9 @@ const DEFAULT_SENIORITY_LEVELS = ['medior']
  * (upsert met ignoreDuplicates) wordt overgeslagen i.p.v. overschreven.
  */
 async function addBurgJobsEmployee(email, naam) {
-  if (!BURG_JOBS_URL || !BURG_JOBS_SERVICE_ROLE_KEY) {
-    console.warn('[admin-users] BURG_JOBS_URL/BURG_JOBS_SERVICE_ROLE_KEY ontbreken, employees-rij niet aangemaakt.')
-    return
-  }
+  const burgJobsAdmin = getBurgJobsAdmin()
+  if (!burgJobsAdmin) return
 
-  const burgJobsAdmin = createClient(BURG_JOBS_URL, BURG_JOBS_SERVICE_ROLE_KEY)
   const name = naam || email.split('@')[0]
 
   const { error } = await burgJobsAdmin
@@ -63,6 +68,24 @@ async function addBurgJobsEmployee(email, naam) {
 
   if (error) {
     console.warn('[admin-users] employees-rij aanmaken mislukt:', error.message)
+  }
+}
+
+/**
+ * Tegenhanger van addBurgJobsEmployee: verwijdert best-effort de employees-
+ * rij bij permanente account-verwijdering, zodat de aanwezigheidskaart in
+ * Mijn Omgeving in sync blijft met de actieve gebruikers in het Adminpaneel.
+ * Alleen aangeroepen bij "delete" (permanent), niet bij het (de)activeren
+ * van een account — een gedeactiveerd account blijft gewoon een medewerker.
+ */
+async function removeBurgJobsEmployee(email) {
+  const burgJobsAdmin = getBurgJobsAdmin()
+  if (!burgJobsAdmin) return
+
+  const { error } = await burgJobsAdmin.from('employees').delete().eq('email', email)
+
+  if (error) {
+    console.warn('[admin-users] employees-rij verwijderen mislukt:', error.message)
   }
 }
 
@@ -167,7 +190,7 @@ Deno.serve(async (req) => {
 
       const { data: targetProfile } = await adminClient
         .from('profiles')
-        .select('role')
+        .select('role, email')
         .eq('id', targetId)
         .single()
 
@@ -181,6 +204,10 @@ Deno.serve(async (req) => {
       const { error: deleteError } = await adminClient.auth.admin.deleteUser(targetId)
       if (deleteError) {
         return jsonResponse({ error: deleteError.message }, 400)
+      }
+
+      if (targetProfile?.email) {
+        await removeBurgJobsEmployee(targetProfile.email)
       }
 
       return jsonResponse({ success: true })
