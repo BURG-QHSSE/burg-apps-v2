@@ -51,3 +51,46 @@ export async function fetchToolUsageCounts() {
 
   return Array.from(perTool.values()).sort((a, b) => b.count - a.count)
 }
+
+/**
+ * Haalt het eigen tool-gebruik van de ingelogde gebruiker op (RLS-policy
+ * "gebruiker leest eigen tool-gebruik"), gegroepeerd per tool_id, gesorteerd
+ * op totaal-aantal — gebruikt voor de "Voor jou · meest gebruikt"-sectie op
+ * het dashboard.
+ *
+ * @param {string} userId
+ * @returns {Promise<Array<{ toolId: string, count: number, vandaagCount: number, laatstGebruikt: string }>>}
+ */
+export async function fetchMyToolUsageSummary(userId) {
+  if (!userId) return []
+
+  const { data, error } = await supabase.from('tool_usage').select('tool_id, used_at').eq('user_id', userId)
+
+  if (error) {
+    console.error('[toolUsage] Kon eigen gebruik niet ophalen:', error.message)
+    return []
+  }
+
+  const vandaag = new Date().toDateString()
+  const perTool = new Map()
+
+  for (const row of data) {
+    const isVandaag = new Date(row.used_at).toDateString() === vandaag
+    const bestaand = perTool.get(row.tool_id)
+
+    if (!bestaand) {
+      perTool.set(row.tool_id, {
+        toolId: row.tool_id,
+        count: 1,
+        vandaagCount: isVandaag ? 1 : 0,
+        laatstGebruikt: row.used_at,
+      })
+    } else {
+      bestaand.count += 1
+      if (isVandaag) bestaand.vandaagCount += 1
+      if (row.used_at > bestaand.laatstGebruikt) bestaand.laatstGebruikt = row.used_at
+    }
+  }
+
+  return Array.from(perTool.values()).sort((a, b) => b.count - a.count)
+}

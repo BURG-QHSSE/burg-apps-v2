@@ -286,6 +286,69 @@
   margin: 0;
 }
 
+/* ---------- Dashboard: welkomstbericht + uitgelichte tools ---------- */
+
+.dashboard-greeting {
+  margin: 0 0 var(--space-8);
+}
+
+.dashboard-greeting h2 {
+  font-size: 26px;
+  margin: 0;
+}
+
+.dashboard-greeting p {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  color: var(--inkt-60);
+}
+
+.featured-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.featured-tool-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--inkt);
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+
+a.featured-tool-card:hover {
+  border-color: var(--blauwgrijs);
+}
+
+a.featured-tool-card:focus-visible {
+  outline: 2px solid var(--blauwgrijs);
+  outline-offset: 2px;
+}
+
+.featured-tool-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  background: var(--inkt);
+  color: var(--steen);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.featured-tool-name {
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+}
+
 /* ---------- Dashboard: secties + tool grid ---------- */
 
 .tool-section {
@@ -336,6 +399,18 @@ a.tool-card:focus-visible {
 .tool-card-locked {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.tool-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--steen);
+  color: var(--inkt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
 }
 
 .tool-card-name {

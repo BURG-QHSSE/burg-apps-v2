@@ -157,7 +157,8 @@ create policy "admin schrijft audit log"
   with check (my_role() = 'admin');
 
 -- ============================================
--- TOOL USAGE: iedereen logt eigen gebruik, alleen admin leest
+-- TOOL USAGE: iedereen logt eigen gebruik, admin leest alles, gebruiker
+-- leest zijn eigen rijen (nodig voor "meest gebruikt" op het dashboard)
 -- ============================================
 create policy "gebruiker logt eigen tool-gebruik"
   on tool_usage for insert
@@ -166,6 +167,10 @@ create policy "gebruiker logt eigen tool-gebruik"
 create policy "admin leest tool-gebruik"
   on tool_usage for select
   using (my_role() = 'admin');
+
+create policy "gebruiker leest eigen tool-gebruik"
+  on tool_usage for select
+  using (auth.uid() = user_id);
 
 -- ============================================
 -- "Laatste admin"-bescherming
