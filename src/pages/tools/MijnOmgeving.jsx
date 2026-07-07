@@ -119,6 +119,24 @@ export default function MijnOmgeving() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserEmail])
 
+  // Live presence-sync: als een collega elders zijn aanwezigheid wijzigt,
+  // updatet dit scherm zonder herladen — poort van het 'employees-presence-
+  // watch' channel uit de bron (regel 606-613).
+  useEffect(() => {
+    const channel = burgJobsSupabase
+      .channel('employees-presence-watch')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'employees' }, (payload) => {
+        setEmployees((prev) =>
+          prev.map((emp) => (emp.id === payload.new.id ? { ...emp, is_present: payload.new.is_present } : emp)),
+        )
+      })
+      .subscribe()
+
+    return () => {
+      burgJobsSupabase.removeChannel(channel)
+    }
+  }, [])
+
   // "Bevestig aanwezigheid": schrijft is_present per medewerker, herverdeelt
   // ALLE pending vacatures over de nu-aanwezige medewerkers, en herlaadt de
   // swipe-wachtrij — exact `confirmPresence()` in de bron (regel 680-700).
