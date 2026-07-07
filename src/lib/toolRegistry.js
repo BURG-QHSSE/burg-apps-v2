@@ -4,11 +4,12 @@
  * routing) leest deze lijst uit i.p.v. rollen hardcoded te verspreiden.
  */
 export const TOOLS = [
-  { id: 'app-counter', naam: 'App Counter', minimumRole: 'admin', path: '/tools/app-counter', category: 'daily' },
-  { id: 'promotie-tracker', naam: 'Promotie Tracker', minimumRole: 'manager', path: '/tools/promotie-tracker', category: 'groei' },
+  { id: 'sales-overdracht', naam: 'Sales Overdracht', minimumRole: 'user', path: '/tools/sales-overdracht', category: 'daily' },
   { id: 'fee-checker', naam: 'Fee Checker', minimumRole: 'user', path: '/tools/fee-checker', category: 'daily' },
+  { id: 'definitief-honorarium', naam: 'Definitief Honorarium', minimumRole: 'user', path: '/tools/definitief-honorarium', category: 'daily' },
   { id: 'verdeling-plaatsing', naam: 'Verdeling Plaatsing', minimumRole: 'user', path: '/tools/verdeling-plaatsing', category: 'daily' },
-  { id: 'jobpull-overdracht', naam: 'Jobpull Overdracht', minimumRole: 'user', path: '/tools/jobpull-overdracht', category: 'daily' },
+  { id: 'mijn-omgeving', naam: 'Mijn Omgeving', minimumRole: 'user', path: '/tools/mijn-omgeving', category: 'daily' },
+  { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
 ]
 
 /**
@@ -16,7 +17,7 @@ export const TOOLS = [
  * de weergavevolgorde van de secties.
  */
 export const TOOL_CATEGORIES = [
-  { id: 'daily', label: 'Daily Tools' },
+  { id: 'daily', label: 'Tools' },
   { id: 'groei', label: 'Persoonlijke groei' },
 ]
 

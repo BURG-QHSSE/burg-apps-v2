@@ -76,8 +76,8 @@ body {
 }
 
 h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-body);
+  font-weight: 700;
   color: var(--inkt);
   margin: 0 0 var(--space-2);
 }

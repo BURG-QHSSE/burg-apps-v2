@@ -20,20 +20,42 @@ create table profiles (
   naam text,
   role user_role not null default 'user',
   actief boolean not null default true,
+  -- Toegangsvlag los van de rol-hiërarchie: geeft binnen "Mijn Omgeving"
+  -- extra tabbladen (Second Check / Analytics / Monitoring), ongeacht of
+  -- iemand admin/manager/user is. Vervangt de hardgecodeerde e-mailcheck
+  -- uit het originele mijn-omgeving.html.
+  mijn_omgeving_uitgebreid boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 -- ============================================
 -- AUDIT LOG voor rolwijzigingen
+-- target_user_id/changed_by zijn NULLABLE met "on delete set null": een
+-- profiel mag permanent verwijderd worden (zie admin-delete-user Edge
+-- Function) zonder dat de audit-geschiedenis daardoor geblokkeerd wordt
+-- door een foreign-key-violation. De log-regel blijft bestaan, alleen de
+-- verwijzing naar de verwijderde gebruiker wordt leeg.
 -- ============================================
 create table role_audit_log (
   id uuid default gen_random_uuid() primary key,
-  target_user_id uuid references profiles(id) not null,
-  changed_by uuid references profiles(id) not null,
+  target_user_id uuid references profiles(id) on delete set null,
+  changed_by uuid references profiles(id) on delete set null,
   old_role user_role,
   new_role user_role,
   changed_at timestamptz not null default now()
+);
+
+-- ============================================
+-- TOOL USAGE — App Counter (admin-only gebruiksteller per tool)
+-- Eén rij per keer dat een gebruiker een tool opent. user_id is om
+-- dezelfde reden als hierboven nullable met "on delete set null".
+-- ============================================
+create table tool_usage (
+  id uuid default gen_random_uuid() primary key,
+  tool_id text not null,
+  user_id uuid references profiles(id) on delete set null,
+  used_at timestamptz not null default now()
 );
 
 -- ============================================
@@ -72,6 +94,7 @@ create trigger on_profile_updated
 -- ============================================
 alter table profiles enable row level security;
 alter table role_audit_log enable row level security;
+alter table tool_usage enable row level security;
 
 -- ============================================
 -- Helper: eigen rol ophalen zonder RLS-recursie
@@ -134,6 +157,17 @@ create policy "admin schrijft audit log"
   with check (my_role() = 'admin');
 
 -- ============================================
+-- TOOL USAGE: iedereen logt eigen gebruik, alleen admin leest
+-- ============================================
+create policy "gebruiker logt eigen tool-gebruik"
+  on tool_usage for insert
+  with check (auth.uid() = user_id);
+
+create policy "admin leest tool-gebruik"
+  on tool_usage for select
+  using (my_role() = 'admin');
+
+-- ============================================
 -- "Laatste admin"-bescherming
 -- RLS alleen voorkomt zelf-degradatie, maar niet dat de laatste admin
 -- door een andere admin wordt gedegradeerd. Daarom loopt elke rolwijziging
@@ -181,5 +215,81 @@ begin
 
   insert into role_audit_log (target_user_id, changed_by, old_role, new_role)
   values (target_id, auth.uid(), old_role_value, new_role_value);
+end;
+$$ language plpgsql security definer;
+
+-- ============================================
+-- Gebruiker (de)activeren — zachte verwijdering
+-- Zelfde beschermingspatroon als change_user_role(): alleen admin, geen
+-- zelf-deactivatie, geen deactivatie van de laatste actieve admin, met
+-- row-locking tegen dezelfde race condition.
+-- ============================================
+create or replace function set_user_actief(
+  target_id uuid,
+  new_actief boolean
+)
+returns void as $$
+declare
+  actieve_admin_count int;
+  target_role user_role;
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen gebruikers (de)activeren';
+  end if;
+
+  if auth.uid() = target_id and new_actief = false then
+    raise exception 'Een admin mag zichzelf niet deactiveren';
+  end if;
+
+  select role into target_role from profiles where id = target_id;
+
+  if target_role = 'admin' and new_actief = false then
+    perform 1 from profiles where role = 'admin' and actief = true for update;
+    select count(*) into actieve_admin_count from profiles where role = 'admin' and actief = true;
+    if actieve_admin_count <= 1 then
+      raise exception 'Kan de laatste actieve admin niet deactiveren';
+    end if;
+  end if;
+
+  update profiles set actief = new_actief where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- ============================================
+-- Gebruiker hernoemen — alleen admin
+-- Nodig o.a. voor Doorgroei Tracker: de naam moet exact overeenkomen met
+-- de naam-schrijfwijze in de bron-Sheet om de rol-gebaseerde filtering
+-- (user ziet alleen eigen rijen) te laten werken.
+-- ============================================
+create or replace function set_user_naam(
+  target_id uuid,
+  new_naam text
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen namen wijzigen';
+  end if;
+
+  update profiles set naam = new_naam where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- ============================================
+-- Mijn Omgeving: uitgebreide toegang (de)activeren — alleen admin
+-- Los van de rol-hiërarchie: bepaalt of iemand binnen Mijn Omgeving de
+-- extra tabbladen (Second Check/Analytics/Monitoring) te zien krijgt.
+-- ============================================
+create or replace function set_mijn_omgeving_uitgebreid(
+  target_id uuid,
+  new_waarde boolean
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen deze toegang wijzigen';
+  end if;
+
+  update profiles set mijn_omgeving_uitgebreid = new_waarde where id = target_id;
 end;
 $$ language plpgsql security definer;

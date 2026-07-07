@@ -27,3 +27,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*
+
+# Supabase CLI lokale cache (project-link state, versie-info)
+supabase/.temp

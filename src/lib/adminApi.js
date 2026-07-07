@@ -46,3 +46,114 @@ export async function changeUserRole(targetId, newRole) {
     throw new Error(error.message)
   }
 }
+
+/**
+ * (De)activeert een gebruiker — de "zachte verwijdering". Gaat via de
+ * `set_user_actief` Postgres-functie (security definer), met dezelfde
+ * bescherming als changeUserRole: alleen admin, geen zelf-deactivatie,
+ * geen deactivatie van de laatste actieve admin.
+ *
+ * @param {string} targetId
+ * @param {boolean} actief
+ * @throws {Error} met de Postgres-foutmelding
+ */
+export async function setUserActief(targetId, actief) {
+  const { error } = await supabase.rpc('set_user_actief', {
+    target_id: targetId,
+    new_actief: actief,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/**
+ * Wijzigt het `naam`-veld van een profiel. Gaat via de `set_user_naam`
+ * Postgres-functie (security definer, admin-only) — er is bewust geen
+ * directe `.update()` op `profiles` toegevoegd, om consistent te blijven
+ * met het "geen client-UPDATE-policy op profiles"-principe.
+ *
+ * @param {string} targetId
+ * @param {string} naam
+ * @throws {Error} met de Postgres-foutmelding
+ */
+export async function setUserNaam(targetId, naam) {
+  const { error } = await supabase.rpc('set_user_naam', {
+    target_id: targetId,
+    new_naam: naam,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/**
+ * Zet de "Mijn Omgeving uitgebreid"-vlag — los van de rol-hiërarchie,
+ * bepaalt of iemand binnen Mijn Omgeving de extra tabbladen (Second
+ * Check/Analytics/Monitoring) te zien krijgt. Gaat via de
+ * `set_mijn_omgeving_uitgebreid` Postgres-functie (security definer,
+ * admin-only).
+ *
+ * @param {string} targetId
+ * @param {boolean} uitgebreid
+ * @throws {Error} met de Postgres-foutmelding
+ */
+export async function setMijnOmgevingUitgebreid(targetId, uitgebreid) {
+  const { error } = await supabase.rpc('set_mijn_omgeving_uitgebreid', {
+    target_id: targetId,
+    new_waarde: uitgebreid,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/**
+ * Maakt een nieuw account aan (met wachtwoord) via de `admin-users` Edge
+ * Function. Dit kan niet met de anon-key alleen — het vereist de
+ * service_role-sleutel, die uitsluitend server-side (in de Edge Function)
+ * leeft, nooit in de browser.
+ *
+ * @param {{ email: string, password: string, naam?: string, role?: 'admin'|'manager'|'user' }} input
+ * @returns {Promise<string>} het nieuwe user-id
+ * @throws {Error}
+ */
+export async function createUser({ email, password, naam, role }) {
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'create', email, password, naam, role },
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  if (data?.error) {
+    throw new Error(data.error)
+  }
+
+  return data.userId
+}
+
+/**
+ * Verwijdert een account PERMANENT (via de admin-API in de Edge Function).
+ * Dit is onomkeerbaar — role_audit_log/tool_usage-regels van deze
+ * gebruiker blijven bestaan maar verliezen de verwijzing (on delete set
+ * null in het schema). Voor een omkeerbaar alternatief: setUserActief().
+ *
+ * @param {string} targetId
+ * @throws {Error}
+ */
+export async function deleteUserPermanently(targetId) {
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'delete', targetId },
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+  if (data?.error) {
+    throw new Error(data.error)
+  }
+}
