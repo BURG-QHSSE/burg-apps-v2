@@ -59,8 +59,8 @@ export default function Account() {
       </header>
 
       <main className="page-content">
-        <form className="auth-card account-card" onSubmit={handleSubmit}>
-          <p className="auth-subtitle">Wachtwoord wijzigen</p>
+        <form className="section-card account-card" onSubmit={handleSubmit}>
+          <h2>Wachtwoord wijzigen</h2>
 
           <label className="field">
             <span>Nieuw wachtwoord</span>

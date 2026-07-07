@@ -276,7 +276,14 @@
 }
 
 .account-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   max-width: 360px;
+}
+
+.account-card h2 {
+  margin: 0;
 }
 
 /* ---------- Dashboard: secties + tool grid ---------- */
