@@ -28,12 +28,21 @@ const SWIPE_COLUMNS =
  * burg-jobs-project (`burgJobsSupabase`, zie src/lib/burgJobsClient.js). Er
  * is bewust geen tweede login-sessie op dat project — matching gebeurt puur
  * op e-mailadres (`profile.email` tegen `employees.email` / `jobs.assigned_to`).
+ *
+ * Swipen + de aanwezigheidswidget zijn exclusief voor gebruikers met
+ * `profile.mijn_omgeving_uitgebreid` — alleen zij bepalen welke consultants
+ * aanwezig zijn en swipen vacatures goed/afgekeurd. "Mijn Vacatures" blijft
+ * voor iedereen zichtbaar: dat toont alleen je eigen al-toegewezen
+ * vacatures, los van wie er mag swipen/verdelen.
  */
 export default function MijnOmgeving() {
   const { profile } = useAuth()
   const currentUserEmail = profile?.email ?? null
+  const isUitgebreid = profile?.mijn_omgeving_uitgebreid ?? false
 
   const [activeTab, setActiveTab] = useState('swipen')
+  const swipenVisible = isUitgebreid && activeTab === 'swipen'
+  const vacaturesVisible = !isUitgebreid || activeTab === 'vacatures'
 
   const [employees, setEmployees] = useState([])
   const [employeesLoading, setEmployeesLoading] = useState(true)
@@ -101,13 +110,17 @@ export default function MijnOmgeving() {
 
   // Init: medewerkers laden -> onbezette pending vacatures verdelen -> swipe-
   // wachtrij laden. Exact de volgorde van `init()` in de bron (regel 622-632).
+  // De verdeel-/swipe-stappen slaan we over voor niet-uitgebreide gebruikers:
+  // zij zien de Swipen-tab toch niet, en mogen ook niet degene zijn die de
+  // job-verdeling triggert. `loadEmployees()` blijft wel altijd draaien —
+  // Mijn Vacatures (Doorsturen) heeft de medewerkerslijst ook nodig.
   useEffect(() => {
     if (!currentUserEmail) return undefined
     let cancelled = false
 
     ;(async () => {
       const emps = await loadEmployees()
-      if (cancelled) return
+      if (cancelled || !isUitgebreid) return
       await distributeUnassignedJobs(emps)
       if (cancelled) return
       await loadSwipeQueue()
@@ -117,7 +130,7 @@ export default function MijnOmgeving() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUserEmail])
+  }, [currentUserEmail, isUitgebreid])
 
   // Live presence-sync: als een collega elders zijn aanwezigheid wijzigt,
   // updatet dit scherm zonder herladen — poort van het 'employees-presence-
@@ -177,45 +190,51 @@ export default function MijnOmgeving() {
       </header>
 
       <main className="page-content">
-        <PresenceBlock
-          employees={employees}
-          loading={employeesLoading}
-          error={employeesError}
-          onConfirm={handleConfirmPresence}
-        />
+        {isUitgebreid && (
+          <PresenceBlock
+            employees={employees}
+            loading={employeesLoading}
+            error={employeesError}
+            onConfirm={handleConfirmPresence}
+          />
+        )}
 
-        <div className="mo-tab-bar">
-          <button
-            type="button"
-            className={activeTab === 'swipen' ? 'mo-tab-btn active' : 'mo-tab-btn'}
-            onClick={() => setActiveTab('swipen')}
-          >
-            Swipen
-            <span className="mo-count-pill">{swipeRemaining}</span>
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'vacatures' ? 'mo-tab-btn active' : 'mo-tab-btn'}
-            onClick={() => setActiveTab('vacatures')}
-          >
-            Mijn Vacatures
-          </button>
-        </div>
+        {isUitgebreid && (
+          <div className="mo-tab-bar">
+            <button
+              type="button"
+              className={activeTab === 'swipen' ? 'mo-tab-btn active' : 'mo-tab-btn'}
+              onClick={() => setActiveTab('swipen')}
+            >
+              Swipen
+              <span className="mo-count-pill">{swipeRemaining}</span>
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'vacatures' ? 'mo-tab-btn active' : 'mo-tab-btn'}
+              onClick={() => setActiveTab('vacatures')}
+            >
+              Mijn Vacatures
+            </button>
+          </div>
+        )}
 
-        <SwipenTab
-          visible={activeTab === 'swipen'}
-          jobs={swipeJobs}
-          version={swipeVersion}
-          loading={swipeLoading}
-          error={swipeError}
-          employees={employees}
-          currentUserEmail={currentUserEmail}
-          onRemainingChange={setSwipeRemaining}
-          onWentGo={handleWentGo}
-        />
+        {isUitgebreid && (
+          <SwipenTab
+            visible={swipenVisible}
+            jobs={swipeJobs}
+            version={swipeVersion}
+            loading={swipeLoading}
+            error={swipeError}
+            employees={employees}
+            currentUserEmail={currentUserEmail}
+            onRemainingChange={setSwipeRemaining}
+            onWentGo={handleWentGo}
+          />
+        )}
 
         <MijnVacaturesTab
-          visible={activeTab === 'vacatures'}
+          visible={vacaturesVisible}
           employees={employees}
           currentUserEmail={currentUserEmail}
           refreshToken={vacaturesRefreshToken}
