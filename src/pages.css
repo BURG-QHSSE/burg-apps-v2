@@ -1782,9 +1782,24 @@ a.tool-card:focus-visible {
 }
 
 .mo-li-link {
-  color: var(--blauwgrijs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 var(--space-2);
+  margin-left: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--blauwgrijs);
+  color: var(--steen);
+  font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 700;
   text-decoration: none;
+  vertical-align: middle;
+}
+
+.mo-li-link:hover {
+  opacity: 0.85;
 }
 
 .mo-swipe-links {
@@ -1952,6 +1967,16 @@ a.tool-card:focus-visible {
   font-family: var(--font-mono);
   font-size: 11px;
   text-decoration: none;
+}
+
+.mo-meta-chip-cta {
+  background: var(--blauwgrijs);
+  color: var(--steen);
+  font-weight: 600;
+}
+
+.mo-meta-chip-cta:hover {
+  opacity: 0.85;
 }
 
 .mo-vac-badges {

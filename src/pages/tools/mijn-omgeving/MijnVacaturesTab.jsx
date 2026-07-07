@@ -235,7 +235,7 @@ function VacatureCard({ job, onUpdateStatus, onNotesChange, onNotesSave, onDoors
           <span className="mo-meta-chip">📅 {scraped}</span>
         ) : null}
         {job.job_url && (
-          <a className="mo-meta-chip" href={job.job_url} target="_blank" rel="noopener noreferrer">
+          <a className="mo-meta-chip mo-meta-chip-cta" href={job.job_url} target="_blank" rel="noopener noreferrer">
             ↗ Bekijk vacature
           </a>
         )}

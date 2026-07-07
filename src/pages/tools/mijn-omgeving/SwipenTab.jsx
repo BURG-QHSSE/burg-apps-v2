@@ -355,7 +355,7 @@ function SwipeCard({ vac, descExpanded, onToggleDesc }) {
       {(vac.job_url || vac.company_website) && (
         <div className="mo-swipe-links">
           {vac.job_url && (
-            <a className="mo-contact-link" href={vac.job_url} target="_blank" rel="noopener noreferrer">
+            <a className="mo-meta-chip mo-meta-chip-cta" href={vac.job_url} target="_blank" rel="noopener noreferrer">
               ↗ Vacature
             </a>
           )}
