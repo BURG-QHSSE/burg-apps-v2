@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
+import { supabase } from '../../lib/supabaseClient'
 import { burgJobsSupabase } from '../../lib/burgJobsClient'
 import PresenceBlock from './mijn-omgeving/PresenceBlock'
 import SwipenTab from './mijn-omgeving/SwipenTab'
 import MijnVacaturesTab from './mijn-omgeving/MijnVacaturesTab'
-import { distributeUnassignedJobs, redistributePendingJobs } from './mijn-omgeving/burgJobsHelpers'
+import { distributeUnassignedJobs } from './mijn-omgeving/burgJobsHelpers'
 
 // Kolommen exact zoals `loadSwipe()` in de bron (regel 745-748).
 const SWIPE_COLUMNS =
@@ -34,6 +35,15 @@ const SWIPE_COLUMNS =
  * aanwezig zijn en swipen vacatures goed/afgekeurd. "Mijn Vacatures" blijft
  * voor iedereen zichtbaar: dat toont alleen je eigen al-toegewezen
  * vacatures, los van wie er mag swipen/verdelen.
+ *
+ * Swipen en aanwezigheid zijn bewust twee losse dingen: WIE mag swipen
+ * wordt bepaald door `uitgebreid_emails()` (een RPC op dit v2-project, zie
+ * supabase/schema.sql), niet door aanwezigheid. Aanwezigheid bepaalt
+ * uitsluitend waar GOEDGEKEURDE (Go) vacatures na een swipe heen gaan (zie
+ * assignGoVacature in burgJobsHelpers.js). Vóór deze wijziging herverdeelde
+ * het bevestigen van aanwezigheid ALLE pending vacatures over de dan-
+ * aanwezige medewerkers — waardoor iemands eigen te-swipen wachtrij
+ * verdween zodra die zichzelf op afwezig zette.
  */
 export default function MijnOmgeving() {
   const { profile } = useAuth()
@@ -47,6 +57,11 @@ export default function MijnOmgeving() {
   const [employees, setEmployees] = useState([])
   const [employeesLoading, setEmployeesLoading] = useState(true)
   const [employeesError, setEmployeesError] = useState('')
+
+  // E-mailadressen van gebruikers met mijn_omgeving_uitgebreid — dit is de
+  // "swipers"-populatie voor distributeUnassignedJobs, volledig los van
+  // employees.is_present.
+  const [uitgebreidEmails, setUitgebreidEmails] = useState(() => new Set())
 
   const [swipeJobs, setSwipeJobs] = useState([])
   const [swipeLoading, setSwipeLoading] = useState(true)
@@ -85,6 +100,15 @@ export default function MijnOmgeving() {
     return data || []
   }, [])
 
+  const loadUitgebreidEmails = useCallback(async () => {
+    const { data, error } = await supabase.rpc('uitgebreid_emails')
+    if (error) {
+      console.error('[MijnOmgeving] Kon uitgebreid_emails niet ophalen:', error.message)
+      return new Set()
+    }
+    return new Set(data || [])
+  }, [])
+
   const loadSwipeQueue = useCallback(async () => {
     if (!currentUserEmail) return
     setSwipeLoading(true)
@@ -108,12 +132,12 @@ export default function MijnOmgeving() {
     setSwipeLoading(false)
   }, [currentUserEmail])
 
-  // Init: medewerkers laden -> onbezette pending vacatures verdelen -> swipe-
-  // wachtrij laden. Exact de volgorde van `init()` in de bron (regel 622-632).
-  // De verdeel-/swipe-stappen slaan we over voor niet-uitgebreide gebruikers:
-  // zij zien de Swipen-tab toch niet, en mogen ook niet degene zijn die de
-  // job-verdeling triggert. `loadEmployees()` blijft wel altijd draaien —
-  // Mijn Vacatures (Doorsturen) heeft de medewerkerslijst ook nodig.
+  // Init: medewerkers laden -> onbezette pending vacatures verdelen over de
+  // swipers (uitgebreid-gebruikers, NIET op aanwezigheid) -> swipe-wachtrij
+  // laden. De verdeel-/swipe-stappen slaan we over voor niet-uitgebreide
+  // gebruikers: zij zien de Swipen-tab toch niet, en mogen ook niet degene
+  // zijn die de job-verdeling triggert. `loadEmployees()` blijft wel altijd
+  // draaien — Mijn Vacatures (Doorsturen) heeft de medewerkerslijst ook nodig.
   useEffect(() => {
     if (!currentUserEmail) return undefined
     let cancelled = false
@@ -121,7 +145,13 @@ export default function MijnOmgeving() {
     ;(async () => {
       const emps = await loadEmployees()
       if (cancelled || !isUitgebreid) return
-      await distributeUnassignedJobs(emps)
+
+      const emailSet = await loadUitgebreidEmails()
+      if (cancelled) return
+      setUitgebreidEmails(emailSet)
+
+      const swipers = emps.filter((e) => emailSet.has(e.email))
+      await distributeUnassignedJobs(swipers)
       if (cancelled) return
       await loadSwipeQueue()
     })()
@@ -150,26 +180,27 @@ export default function MijnOmgeving() {
     }
   }, [])
 
-  // "Bevestig aanwezigheid": schrijft is_present per medewerker, herverdeelt
-  // ALLE pending vacatures over de nu-aanwezige medewerkers, en herlaadt de
-  // swipe-wachtrij — exact `confirmPresence()` in de bron (regel 680-700).
+  // "Bevestig aanwezigheid": schrijft alleen is_present per medewerker.
+  // Dit bepaalt uitsluitend waar toekomstige GOEDGEKEURDE (Go) vacatures
+  // heen gaan (assignGoVacature) — het raakt bewust NOOIT de swipe-wachtrij:
+  // wie mag swipen is volledig losgekoppeld van aanwezigheid (zie
+  // uitgebreidEmails hierboven).
   const handleConfirmPresence = useCallback(
     async (updates) => {
       await Promise.all(
         updates.map(({ id, is_present }) => burgJobsSupabase.from('employees').update({ is_present }).eq('id', id)),
       )
 
-      const nextEmployees = employees.map((emp) => {
-        const match = updates.find((u) => u.id === emp.id)
-        return match ? { ...emp, is_present: match.is_present } : emp
-      })
-      setEmployees(nextEmployees)
+      setEmployees((prev) =>
+        prev.map((emp) => {
+          const match = updates.find((u) => u.id === emp.id)
+          return match ? { ...emp, is_present: match.is_present } : emp
+        }),
+      )
 
-      await redistributePendingJobs(nextEmployees)
-      await loadSwipeQueue()
-      showToast('Aanwezigheid bijgewerkt en verdeling herberekend.')
+      showToast('Aanwezigheid bijgewerkt.')
     },
-    [employees, loadSwipeQueue, showToast],
+    [showToast],
   )
 
   function handleWentGo() {

@@ -30,12 +30,17 @@ async function distributeJobIds(jobIds, present) {
 
 /**
  * Verdeelt bij het laden van het scherm alle NOG NIET toegewezen pending
- * vacatures round-robin over de aanwezige medewerkers (`distributeUnassigned`
- * in de bron, regel 634).
+ * vacatures round-robin over de medewerkers die mogen swipen (`swipers`:
+ * medewerkers met `mijn_omgeving_uitgebreid`, zie MijnOmgeving.jsx).
+ *
+ * Bewust NIET gefilterd op aanwezigheid: die vlag bepaalt sinds de
+ * ontkoppeling van swipen/aanwezigheid alleen nog waar GOEDGEKEURDE
+ * vacatures heen gaan (zie assignGoVacature hieronder), niet wie de
+ * swipe-wachtrij krijgt — anders verdwijnen iemands eigen te-swipen
+ * vacatures zodra die persoon zichzelf op afwezig zet.
  */
-export async function distributeUnassignedJobs(employees) {
-  const present = employees.filter((e) => e.is_present)
-  if (present.length === 0) return
+export async function distributeUnassignedJobs(swipers) {
+  if (!swipers || swipers.length === 0) return
 
   const { data: unassigned } = await burgJobsSupabase
     .from('jobs')
@@ -43,21 +48,7 @@ export async function distributeUnassignedJobs(employees) {
     .eq('review_status', 'pending')
     .is('assigned_to', null)
 
-  await distributeJobIds((unassigned || []).map((j) => j.id), present)
-}
-
-/**
- * Herverdeelt na het bevestigen van aanwezigheid ALLE pending vacatures
- * (niet alleen de onbezette) round-robin over de nu-aanwezige medewerkers
- * (`redistributePending` in de bron, regel 702).
- */
-export async function redistributePendingJobs(employees) {
-  const present = employees.filter((e) => e.is_present)
-  if (present.length === 0) return
-
-  const { data: pending } = await burgJobsSupabase.from('jobs').select('id').eq('review_status', 'pending')
-
-  await distributeJobIds((pending || []).map((j) => j.id), present)
+  await distributeJobIds((unassigned || []).map((j) => j.id), swipers)
 }
 
 /**

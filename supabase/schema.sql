@@ -293,3 +293,26 @@ begin
   update profiles set mijn_omgeving_uitgebreid = new_waarde where id = target_id;
 end;
 $$ language plpgsql security definer;
+
+-- ============================================
+-- Mijn Omgeving: e-mailadressen van uitgebreide gebruikers
+-- Nodig omdat de swipe-verdeling (distributeUnassignedJobs/
+-- redistributePendingJobs, in het losse burg-jobs-project) moet weten wie
+-- er mag swipen, los van rol en los van aanwezigheid. RLS op profiles laat
+-- alleen admin/manager alle profielen lezen — een gewone 'user' met
+-- mijn_omgeving_uitgebreid zou dus zelf niet kunnen navragen wie er verder
+-- nog mag swipen. SECURITY DEFINER + grant aan alle authenticated
+-- gebruikers, en geeft bewust ALLEEN e-mailadressen terug (geen rol, naam
+-- of actief-status).
+-- ============================================
+create or replace function uitgebreid_emails()
+returns setof text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select email from profiles where mijn_omgeving_uitgebreid = true and actief = true;
+$$;
+
+grant execute on function uitgebreid_emails() to authenticated;
