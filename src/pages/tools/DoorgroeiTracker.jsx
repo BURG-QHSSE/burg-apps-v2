@@ -32,7 +32,11 @@ function normalizeNaam(naam) {
  * basis daarvan zonder de tekst zelf te herschrijven.
  */
 function statusToneClass(status) {
-  const s = (status || '').toLowerCase()
+  // String(...) i.p.v. aannemen dat status al tekst is: de bron (Google
+  // Sheet) kan door een kolomverschuiving per ongeluk een getal leveren waar
+  // tekst wordt verwacht — zonder deze coercion crasht .toLowerCase() daarop
+  // en valt de hele pagina wit weg.
+  const s = String(status ?? '').toLowerCase()
   if (s.startsWith('behaald')) return 'badge-mos'
   if (s.startsWith('bezig')) return 'badge-blauwgrijs'
   return 'badge-inactive'
