@@ -9,6 +9,7 @@ export const TOOLS = [
   { id: 'definitief-honorarium', naam: 'Definitief Honorarium', minimumRole: 'user', path: '/tools/definitief-honorarium', category: 'daily' },
   { id: 'verdeling-plaatsing', naam: 'Verdeling Plaatsing', minimumRole: 'user', path: '/tools/verdeling-plaatsing', category: 'daily' },
   { id: 'mijn-omgeving', naam: 'Kansen Swiper', minimumRole: 'user', path: '/tools/mijn-omgeving', category: 'daily' },
+  { id: 'proeftijd-tracker', naam: 'Proeftijd Tracker', minimumRole: 'user', path: '/tools/proeftijd-tracker', category: 'daily' },
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
 ]
 

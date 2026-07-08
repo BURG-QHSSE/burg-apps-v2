@@ -20,6 +20,7 @@ import VerdelingPlaatsing from './pages/tools/VerdelingPlaatsing'
 import SalesOverdracht from './pages/tools/SalesOverdracht'
 import DoorgroeiTracker from './pages/tools/DoorgroeiTracker'
 import MijnOmgeving from './pages/tools/MijnOmgeving'
+import ProeftijdTracker from './pages/tools/ProeftijdTracker'
 import './App.css'
 import './pages.css'
 
@@ -32,6 +33,7 @@ const TOOL_COMPONENTS = {
   'verdeling-plaatsing': VerdelingPlaatsing,
   'doorgroei-tracker': DoorgroeiTracker,
   'mijn-omgeving': MijnOmgeving,
+  'proeftijd-tracker': ProeftijdTracker,
 }
 
 /**

@@ -321,3 +321,34 @@ as $$
 $$;
 
 grant execute on function uitgebreid_emails() to authenticated;
+
+-- ============================================
+-- PROEFTIJD TRACKER — gedeelde lijst kandidaten in proeftijd.
+-- Bewust geen rol-restrictie: elke ingelogde gebruiker mag toevoegen,
+-- lezen en verwijderen (zelfde toegangsniveau als de meeste tools).
+-- created_by is nullable met "on delete set null" om dezelfde reden als
+-- role_audit_log/tool_usage hierboven — een verwijderd profiel mag de
+-- historische rijen niet blokkeren.
+-- ============================================
+create table proeftijd_kandidaten (
+  id uuid default gen_random_uuid() primary key,
+  naam text not null,
+  start_datum date not null,
+  duur_maanden int not null,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table proeftijd_kandidaten enable row level security;
+
+create policy "ingelogde gebruikers lezen proeftijd-kandidaten"
+  on proeftijd_kandidaten for select
+  using (auth.uid() is not null);
+
+create policy "ingelogde gebruikers voegen proeftijd-kandidaten toe"
+  on proeftijd_kandidaten for insert
+  with check (auth.uid() is not null);
+
+create policy "ingelogde gebruikers verwijderen proeftijd-kandidaten"
+  on proeftijd_kandidaten for delete
+  using (auth.uid() is not null);

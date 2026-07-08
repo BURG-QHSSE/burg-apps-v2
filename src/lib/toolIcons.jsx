@@ -40,6 +40,13 @@ const ICONS = {
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
+  'proeftijd-tracker': (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 9v4l2.5 2.5" />
+      <path d="M9 1h6" />
+    </svg>
+  ),
   'doorgroei-tracker': (props) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />

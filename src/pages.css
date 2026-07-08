@@ -2072,3 +2072,245 @@ a.tool-card:focus-visible {
     padding: var(--space-5);
   }
 }
+
+/* ---------- Proeftijd Tracker ---------- */
+
+.proeftijd-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.proeftijd-toolbar .page-intro {
+  margin: 0;
+}
+
+.proeftijd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.proeftijd-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.proeftijd-card-done {
+  border-color: var(--mos);
+  background: var(--mos-10);
+}
+
+.proeftijd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.proeftijd-naam {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--inkt);
+}
+
+.proeftijd-naam-done {
+  color: var(--mos);
+}
+
+.proeftijd-confirm-delete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--inkt-60);
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--inkt-60);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.delete-btn:hover {
+  color: var(--brand);
+}
+
+.progress-bar {
+  height: 3px;
+  background: var(--lijn);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--blauwgrijs), var(--mos));
+  transition: width 0.5s;
+}
+
+.proeftijd-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--inkt-60);
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.proeftijd-card-done .proeftijd-meta {
+  color: var(--mos);
+}
+
+.months-badge {
+  background: var(--blauwgrijs-10);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--blauwgrijs);
+}
+
+/* ---------- Split-flap bord ----------
+   Bewust vaste (niet-thema-afhankelijke) donkere kleuren: dit stelt een
+   mechanisch vertrekbord voor, dat in het echt ook niet van kleur wisselt
+   met een licht/donker thema. */
+.flap-board {
+  background: #1a1a18;
+  border-radius: var(--radius-md);
+  padding: 14px 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: var(--space-4);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+  flex-wrap: wrap;
+}
+
+.flap-board-done {
+  background: #1f3d0f;
+}
+
+.flap-gap {
+  width: 6px;
+}
+
+.flap {
+  position: relative;
+  width: 34px;
+  height: 52px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #111110;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  perspective: 200px;
+  flex-shrink: 0;
+}
+
+.flap-upper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  overflow: hidden;
+  background: #1e1e1c;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.flap-lower {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  overflow: hidden;
+  background: #151513;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.flap-sep {
+  position: absolute;
+  top: 25px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #1a1a18;
+  z-index: 3;
+}
+
+.flap-upper span,
+.flap-lower span,
+.flap-fold span {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  color: #f5f4f0;
+  display: block;
+  height: 52px;
+  line-height: 52px;
+  width: 34px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.flap-upper span {
+  transform: translateY(26px);
+}
+
+.flap-lower span {
+  transform: translateY(-26px);
+}
+
+.flap-fold {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  overflow: hidden;
+  background: #1e1e1c;
+  transform-origin: bottom center;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.flap-fold span {
+  transform: translateY(26px);
+}
+
+@keyframes flapFlip {
+  0% {
+    transform: rotateX(0deg);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+  40% {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+  }
+  100% {
+    transform: rotateX(-90deg);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+.flap-fold-flipping {
+  animation: flapFlip 0.22s ease-in forwards;
+}
