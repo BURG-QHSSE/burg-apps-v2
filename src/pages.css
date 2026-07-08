@@ -155,6 +155,7 @@
 
 .page-content {
   flex: 1;
+  min-width: 0; /* voorkomt dat een breed kind (bv. het split-flap-bord) de hele pagina breder dan het scherm duwt */
   padding: var(--space-6) var(--space-5);
   text-align: left;
   max-width: 1024px;
@@ -2121,6 +2122,7 @@ a.tool-card:focus-visible {
 .proeftijd-card {
   display: flex;
   flex-direction: column;
+  min-width: 0; /* grid-items krijgen anders min-width:auto, gebaseerd op het onkrimpbare split-flap-bord */
 }
 
 .proeftijd-card-done {
@@ -2231,6 +2233,7 @@ a.tool-card:focus-visible {
   gap: 3px;
   margin-bottom: var(--space-4);
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+  max-width: 100%;
   overflow-x: auto;
 }
 
