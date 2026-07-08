@@ -99,7 +99,7 @@ function ProgressReeks({ waarden, doelPerPeriode, periodeLabel }) {
   )
 }
 
-function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden }) {
+function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden, gemLabel, gemWaarde, besteLabel, besteWaarde }) {
   return (
     <div className="section-card doel-card">
       <div className="doel-card-header">
@@ -122,12 +122,12 @@ function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden }) {
           <span className="metric-card-value">{entry.vereisteReeks ?? '—'}</span>
         </div>
         <div className="metric-card">
-          <span className="metric-card-label">Gem. laatste periode</span>
-          <span className="metric-card-value">{fmtGetal(entry.avgLastPeriod)}</span>
+          <span className="metric-card-label">{gemLabel}</span>
+          <span className="metric-card-value">{fmtGetal(gemWaarde)}</span>
         </div>
         <div className="metric-card">
-          <span className="metric-card-label">Beste periodegemiddelde</span>
-          <span className="metric-card-value">{fmtGetal(entry.bestPeriodAvg)}</span>
+          <span className="metric-card-label">{besteLabel}</span>
+          <span className="metric-card-value">{fmtGetal(besteWaarde)}</span>
         </div>
       </div>
 
@@ -285,6 +285,10 @@ export default function DoorgroeiTracker() {
                       periodeLabel="maand"
                       doelPerPeriode={entry.doelPerPeriode}
                       waarden={Array.isArray(entry.months) ? entry.months : []}
+                      gemLabel="Gem. laatste periode"
+                      gemWaarde={entry.avgLastPeriod}
+                      besteLabel="Beste periodegemiddelde"
+                      besteWaarde={entry.bestPeriodAvg}
                       key={`${entry.naam}-${i}`}
                     />
                   ))}
@@ -302,6 +306,10 @@ export default function DoorgroeiTracker() {
                       periodeLabel="week"
                       doelPerPeriode={entry.doelPerWeek}
                       waarden={Array.isArray(entry.weeks) ? entry.weeks : []}
+                      gemLabel="Huidige reeks"
+                      gemWaarde={entry.huidigeReeks}
+                      besteLabel="Beste reeks"
+                      besteWaarde={entry.besteReeks}
                       key={`${entry.naam}-${i}`}
                     />
                   ))}
