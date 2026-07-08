@@ -99,25 +99,6 @@ function ProgressReeks({ waarden, doelPerPeriode, periodeLabel }) {
   )
 }
 
-function RosterRow({ entry }) {
-  return (
-    <div className="result-row">
-      <div className="result-left">
-        <div className="result-name">{entry.naam}</div>
-        <div className="result-sub">
-          {entry.team} · doel: {entry.doelRol}
-        </div>
-      </div>
-      <div className="result-right">
-        <StatusBadge status={entry.status} />
-        <div className="result-amount">
-          reeks {fmtGetal(entry.huidigeReeks)} / beste {fmtGetal(entry.besteReeks)} · duur {entry.reeksDuur ?? '—'}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden }) {
   return (
     <div className="section-card doel-card">
@@ -217,7 +198,7 @@ export default function DoorgroeiTracker() {
   const isPlainUser = profile?.role === 'user'
   const eigenNaamNormalized = normalizeNaam(profile?.naam)
 
-  const { visibleRoster, visibleRecruitment, visibleSales, geenMatch } = useMemo(() => {
+  const { visibleRecruitment, visibleSales, geenMatch } = useMemo(() => {
     if (!data) {
       return { visibleRoster: [], visibleRecruitment: [], visibleSales: [], geenMatch: false }
     }
@@ -294,17 +275,6 @@ export default function DoorgroeiTracker() {
 
         {!loading && !loadError && !(isPlainUser && geenMatch) && (
           <>
-            {visibleRoster.length > 0 && (
-              <div className="calc-section">
-                <p className="calc-section-label">Overzicht</p>
-                <div className="results-list">
-                  {visibleRoster.map((entry, i) => (
-                    <RosterRow entry={entry} key={`${entry.naam}-${i}`} />
-                  ))}
-                </div>
-              </div>
-            )}
-
             {visibleRecruitment.length > 0 && (
               <div className="calc-section">
                 <p className="calc-section-label">Recruitment</p>
@@ -339,7 +309,7 @@ export default function DoorgroeiTracker() {
               </div>
             )}
 
-            {visibleRoster.length === 0 && visibleRecruitment.length === 0 && visibleSales.length === 0 && (
+            {visibleRecruitment.length === 0 && visibleSales.length === 0 && (
               <div className="idle-state">Geen gegevens beschikbaar.</div>
             )}
           </>
