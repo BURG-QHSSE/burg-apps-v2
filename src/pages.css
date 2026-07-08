@@ -727,6 +727,37 @@ a.tool-card:focus-visible {
   color: var(--steen);
 }
 
+/* ---------- Metric cards: afwijking-t.o.v.-doel kleuren ----------
+   Gebruikt voor Gem. laatste periode / Beste periodegemiddelde in de
+   Doorgroei Tracker: groen = doel behaald, oranje = tot 20% eronder,
+   rood = meer dan 20% eronder. */
+.metric-card-goed {
+  background: var(--mos-10);
+  border-color: var(--mos);
+}
+
+.metric-card-goed .metric-card-value {
+  color: var(--mos);
+}
+
+.metric-card-waarschuwing {
+  background: var(--amber-10);
+  border-color: var(--amber);
+}
+
+.metric-card-waarschuwing .metric-card-value {
+  color: var(--amber);
+}
+
+.metric-card-kritiek {
+  background: var(--brand-10);
+  border-color: var(--brand);
+}
+
+.metric-card-kritiek .metric-card-value {
+  color: var(--brand);
+}
+
 /* ---------- Control rows ---------- */
 
 .control-row {

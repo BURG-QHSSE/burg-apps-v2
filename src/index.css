@@ -11,6 +11,8 @@
   --mos-10:     #EAEEEA;
   --brand:      #A9463C;   /* enige alarmkleur — waarschuwing/kritiek, nooit decoratief */
   --brand-10:   #F5E9E7;
+  --amber:      #B8863B;   /* tussenliggend signaal — "bijna op doel", tussen mos en brand */
+  --amber-10:   #F3EBDC;
 
   --font-display: 'Newsreader', Georgia, serif;
   --font-body: 'Inter', -apple-system, sans-serif;
@@ -42,6 +44,8 @@ html[data-theme='dark'] {
   --mos-10:     #212922;
   --brand:      #D08277;
   --brand-10:   #33201D;
+  --amber:      #D9AD6B;
+  --amber-10:   #332A1A;
 
   color-scheme: dark;
 }

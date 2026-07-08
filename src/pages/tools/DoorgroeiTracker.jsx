@@ -65,6 +65,19 @@ function fmtGetal(n) {
 }
 
 /**
+ * Kleurklasse voor een metric-tile t.o.v. het doel: groen bij behaald, tot
+ * 20% eronder oranje, meer dan 20% eronder rood. Geeft niets terug zonder
+ * bruikbare waarde/doel, zodat de tile dan gewoon neutraal blijft.
+ */
+function afwijkingKleurClass(waarde, doel) {
+  if (waarde === null || waarde === undefined || !doel || doel <= 0) return ''
+  if (waarde >= doel) return 'metric-card-goed'
+
+  const afwijkingPct = (doel - waarde) / doel
+  return afwijkingPct <= 0.2 ? 'metric-card-waarschuwing' : 'metric-card-kritiek'
+}
+
+/**
  * Compacte progressie-balk voor een reeks periodewaarden (maanden of weken).
  * `null` = periode nog niet bereikt/geen data (zichtbaar onderscheiden van
  * 0), hoogte van de vulling is proportioneel aan waarde t.o.v. het doel per
@@ -121,11 +134,11 @@ function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden, gemLabel, gemW
           <span className="metric-card-label">Vereiste reeks</span>
           <span className="metric-card-value">{entry.vereisteReeks ?? '—'}</span>
         </div>
-        <div className="metric-card">
+        <div className={`metric-card ${afwijkingKleurClass(gemWaarde, doelPerPeriode)}`}>
           <span className="metric-card-label">{gemLabel}</span>
           <span className="metric-card-value">{fmtGetal(gemWaarde)}</span>
         </div>
-        <div className="metric-card">
+        <div className={`metric-card ${afwijkingKleurClass(besteWaarde, doelPerPeriode)}`}>
           <span className="metric-card-label">{besteLabel}</span>
           <span className="metric-card-value">{fmtGetal(besteWaarde)}</span>
         </div>
