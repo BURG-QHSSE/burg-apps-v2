@@ -360,3 +360,25 @@ create policy "gebruiker voegt eigen proeftijd-kandidaten toe"
 create policy "gebruiker verwijdert eigen proeftijd-kandidaten"
   on proeftijd_kandidaten for delete
   using (auth.uid() = created_by);
+
+-- ============================================
+-- Adminpaneel: laatste inlogtijd per gebruiker
+-- auth.users is niet rechtstreeks opvraagbaar voor de client (geen RLS op
+-- het auth-schema). Deze SECURITY DEFINER-functie geeft daarom alleen
+-- id + last_sign_in_at terug, en uitsluitend aan een admin — de WHERE-
+-- constructie levert een lege set op voor iedereen die geen admin is,
+-- i.p.v. een foutmelding.
+-- ============================================
+create or replace function admin_last_sign_ins()
+returns table(id uuid, last_sign_in_at timestamptz)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select u.id, u.last_sign_in_at
+  from auth.users u
+  where my_role() = 'admin';
+$$;
+
+grant execute on function admin_last_sign_ins() to authenticated;

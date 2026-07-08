@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   fetchAllProfiles,
+  fetchLastSignIns,
   changeUserRole,
   setUserActief,
   setUserNaam,
@@ -9,7 +10,7 @@ import {
   createUser,
   deleteUserPermanently,
 } from '../lib/adminApi'
-import { fetchToolUsageCounts } from '../lib/toolUsage'
+import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 
 const ROLE_OPTIONS = ['admin', 'manager', 'user']
@@ -52,6 +53,11 @@ export default function AdminPanel() {
   const [usageLoading, setUsageLoading] = useState(true)
   const [usageError, setUsageError] = useState(null)
 
+  // lastSignIns: user id -> ISO-datum laatste login | null (uit admin_last_sign_ins())
+  const [lastSignIns, setLastSignIns] = useState(new Map())
+  // usageByUser: user id -> { count, laatstActief } (uit tool_usage, per gebruiker i.p.v. per tool)
+  const [usageByUser, setUsageByUser] = useState(new Map())
+
   // Nieuwe-gebruiker formulier
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -63,7 +69,20 @@ export default function AdminPanel() {
   useEffect(() => {
     loadProfiles()
     loadUsageCounts()
+    loadPerUserExtras()
   }, [])
+
+  async function loadPerUserExtras() {
+    try {
+      const [signIns, usage] = await Promise.all([fetchLastSignIns(), fetchToolUsageByUser()])
+      setLastSignIns(signIns)
+      setUsageByUser(usage)
+    } catch (err) {
+      // Niet-kritiek voor de rest van het scherm — de kolommen tonen dan
+      // gewoon "—", de rest van het Adminpaneel blijft werken.
+      console.error('[AdminPanel] Kon login/gebruik per gebruiker niet laden:', err.message)
+    }
+  }
 
   async function loadUsageCounts() {
     setUsageLoading(true)
@@ -334,6 +353,9 @@ export default function AdminPanel() {
                   <th>E-mail</th>
                   <th>Rol</th>
                   <th>Actief</th>
+                  <th>Laatste login</th>
+                  <th>Laatst actief</th>
+                  <th>Tool-gebruik</th>
                   <th>Kansen Swiper uitgebreid</th>
                   <th>Verwijderen</th>
                 </tr>
@@ -384,6 +406,9 @@ export default function AdminPanel() {
                         {profile.actief ? 'Actief' : 'Inactief'}
                       </button>
                     </td>
+                    <td data-label="Laatste login">{fmtDatum(lastSignIns.get(profile.id))}</td>
+                    <td data-label="Laatst actief">{fmtDatum(usageByUser.get(profile.id)?.laatstActief)}</td>
+                    <td data-label="Tool-gebruik">{usageByUser.get(profile.id)?.count ?? 0}x</td>
                     <td data-label="Kansen Swiper uitgebreid">
                       <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <input

@@ -53,6 +53,40 @@ export async function fetchToolUsageCounts() {
 }
 
 /**
+ * Zelfde ruwe data als fetchToolUsageCounts(), maar gegroepeerd per
+ * user_id i.p.v. per tool_id — gebruikt in het Adminpaneel om te tonen
+ * hoe actief elke gebruiker is (los van, en aanvullend op, laatste
+ * inlogtijd: iemand kan wél inloggen maar geen enkele tool openen).
+ *
+ * @returns {Promise<Map<string, { count: number, laatstActief: string }>>} user id -> gebruik
+ */
+export async function fetchToolUsageByUser() {
+  const { data, error } = await supabase.from('tool_usage').select('user_id, used_at')
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const perUser = new Map()
+
+  for (const row of data) {
+    if (!row.user_id) continue // rij van een inmiddels verwijderde gebruiker (on delete set null)
+
+    const bestaand = perUser.get(row.user_id)
+    if (!bestaand) {
+      perUser.set(row.user_id, { count: 1, laatstActief: row.used_at })
+    } else {
+      bestaand.count += 1
+      if (row.used_at > bestaand.laatstActief) {
+        bestaand.laatstActief = row.used_at
+      }
+    }
+  }
+
+  return perUser
+}
+
+/**
  * Haalt het eigen tool-gebruik van de ingelogde gebruiker op (RLS-policy
  * "gebruiker leest eigen tool-gebruik"), gegroepeerd per tool_id, gesorteerd
  * op totaal-aantal — gebruikt voor de "Voor jou · meest gebruikt"-sectie op

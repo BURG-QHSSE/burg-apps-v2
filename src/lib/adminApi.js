@@ -20,6 +20,24 @@ export async function fetchAllProfiles() {
 }
 
 /**
+ * Haalt de laatste inlogtijd per gebruiker op via de `admin_last_sign_ins`
+ * Postgres-functie (security definer — auth.users is niet rechtstreeks
+ * opvraagbaar voor de client). Geeft voor een niet-admin altijd een lege
+ * lijst terug (zie de functie zelf in supabase/schema.sql).
+ *
+ * @returns {Promise<Map<string, string|null>>} user id -> last_sign_in_at (ISO) | null
+ */
+export async function fetchLastSignIns() {
+  const { data, error } = await supabase.rpc('admin_last_sign_ins')
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return new Map(data.map((row) => [row.id, row.last_sign_in_at]))
+}
+
+/**
  * Wijzigt de rol van een gebruiker. Dit is de ENIGE manier waarop de rol
  * van een profiel gewijzigd mag worden vanuit de client: het gaat via de
  * `change_user_role` Postgres-functie (security definer), die:
