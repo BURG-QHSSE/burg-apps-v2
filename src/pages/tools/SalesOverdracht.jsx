@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import emailjs from '@emailjs/browser'
 
@@ -52,6 +52,22 @@ const REQUIRED_KEYS = [
 ]
 
 /**
+ * Concept wordt bewaard in sessionStorage zodat tussendoor naar een andere
+ * tool navigeren (en terugkomen) de invoer niet meer wist — de route
+ * unmount dit component, useState alleen is dan niet genoeg.
+ */
+const DRAFT_KEY = 'sales-overdracht-draft'
+
+function laadDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
  * Drieledige toggle (Nee/Ja/Onbekend of vergelijkbaar) met semantische
  * kleur per keuze. Groen = gunstig/rustgevend (mos), rood = waarschuwend
  * (brand), amber-achtig = neutraal-onzeker. We hebben bewust geen nieuw
@@ -93,32 +109,49 @@ function FormField({ label, required, filled, full, children }) {
 }
 
 export default function SalesOverdracht() {
-  const [salesNaam, setSalesNaam] = useState('')
-  const [bedrijf, setBedrijf] = useState('')
-  const [functie, setFunctie] = useState('')
-  const [senioriteit, setSenioriteit] = useState('')
+  const [draft] = useState(laadDraft)
 
-  const [gp1, setGp1] = useState('')
-  const [gp2, setGp2] = useState('')
+  const [salesNaam, setSalesNaam] = useState(draft.salesNaam ?? '')
+  const [bedrijf, setBedrijf] = useState(draft.bedrijf ?? '')
+  const [functie, setFunctie] = useState(draft.functie ?? '')
+  const [senioriteit, setSenioriteit] = useState(draft.senioriteit ?? '')
 
-  const [datum, setDatum] = useState('')
-  const [tijd, setTijd] = useState('08:00')
-  const [typeAfspraak, setTypeAfspraak] = useState('')
-  const [adres, setAdres] = useState('')
-  const [auto, setAuto] = useState('')
+  const [gp1, setGp1] = useState(draft.gp1 ?? '')
+  const [gp2, setGp2] = useState(draft.gp2 ?? '')
 
-  const [beschrijving, setBeschrijving] = useState('')
-  const [zoekduur, setZoekduur] = useState('')
-  const [bureaus, setBureaus] = useState('')
-  const [kandidaten, setKandidaten] = useState('')
-  const [salaris, setSalaris] = useState('')
-  const [voorwaarden, setVoorwaarden] = useState('')
-  const [feePct, setFeePct] = useState('')
-  const [exclusief, setExclusief] = useState('')
-  const [opmerkingen, setOpmerkingen] = useState('')
+  const [datum, setDatum] = useState(draft.datum ?? '')
+  const [tijd, setTijd] = useState(draft.tijd ?? '08:00')
+  const [typeAfspraak, setTypeAfspraak] = useState(draft.typeAfspraak ?? '')
+  const [adres, setAdres] = useState(draft.adres ?? '')
+  const [auto, setAuto] = useState(draft.auto ?? '')
+
+  const [beschrijving, setBeschrijving] = useState(draft.beschrijving ?? '')
+  const [zoekduur, setZoekduur] = useState(draft.zoekduur ?? '')
+  const [bureaus, setBureaus] = useState(draft.bureaus ?? '')
+  const [kandidaten, setKandidaten] = useState(draft.kandidaten ?? '')
+  const [salaris, setSalaris] = useState(draft.salaris ?? '')
+  const [voorwaarden, setVoorwaarden] = useState(draft.voorwaarden ?? '')
+  const [feePct, setFeePct] = useState(draft.feePct ?? '')
+  const [exclusief, setExclusief] = useState(draft.exclusief ?? '')
+  const [opmerkingen, setOpmerkingen] = useState(draft.opmerkingen ?? '')
 
   const [status, setStatus] = useState('idle') // idle | sending | success | error
   const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    const data = {
+      salesNaam, bedrijf, functie, senioriteit,
+      gp1, gp2,
+      datum, tijd, typeAfspraak, adres, auto,
+      beschrijving, zoekduur, bureaus, kandidaten, salaris, voorwaarden, feePct, exclusief, opmerkingen,
+    }
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data))
+  }, [
+    salesNaam, bedrijf, functie, senioriteit,
+    gp1, gp2,
+    datum, tijd, typeAfspraak, adres, auto,
+    beschrijving, zoekduur, bureaus, kandidaten, salaris, voorwaarden, feePct, exclusief, opmerkingen,
+  ])
 
   const isOpLocatie = typeAfspraak === 'Op locatie'
   const heeftVoorwaarden = voorwaarden === 'Ja'
@@ -171,6 +204,7 @@ export default function SalesOverdracht() {
           EMAILJS_PUBLIC_KEY
         )
       }
+      sessionStorage.removeItem(DRAFT_KEY)
       setStatus('success')
     } catch (err) {
       console.error(err)

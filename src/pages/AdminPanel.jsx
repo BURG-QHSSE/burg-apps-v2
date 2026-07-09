@@ -371,7 +371,6 @@ export default function AdminPanel() {
                       Naam {naamSortAsc ? '▲' : '▼'}
                     </button>
                   </th>
-                  <th>E-mail</th>
                   <th>Rol</th>
                   <th>Actief</th>
                   <th>Laatste login</th>
@@ -391,38 +390,41 @@ export default function AdminPanel() {
                   <tr key={profile.id}>
                     <td data-label="Naam">
                       {editingNaamId === profile.id ? (
-                        <div className="admin-naam-edit">
-                          <div className="text-input-wrap">
-                            <input
-                              type="text"
-                              autoFocus
-                              value={naamDrafts[profile.id] ?? profile.naam ?? ''}
+                        <div className="admin-naam-edit-wrap">
+                          <div className="admin-naam-edit">
+                            <div className="text-input-wrap">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={naamDrafts[profile.id] ?? profile.naam ?? ''}
+                                disabled={pendingIds[profile.id]}
+                                onChange={(e) =>
+                                  setNaamDrafts((current) => ({ ...current, [profile.id]: e.target.value }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleNaamOpslaan(profile.id)
+                                  if (e.key === 'Escape') cancelNaamEdit(profile.id)
+                                }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
                               disabled={pendingIds[profile.id]}
-                              onChange={(e) =>
-                                setNaamDrafts((current) => ({ ...current, [profile.id]: e.target.value }))
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleNaamOpslaan(profile.id)
-                                if (e.key === 'Escape') cancelNaamEdit(profile.id)
-                              }}
-                            />
+                              onClick={() => handleNaamOpslaan(profile.id)}
+                            >
+                              Opslaan
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={pendingIds[profile.id]}
+                              onClick={() => cancelNaamEdit(profile.id)}
+                            >
+                              Annuleren
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            disabled={pendingIds[profile.id]}
-                            onClick={() => handleNaamOpslaan(profile.id)}
-                          >
-                            Opslaan
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            disabled={pendingIds[profile.id]}
-                            onClick={() => cancelNaamEdit(profile.id)}
-                          >
-                            Annuleren
-                          </button>
+                          <p className="admin-naam-edit-email">{profile.email}</p>
                         </div>
                       ) : (
                         <div className="admin-naam-display">
@@ -438,7 +440,6 @@ export default function AdminPanel() {
                         </div>
                       )}
                     </td>
-                    <td data-label="E-mail">{profile.email}</td>
                     <td data-label="Rol">
                       <select
                         value={profile.role}
@@ -507,7 +508,7 @@ export default function AdminPanel() {
                       )}
                     </td>
                     {rowErrors[profile.id] && (
-                      <td colSpan={9} style={{ paddingTop: 0 }}>
+                      <td colSpan={8} style={{ paddingTop: 0 }}>
                         <p className="form-error form-error-inline" role="alert">
                           {rowErrors[profile.id]}
                         </p>

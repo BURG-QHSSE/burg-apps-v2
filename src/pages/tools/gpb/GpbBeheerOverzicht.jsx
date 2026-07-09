@@ -33,9 +33,12 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
 
   useEffect(() => {
     fetchAllProfiles()
-      .then(setProfiles)
+      .then((data) => setProfiles([...data].sort((a, b) => a.naam.localeCompare(b.naam, 'nl'))))
       .catch((err) => console.error('[GpbBeheerOverzicht] Kon profielen niet laden:', err.message))
   }, [])
+
+  // Alleen manager/hr/admin kunnen als leidinggevende voor een GPB worden gekozen — geen gewone users.
+  const leidinggevenden = profiles.filter((p) => ['manager', 'hr', 'admin'].includes(p.role))
 
   useEffect(() => {
     if (!geselecteerdId) {
@@ -198,7 +201,7 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
             <span>Leidinggevende</span>
             <select value={leidinggevendeId} onChange={(e) => setLeidinggevendeId(e.target.value)} disabled={aanmakenBezig}>
               <option value="">Kies leidinggevende…</option>
-              {profiles.map((p) => (
+              {leidinggevenden.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.naam} ({p.email})
                 </option>

@@ -534,6 +534,17 @@ a.tool-card:focus-visible {
   min-width: 140px;
 }
 
+.admin-naam-edit-email {
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+  color: var(--inkt-60);
+}
+
+.admin-table td[data-label='Laatste login'],
+.admin-table td[data-label='Laatst actief'] {
+  white-space: nowrap;
+}
+
 .admin-table select {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
@@ -660,6 +671,12 @@ a.tool-card:focus-visible {
 
   .admin-table td[data-label='Rol'] {
     align-items: flex-start;
+  }
+
+  .admin-table td[data-label='Laatste login'],
+  .admin-table td[data-label='Laatst actief'] {
+    white-space: normal;
+    text-align: right;
   }
 }
 
@@ -1993,6 +2010,56 @@ a.tool-card:focus-visible {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
+}
+
+.mo-nogo-reason {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.mo-info-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--lijn);
+  color: var(--inkt-60);
+  font-size: 10px;
+  font-style: italic;
+  font-family: var(--font-body);
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.mo-info-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 200px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inkt);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 400;
+  font-style: normal;
+  text-align: center;
+  line-height: 1.4;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.mo-info-dot:hover .mo-info-tooltip,
+.mo-info-dot:focus .mo-info-tooltip {
+  display: block;
 }
 
 .mo-nogo-back {

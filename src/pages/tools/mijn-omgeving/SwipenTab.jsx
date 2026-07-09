@@ -381,8 +381,14 @@ function NogoReasonPopup({ job, onSelect, onClose, onBack }) {
         </div>
         <div className="mo-nogo-reasons">
           {NOGO_REASONS.map((reason) => (
-            <button type="button" key={reason} className="btn-toggle" onClick={() => onSelect(reason)}>
-              {reason}
+            <button type="button" key={reason.label} className="btn-toggle mo-nogo-reason" onClick={() => onSelect(reason.label)}>
+              {reason.label}
+              {reason.info && (
+                <span className="mo-info-dot" tabIndex={0} onClick={(e) => e.stopPropagation()}>
+                  i
+                  <span className="mo-info-tooltip">{reason.info}</span>
+                </span>
+              )}
             </button>
           ))}
         </div>

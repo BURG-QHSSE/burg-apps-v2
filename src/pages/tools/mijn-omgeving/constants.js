@@ -9,14 +9,19 @@
 // die optie is hier niet meer kiesbaar.
 export const SALES_STATUSES = ['Toegevoegd aan Bullhorn', 'Al bekend']
 
+// Elke reden is een { label, info } object — info is een optionele toelichting
+// die als tooltip bij een ⓘ-icoontje verschijnt (zie NogoReasonPopup). Het
+// opgeslagen nogo_reason blijft gewoon de label-tekst, dus bestaande rijen
+// met een oudere labelnaam (bv. "Intermediair / uitzendbureau") blijven
+// geldig — die optie is alleen niet meer kiesbaar.
 export const NOGO_REASONS = [
-  'Verkeerde sector',
-  'Te operationeel',
-  'Intermediair / uitzendbureau',
-  'Te junior / stage',
-  'Buiten werkgebied',
-  'Dubbeling / al bekend',
-  'Overig',
+  { label: 'Verkeerde sector', info: 'Bijvoorbeeld Finance' },
+  { label: 'Buiten werkgebied', info: 'Geografisch niet ons werkgebied' },
+  { label: 'Concurrent' },
+  { label: 'Te junior / stage' },
+  { label: 'Al bekend' },
+  { label: 'Overig' },
+  { label: 'Voor nu nog niet relevant', info: 'Bijvoorbeeld Cyber Security, Overheden' },
 ]
 
 // Webhook die Apollo-enrichment triggert na een Go-beslissing (zie
