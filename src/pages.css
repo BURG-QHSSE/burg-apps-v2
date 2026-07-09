@@ -734,6 +734,22 @@ a.tool-card:focus-visible {
 .metric-card-goed {
   background: var(--mos-10);
   border-color: var(--mos);
+  animation: metricPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes metricPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(110, 130, 113, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(110, 130, 113, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metric-card-goed {
+    animation: none;
+  }
 }
 
 .metric-card-goed .metric-card-value {

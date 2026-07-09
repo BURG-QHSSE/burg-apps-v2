@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import confetti from 'canvas-confetti'
 import { useAuth } from '../../lib/AuthProvider'
 
 /**
@@ -77,6 +78,24 @@ function afwijkingKleurClass(waarde, doel) {
   return afwijkingPct <= 0.2 ? 'metric-card-waarschuwing' : 'metric-card-kritiek'
 }
 
+// Module-level i.p.v. component-state: blijft bestaan zolang de pagina niet
+// volledig herladen wordt, ook als een kaart tussentijds unmount/remount
+// (bv. bij het wisselen van rol-filter). Voorkomt dat confetti telkens
+// opnieuw afgaat bij elke 10-seconden-herrender van een al gevierde naam.
+const gevierdeNamen = new Set()
+
+function vierBehaald(naam) {
+  if (!naam || gevierdeNamen.has(naam)) return
+  gevierdeNamen.add(naam)
+
+  confetti({
+    particleCount: 90,
+    spread: 70,
+    origin: { y: 0.6 },
+    colors: ['#6E8271', '#B8863B', '#5C7285'],
+  })
+}
+
 /**
  * Compacte progressie-balk voor een reeks periodewaarden (maanden of weken).
  * `null` = periode nog niet bereikt/geen data (zichtbaar onderscheiden van
@@ -113,6 +132,12 @@ function ProgressReeks({ waarden, doelPerPeriode, periodeLabel }) {
 }
 
 function DoelCard({ entry, periodeLabel, doelPerPeriode, waarden, gemLabel, gemWaarde, besteLabel, besteWaarde }) {
+  useEffect(() => {
+    if (String(entry.status ?? '').startsWith('Behaald')) {
+      vierBehaald(entry.naam)
+    }
+  }, [entry.status, entry.naam])
+
   return (
     <div className="section-card doel-card">
       <div className="doel-card-header">
