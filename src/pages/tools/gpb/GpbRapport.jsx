@@ -1,4 +1,4 @@
-import { PIJLERS, scoreBetekenis, eindscoreKwalificatie, STATUS_LABELS } from './constants'
+import { PIJLERS, scoreBetekenis, eindscoreKwalificatie, functieLabel, STATUS_LABELS } from './constants'
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
@@ -34,7 +34,7 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
         <div>
           <h2>{beoordeling.medewerker_naam}</h2>
           <p className="page-intro">
-            {beoordeling.afdeling} · Niveau {beoordeling.functieniveau} · {beoordeling.periode}
+            {beoordeling.afdeling} · {functieLabel(beoordeling.afdeling, beoordeling.functieniveau)} · {beoordeling.periode}
           </p>
         </div>
         <span className={`badge badge-${beoordeling.status === 'definitief' ? 'mos' : 'blauwgrijs'}`}>
@@ -85,6 +85,8 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
                     <p>{leidinggevendeAntwoorden[i].toelichtingen[j]}</p>
                   </div>
                 ))
+              ) : beoordeling.leidinggevende_ingevuld_at ? (
+                <p className="idle-state">Ingevuld — zichtbaar na goedkeuring door HR.</p>
               ) : (
                 <p className="idle-state">Nog niet ingevuld.</p>
               )}

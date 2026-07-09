@@ -18,10 +18,27 @@ function legeDoelen() {
  * leidinggevende-beoordeling — zelfde 18 stellingen (score + verplichte
  * toelichting), alleen de medewerker vult daarnaast 3 persoonlijke doelen
  * in (toontDoelen=true).
+ *
+ * Werkt als concept: initialAntwoorden/initialDoelen vullen het formulier
+ * met een eerder opgeslagen versie zodat bewerken (zolang de status dit
+ * toelaat) niet weer bij nul begint. Alleen gebruikt als startwaarde bij
+ * mount (useState-initializer) — een later wijzigende prop synct niet
+ * automatisch na, dat is prima zolang de aanroeper wacht tot de initiële
+ * data geladen is voordat dit component gemount wordt.
  */
-export default function GpbInvulForm({ titel, afdeling, functieniveau, toontDoelen, submitLabel, submitting, onSubmit }) {
-  const [antwoorden, setAntwoorden] = useState(legeAntwoorden)
-  const [doelen, setDoelen] = useState(toontDoelen ? legeDoelen() : [])
+export default function GpbInvulForm({
+  titel,
+  afdeling,
+  functieniveau,
+  toontDoelen,
+  submitLabel,
+  submitting,
+  onSubmit,
+  initialAntwoorden,
+  initialDoelen,
+}) {
+  const [antwoorden, setAntwoorden] = useState(() => initialAntwoorden ?? legeAntwoorden())
+  const [doelen, setDoelen] = useState(() => (toontDoelen ? initialDoelen ?? legeDoelen() : []))
   const [fout, setFout] = useState('')
 
   const stellingenPerPijler =
@@ -168,7 +185,7 @@ export default function GpbInvulForm({ titel, afdeling, functieniveau, toontDoel
       )}
 
       <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Bezig met indienen…' : submitLabel}
+        {submitting ? 'Bezig met opslaan…' : submitLabel}
       </button>
     </div>
   )

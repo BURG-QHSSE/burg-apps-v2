@@ -468,6 +468,44 @@ create policy "leidinggevende leest toegewezen gpb-beoordelingen"
   on gpb_beoordelingen for select
   using (auth.uid() = leidinggevende_id);
 
+-- ============================================
+-- GPB: leesview die leidinggevende_antwoorden verbergt voor de medewerker
+-- zelf zolang HR de beoordeling nog niet heeft goedgekeurd (status =
+-- 'concept'). RLS hierboven is alleen rij-niveau: zonder deze view zou de
+-- medewerker de kolom leidinggevende_antwoorden gewoon in de ruwe response
+-- krijgen zodra de leidinggevende heeft ingevuld, nog voor HR-goedkeuring.
+-- security_invoker zorgt dat de RLS-policies hierboven gewoon van
+-- toepassing blijven (de view voegt alleen kolom-maskering toe) — de
+-- leidinggevende zelf en hr/admin blijven de antwoorden altijd zien, want
+-- voor hen is auth.uid() <> medewerker_id.
+-- ============================================
+create or replace view gpb_beoordelingen_view
+with (security_invoker = true) as
+select
+  id,
+  medewerker_id,
+  medewerker_naam,
+  leidinggevende_id,
+  afdeling,
+  functieniveau,
+  periode,
+  status,
+  medewerker_antwoorden,
+  medewerker_ingevuld_at,
+  case
+    when auth.uid() = medewerker_id and status = 'concept' then null
+    else leidinggevende_antwoorden
+  end as leidinggevende_antwoorden,
+  leidinggevende_ingevuld_at,
+  created_by,
+  created_at,
+  goedgekeurd_by,
+  goedgekeurd_at,
+  definitief_at
+from gpb_beoordelingen;
+
+grant select on gpb_beoordelingen_view to authenticated;
+
 -- Verwijderen is een simpele, niet-toestandsafhankelijke actie (in
 -- tegenstelling tot invullen/goedkeuren/definitief maken hierboven), dus
 -- hiervoor volstaat een gewone RLS-policy i.p.v. een RPC. gpb_doelen
@@ -525,10 +563,13 @@ $$;
 grant execute on function create_gpb_beoordeling(uuid, text, uuid, text, int, text) to authenticated;
 
 -- ============================================
--- GPB: medewerker dient zijn zelfevaluatie + 3 doelen in. Mag alleen de
--- toegewezen medewerker, en alleen zolang hij nog niet eerder heeft
--- ingediend (medewerker_ingevuld_at is null) — voorkomt dat een eerdere
--- inzending overschreven wordt.
+-- GPB: medewerker slaat zijn zelfevaluatie + 3 doelen op — als concept,
+-- net zo vaak te herzien als nodig zolang de status 'concept' is. Mag
+-- alleen de toegewezen medewerker. Zodra HR goedkeurt (status wijzigt),
+-- kan de medewerker niet meer bewerken (zie keur_gpb_goed). De
+-- ingevuld_at-timestamp blijft de EERSTE keer opslaan markeren (via
+-- coalesce), zodat "heeft ingevuld" bruikbaar blijft voor tellers/labels
+-- ook al is er daarna nog aan gesleuteld.
 -- ============================================
 create or replace function submit_gpb_medewerker(
   p_beoordeling_id uuid,
@@ -552,8 +593,8 @@ begin
   if auth.uid() <> b.medewerker_id then
     raise exception 'Alleen de toegewezen medewerker mag dit invullen';
   end if;
-  if b.medewerker_ingevuld_at is not null then
-    raise exception 'Zelfevaluatie is al ingediend';
+  if b.status <> 'concept' then
+    raise exception 'Zelfevaluatie kan niet meer bewerkt worden na goedkeuring door HR';
   end if;
   if jsonb_array_length(p_antwoorden) <> 6 then
     raise exception 'Verwacht 6 pijlers met antwoorden';
@@ -561,9 +602,10 @@ begin
 
   update gpb_beoordelingen
   set medewerker_antwoorden = p_antwoorden,
-      medewerker_ingevuld_at = now()
+      medewerker_ingevuld_at = coalesce(medewerker_ingevuld_at, now())
   where id = p_beoordeling_id;
 
+  delete from gpb_doelen where beoordeling_id = p_beoordeling_id;
   for doel in select * from jsonb_array_elements(p_doelen) loop
     insert into gpb_doelen (beoordeling_id, omschrijving, pijler, deadline)
     values (
@@ -579,9 +621,11 @@ $$;
 grant execute on function submit_gpb_medewerker(uuid, jsonb, jsonb) to authenticated;
 
 -- ============================================
--- GPB: leidinggevende dient zijn beoordeling in. Mag alleen de toegewezen
--- leidinggevende, en alleen één keer. Bewust ONAFHANKELIJK van de
--- medewerker-zelfevaluatie (niet meer sequentieel) — medewerker en
+-- GPB: leidinggevende slaat zijn beoordeling op — als concept, te herzien
+-- zolang de beoordeling niet definitief is (dus ook nog na HR-goedkeuring,
+-- bewust optioneel bewerkbaar tot HR 'm definitief maakt). Mag alleen de
+-- toegewezen leidinggevende. Bewust ONAFHANKELIJK van de
+-- medewerker-zelfevaluatie (niet sequentieel) — medewerker en
 -- leidinggevende kunnen dit simultaan, los van elkaar invullen.
 -- ============================================
 create or replace function submit_gpb_leidinggevende(
@@ -604,8 +648,8 @@ begin
   if auth.uid() <> b.leidinggevende_id then
     raise exception 'Alleen de toegewezen leidinggevende mag dit invullen';
   end if;
-  if b.leidinggevende_ingevuld_at is not null then
-    raise exception 'Beoordeling is al ingediend';
+  if b.status = 'definitief' then
+    raise exception 'Beoordeling is definitief gemaakt en kan niet meer bewerkt worden';
   end if;
   if jsonb_array_length(p_antwoorden) <> 6 then
     raise exception 'Verwacht 6 pijlers met antwoorden';
@@ -613,7 +657,7 @@ begin
 
   update gpb_beoordelingen
   set leidinggevende_antwoorden = p_antwoorden,
-      leidinggevende_ingevuld_at = now()
+      leidinggevende_ingevuld_at = coalesce(leidinggevende_ingevuld_at, now())
   where id = p_beoordeling_id;
 end;
 $$;

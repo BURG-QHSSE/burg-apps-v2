@@ -37,6 +37,20 @@ export const NIVEAUS = {
   ],
 }
 
+/** Afdelingen waar 'functieniveau' een echt carrièreniveau is (i.p.v. een functie-selector zoals bij Corporate). */
+const AFDELINGEN_MET_NIVEAUS = ['Sales', 'Recruitment']
+
+/**
+ * Leesbaar label voor een functieniveau: "Niveau X — Titel" voor afdelingen
+ * met echte carrièreniveaus, en alleen "Titel" voor Corporate — daar zijn
+ * het drie losse functies, geen niveaus.
+ */
+export function functieLabel(afdeling, functieniveau) {
+  const niveau = NIVEAUS[afdeling]?.find((n) => n.niveau === functieniveau)
+  if (!niveau) return `Niveau ${functieniveau}`
+  return AFDELINGEN_MET_NIVEAUS.includes(afdeling) ? `Niveau ${niveau.niveau} — ${niveau.titel}` : niveau.titel
+}
+
 /** Bouwt de 6x3 stellingen-array uit platte [tekst, voorbeeld] paren, pijler na pijler. */
 function bouwStellingen(...pijlerParen) {
   return pijlerParen.map((paren) => paren.map(([tekst, voorbeeld]) => ({ tekst, voorbeeld })))

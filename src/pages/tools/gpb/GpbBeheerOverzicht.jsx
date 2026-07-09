@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAllProfiles } from '../../../lib/adminApi'
 import { createGpbBeoordeling, deleteGpbBeoordeling, fetchDoelen, keurGpbGoed, maakGpbDefinitief } from '../../../lib/gpbApi'
-import { AFDELINGEN, NIVEAUS, STATUS_LABELS } from './constants'
+import { AFDELINGEN, NIVEAUS, STATUS_LABELS, functieLabel } from './constants'
 import GpbRapport from './GpbRapport'
 
 function fmtDatum(isoString) {
@@ -226,11 +226,11 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
             </select>
           </label>
           <label className="field">
-            <span>Functieniveau</span>
+            <span>{afdeling === 'Corporate' ? 'Functie' : 'Functieniveau'}</span>
             <select value={functieniveau} onChange={(e) => setFunctieniveau(Number(e.target.value))} disabled={aanmakenBezig}>
               {NIVEAUS[afdeling].map((n) => (
                 <option key={n.niveau} value={n.niveau}>
-                  Niveau {n.niveau} — {n.titel}
+                  {functieLabel(afdeling, n.niveau)}
                 </option>
               ))}
             </select>
@@ -263,7 +263,7 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
           <thead>
             <tr>
               <th>Medewerker</th>
-              <th>Afdeling / niveau</th>
+              <th>Afdeling / functie</th>
               <th>Periode</th>
               <th>Status</th>
               <th>Medewerker ingevuld</th>
@@ -275,8 +275,8 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
             {beoordelingen.map((b) => (
               <tr key={b.id} className="gpb-rij-klikbaar" onClick={() => setGeselecteerdId(b.id)}>
                 <td data-label="Medewerker">{b.medewerker_naam}</td>
-                <td data-label="Afdeling / niveau">
-                  {b.afdeling} · niveau {b.functieniveau}
+                <td data-label="Afdeling / functie">
+                  {b.afdeling} · {functieLabel(b.afdeling, b.functieniveau)}
                 </td>
                 <td data-label="Periode">{b.periode}</td>
                 <td data-label="Status">{STATUS_LABELS[b.status]}</td>

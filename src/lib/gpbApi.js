@@ -6,10 +6,16 @@ import { supabase } from './supabaseClient'
  * leidinggevende je toegewezen team, als hr/admin alles. De aanroeper splitst
  * zelf op basis van medewerker_id/leidinggevende_id welke rij bij welke rol
  * hoort (zie GpbBeoordelingstool.jsx).
+ *
+ * Leest bewust van gpb_beoordelingen_view i.p.v. de tabel zelf: die view
+ * verbergt leidinggevende_antwoorden voor de medewerker zelf zolang status
+ * 'concept' is (nog geen HR-goedkeuring) — RLS is alleen rij-niveau, dus
+ * zonder deze view zou de medewerker die kolom gewoon in de ruwe response
+ * krijgen zodra de leidinggevende heeft ingevuld.
  */
 export async function fetchMijnGpb() {
   const { data, error } = await supabase
-    .from('gpb_beoordelingen')
+    .from('gpb_beoordelingen_view')
     .select('*')
     .order('created_at', { ascending: false })
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
 import { fetchMijnGpb, fetchDoelen, submitGpbMedewerker, submitGpbLeidinggevende } from '../../lib/gpbApi'
+import { functieLabel } from './gpb/constants'
 import GpbInvulForm from './gpb/GpbInvulForm'
 import GpbRapport from './gpb/GpbRapport'
 import GpbBeheerOverzicht from './gpb/GpbBeheerOverzicht'
@@ -133,22 +134,39 @@ export default function GpbBeoordelingstool() {
   )
 }
 
+/**
+ * Zolang status 'concept' is, blijft de zelfevaluatie een bewerkbaar concept
+ * (submit_gpb_medewerker staat herhaald opslaan toe) — pas zodra HR
+ * goedkeurt kan de medewerker niet meer bewerken en wordt het alleen-lezen
+ * rapport getoond.
+ */
 function MijnBeoordelingBlok({ beoordeling, onIngediend, showToast }) {
   const [doelen, setDoelen] = useState([])
+  const [doelenGeladen, setDoelenGeladen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [fout, setFout] = useState('')
 
   useEffect(() => {
+    setDoelenGeladen(false)
     if (beoordeling?.medewerker_ingevuld_at) {
-      fetchDoelen(beoordeling.id).then(setDoelen).catch(() => {})
+      fetchDoelen(beoordeling.id)
+        .then((data) => setDoelen(data))
+        .catch(() => {})
+        .finally(() => setDoelenGeladen(true))
+    } else {
+      setDoelen([])
+      setDoelenGeladen(true)
     }
-  }, [beoordeling])
+  }, [beoordeling?.id, beoordeling?.medewerker_ingevuld_at])
 
   if (!beoordeling) {
     return <div className="idle-state">Er staat nog geen beoordeling voor je klaar.</div>
   }
 
-  if (!beoordeling.medewerker_ingevuld_at) {
+  if (beoordeling.status === 'concept') {
+    if (!doelenGeladen) {
+      return <div className="idle-state">Laden…</div>
+    }
     return (
       <>
         {fout && (
@@ -161,14 +179,20 @@ function MijnBeoordelingBlok({ beoordeling, onIngediend, showToast }) {
           afdeling={beoordeling.afdeling}
           functieniveau={beoordeling.functieniveau}
           toontDoelen
-          submitLabel="Zelfevaluatie indienen"
+          initialAntwoorden={beoordeling.medewerker_antwoorden ?? undefined}
+          initialDoelen={
+            doelen.length > 0
+              ? doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline }))
+              : undefined
+          }
+          submitLabel="Zelfevaluatie opslaan"
           submitting={submitting}
           onSubmit={async (antwoorden, doelenInvoer) => {
             setSubmitting(true)
             setFout('')
             try {
               await submitGpbMedewerker(beoordeling.id, antwoorden, doelenInvoer)
-              showToast?.('Zelfevaluatie ingediend.')
+              showToast?.('Zelfevaluatie opgeslagen.')
               await onIngediend()
             } catch (err) {
               setFout(err.message)
@@ -184,6 +208,12 @@ function MijnBeoordelingBlok({ beoordeling, onIngediend, showToast }) {
   return <GpbRapport beoordeling={beoordeling} doelen={doelen} acties={null} />
 }
 
+/**
+ * De leidinggevende kan zijn beoordeling blijven bewerken tot HR 'm
+ * definitief maakt (submit_gpb_leidinggevende blokkeert alleen bij status
+ * 'definitief') — bewust ook nog na goedkeuring, in tegenstelling tot de
+ * medewerker zelf.
+ */
 function TeamBlok({ beoordelingen, onIngediend, showToast }) {
   const [geselecteerdId, setGeselecteerdId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -196,6 +226,8 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
   }
 
   if (geselecteerd) {
+    const bewerkbaar = geselecteerd.status !== 'definitief'
+
     return (
       <div>
         <button type="button" className="btn btn-secondary" onClick={() => setGeselecteerdId(null)}>
@@ -208,29 +240,29 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
           </p>
         )}
 
-        {!geselecteerd.medewerker_ingevuld_at && !geselecteerd.leidinggevende_ingevuld_at && (
+        {bewerkbaar && !geselecteerd.medewerker_ingevuld_at && (
           <div className="idle-state">
             {geselecteerd.medewerker_naam} heeft zijn/haar zelfevaluatie nog niet ingediend — je kunt je eigen
             beoordeling hieronder alvast onafhankelijk invullen.
           </div>
         )}
 
-        {!geselecteerd.leidinggevende_ingevuld_at && (
+        {bewerkbaar ? (
           <GpbInvulForm
             titel={`Beoordeling voor ${geselecteerd.medewerker_naam}`}
             afdeling={geselecteerd.afdeling}
             functieniveau={geselecteerd.functieniveau}
             toontDoelen={false}
-            submitLabel="Beoordeling indienen"
+            initialAntwoorden={geselecteerd.leidinggevende_antwoorden ?? undefined}
+            submitLabel="Beoordeling opslaan"
             submitting={submitting}
             onSubmit={async (antwoorden) => {
               setSubmitting(true)
               setFout('')
               try {
                 await submitGpbLeidinggevende(geselecteerd.id, antwoorden)
-                showToast?.('Beoordeling ingediend.')
+                showToast?.('Beoordeling opgeslagen.')
                 await onIngediend()
-                setGeselecteerdId(null)
               } catch (err) {
                 setFout(err.message)
               } finally {
@@ -238,9 +270,7 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
               }
             }}
           />
-        )}
-
-        {geselecteerd.leidinggevende_ingevuld_at && (
+        ) : (
           <GpbRapportMetDoelen beoordeling={geselecteerd} />
         )}
       </div>
@@ -253,14 +283,16 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
         <button type="button" key={b.id} className="section-card gpb-team-kaart" onClick={() => setGeselecteerdId(b.id)}>
           <span className="proeftijd-naam">{b.medewerker_naam}</span>
           <span className="tool-card-hint">
-            {b.afdeling} · niveau {b.functieniveau} · {b.periode}
+            {b.afdeling} · {functieLabel(b.afdeling, b.functieniveau)} · {b.periode}
           </span>
           <span className="tool-card-hint">
-            {b.leidinggevende_ingevuld_at
-              ? 'Al ingediend'
-              : b.medewerker_ingevuld_at
-                ? 'Klaar om te beoordelen'
-                : 'Klaar om te beoordelen (zelfevaluatie loopt nog)'}
+            {b.status === 'definitief'
+              ? 'Definitief — niet meer te bewerken'
+              : b.leidinggevende_ingevuld_at
+                ? 'Opgeslagen — nog te bewerken'
+                : b.medewerker_ingevuld_at
+                  ? 'Klaar om te beoordelen'
+                  : 'Klaar om te beoordelen (zelfevaluatie loopt nog)'}
           </span>
         </button>
       ))}
