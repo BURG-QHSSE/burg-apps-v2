@@ -9,6 +9,7 @@ import ToolIcon from '../lib/toolIcons'
 const ROLE_LABELS = {
   admin: 'Admin',
   manager: 'Manager',
+  hr: 'HR',
   user: 'Gebruiker',
 }
 

@@ -9,7 +9,11 @@ create extension if not exists pgcrypto;
 -- ============================================
 -- ENUM voor rollen
 -- ============================================
-create type user_role as enum ('admin', 'manager', 'user');
+create type user_role as enum ('admin', 'manager', 'user', 'hr');
+-- Let op: 'hr' is later toegevoegd via `alter type user_role add value 'hr'`
+-- (zie project-geschiedenis) — deze create-statement is puur ter
+-- documentatie van de huidige staat, niet letterlijk opnieuw uitvoerbaar
+-- op een vers project zonder een losse ADD VALUE voor 'hr'.
 
 -- ============================================
 -- PROFILES tabel (1-op-1 met auth.users)
@@ -132,6 +136,14 @@ create policy "admin leest alle profielen"
 create policy "manager leest alle profielen"
   on profiles for select
   using (my_role() = 'manager');
+
+-- HR heeft dezelfde rechten als manager (zie ROLE_HIERARCHY in
+-- toolRegistry.js: hr en manager delen hetzelfde niveau) — los daarvan
+-- kan een toekomstige tool zelf nog los onderscheid maken tussen
+-- manager/user/hr, dat gebeurt dan in die tool zelf, niet hier.
+create policy "hr leest alle profielen"
+  on profiles for select
+  using (my_role() = 'hr');
 
 -- ============================================
 -- PROFILES: wijzigen

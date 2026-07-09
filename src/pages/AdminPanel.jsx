@@ -13,7 +13,7 @@ import {
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 
-const ROLE_OPTIONS = ['admin', 'manager', 'user']
+const ROLE_OPTIONS = ['admin', 'manager', 'hr', 'user']
 
 function toolNaam(toolId) {
   return TOOLS.find((t) => t.id === toolId)?.naam ?? toolId

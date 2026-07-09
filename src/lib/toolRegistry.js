@@ -24,11 +24,17 @@ export const TOOL_CATEGORIES = [
 
 /**
  * Hoe hoger het getal, hoe meer rechten. Moet in lijn blijven met het
- * `user_role` enum in supabase/schema.sql ('admin', 'manager', 'user').
+ * `user_role` enum in supabase/schema.sql ('admin', 'manager', 'user', 'hr').
+ * `hr` deelt bewust hetzelfde niveau als `manager` — overal in de app
+ * heeft HR dezelfde toegang als manager. Een toekomstige tool die manager/
+ * user/hr wél als 3 losse groepen wil behandelen doet dat zelf, met een
+ * eigen check op `profile.role`, niet via deze ladder (zie ook hoe
+ * `mijn_omgeving_uitgebreid` los van deze hiërarchie staat).
  */
 const ROLE_HIERARCHY = {
   admin: 3,
   manager: 2,
+  hr: 2,
   user: 1,
 }
 
