@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
 import { fetchMijnGpb, fetchDoelen, submitGpbMedewerker, submitGpbLeidinggevende } from '../../lib/gpbApi'
-import { functieLabel, STATUS_LABELS } from './gpb/constants'
+import { functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './gpb/constants'
 import GpbInvulForm from './gpb/GpbInvulForm'
 import GpbRapport from './gpb/GpbRapport'
 import GpbBeheerOverzicht from './gpb/GpbBeheerOverzicht'
@@ -223,15 +223,19 @@ function MijnBeoordelingBlok({ beoordelingen, onIngediend, showToast }) {
 
   return (
     <div className="proeftijd-grid">
-      {beoordelingen.map((b) => (
-        <button type="button" key={b.id} className="section-card gpb-team-kaart" onClick={() => setGeselecteerdId(b.id)}>
-          <span className="proeftijd-naam">{b.periode}</span>
-          <span className="tool-card-hint">
-            {b.afdeling} · {functieLabel(b.afdeling, b.functieniveau)}
-          </span>
-          <span className="tool-card-hint">{STATUS_LABELS[b.status]}</span>
-        </button>
-      ))}
+      {beoordelingen.map((b) => {
+        const eindscore = berekenEindscore(b)
+        return (
+          <button type="button" key={b.id} className="section-card gpb-team-kaart" onClick={() => setGeselecteerdId(b.id)}>
+            <span className="proeftijd-naam">{b.periode}</span>
+            <span className="tool-card-hint">
+              {b.afdeling} · {functieLabel(b.afdeling, b.functieniveau)}
+            </span>
+            <span className="tool-card-hint">{STATUS_LABELS[b.status]}</span>
+            {eindscore !== null && <span className="badge badge-blauwgrijs">Eindscore {fmtScore(eindscore)}</span>}
+          </button>
+        )
+      })}
     </div>
   )
 }

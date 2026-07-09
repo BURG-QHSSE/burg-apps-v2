@@ -1,12 +1,7 @@
-import { PIJLERS, scoreBetekenis, eindscoreKwalificatie, functieLabel, STATUS_LABELS } from './constants'
+import { PIJLERS, scoreBetekenis, eindscoreKwalificatie, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
-}
-
-function fmt(n) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—'
-  return (Math.round(n * 10) / 10).toLocaleString('nl-NL')
 }
 
 /**
@@ -24,9 +19,7 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
     leidinggevende: leidinggevendeAntwoorden ? gemiddelde(leidinggevendeAntwoorden[i].scores) : null,
   }))
 
-  const eindscore = leidinggevendeAntwoorden
-    ? gemiddelde(pijlerGemiddeldes.map((p) => p.leidinggevende))
-    : null
+  const eindscore = berekenEindscore(beoordeling)
 
   return (
     <div className="gpb-rapport">
@@ -45,7 +38,7 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
       {eindscore !== null && (
         <div className="section-card gpb-eindscore-card">
           <span className="metric-card-label">Eindscore (leidinggevende leidend)</span>
-          <span className="metric-card-value">{fmt(eindscore)}</span>
+          <span className="metric-card-value">{fmtScore(eindscore)}</span>
           <span className="badge badge-blauwgrijs">{eindscoreKwalificatie(eindscore)}</span>
         </div>
       )}
@@ -53,8 +46,8 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
       {PIJLERS.map((pijlerNaam, i) => (
         <div className="section-card gpb-pijler-card" key={pijlerNaam}>
           <p className="calc-section-label">
-            Pijler {i + 1}: {pijlerNaam} — gem. medewerker {fmt(pijlerGemiddeldes[i].medewerker)} · gem.
-            leidinggevende {fmt(pijlerGemiddeldes[i].leidinggevende)}
+            Pijler {i + 1}: {pijlerNaam} — gem. medewerker {fmtScore(pijlerGemiddeldes[i].medewerker)} · gem.
+            leidinggevende {fmtScore(pijlerGemiddeldes[i].leidinggevende)}
           </p>
 
           <div className="gpb-vergelijk-grid">

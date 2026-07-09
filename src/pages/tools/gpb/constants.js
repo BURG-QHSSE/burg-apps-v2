@@ -866,6 +866,29 @@ export function eindscoreKwalificatie(eindscore) {
   return 'Op of onder niveau'
 }
 
+function gemiddelde(waarden) {
+  return waarden.reduce((a, b) => a + b, 0) / waarden.length
+}
+
+/**
+ * Eindscore o.b.v. de leidinggevende-antwoorden (leidend, zie GpbRapport) —
+ * null zolang die niet (zichtbaar) zijn ingevuld. Voor de medewerker zelf
+ * is dit ook null zolang status 'concept' is, dankzij de maskering in
+ * gpb_beoordelingen_view — dus deze functie geeft vanzelf pas een getal
+ * terug zodra het ook echt getoond mag worden.
+ */
+export function berekenEindscore(beoordeling) {
+  const antwoorden = beoordeling.leidinggevende_antwoorden
+  if (!antwoorden) return null
+  return gemiddelde(antwoorden.map((pijler) => gemiddelde(pijler.scores)))
+}
+
+/** Rondt af op 1 decimaal in nl-notatie — '—' voor null/undefined/NaN. */
+export function fmtScore(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—'
+  return (Math.round(n * 10) / 10).toLocaleString('nl-NL')
+}
+
 export const STATUS_LABELS = {
   concept: 'Concept',
   goedgekeurd: 'Goedgekeurd',
