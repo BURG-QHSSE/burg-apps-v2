@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
 import { fetchMijnGpb, fetchDoelen, submitGpbMedewerker, submitGpbLeidinggevende } from '../../lib/gpbApi'
-import { functieLabel } from './gpb/constants'
+import { functieLabel, STATUS_LABELS } from './gpb/constants'
 import GpbInvulForm from './gpb/GpbInvulForm'
 import GpbRapport from './gpb/GpbRapport'
 import GpbBeheerOverzicht from './gpb/GpbBeheerOverzicht'
@@ -65,7 +65,7 @@ export default function GpbBeoordelingstool() {
     )
   }
 
-  const eigenBeoordeling = beoordelingen.find((b) => b.medewerker_id === user?.id)
+  const mijnBeoordelingen = beoordelingen.filter((b) => b.medewerker_id === user?.id)
   const teamBeoordelingen = beoordelingen.filter((b) => b.leidinggevende_id === user?.id)
 
   const tabs = []
@@ -117,7 +117,7 @@ export default function GpbBeoordelingstool() {
         )}
 
         {tab === 'mijn' && (
-          <MijnBeoordelingBlok beoordeling={eigenBeoordeling} onIngediend={load} showToast={setToast} />
+          <MijnBeoordelingBlok beoordelingen={mijnBeoordelingen} onIngediend={load} showToast={setToast} />
         )}
 
         {tab === 'team' && (
@@ -135,21 +135,27 @@ export default function GpbBeoordelingstool() {
 }
 
 /**
- * Zolang status 'concept' is, blijft de zelfevaluatie een bewerkbaar concept
- * (submit_gpb_medewerker staat herhaald opslaan toe) — pas zodra HR
- * goedkeurt kan de medewerker niet meer bewerken en wordt het alleen-lezen
- * rapport getoond.
+ * Toont alle eigen beoordelingen als tegels (net als het Team-overzicht) —
+ * niet alleen de meest recente, zodat je kunt terugkijken naar oudere,
+ * inmiddels definitieve periodes. Zolang status 'concept' is, blijft de
+ * geselecteerde zelfevaluatie een bewerkbaar concept (submit_gpb_medewerker
+ * staat herhaald opslaan toe) — pas zodra HR goedkeurt kan de medewerker
+ * niet meer bewerken en wordt het alleen-lezen rapport getoond.
  */
-function MijnBeoordelingBlok({ beoordeling, onIngediend, showToast }) {
+function MijnBeoordelingBlok({ beoordelingen, onIngediend, showToast }) {
+  const [geselecteerdId, setGeselecteerdId] = useState(null)
   const [doelen, setDoelen] = useState([])
   const [doelenGeladen, setDoelenGeladen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [fout, setFout] = useState('')
 
+  const geselecteerd = beoordelingen.find((b) => b.id === geselecteerdId)
+
   useEffect(() => {
+    if (!geselecteerd) return
     setDoelenGeladen(false)
-    if (beoordeling?.medewerker_ingevuld_at) {
-      fetchDoelen(beoordeling.id)
+    if (geselecteerd.medewerker_ingevuld_at) {
+      fetchDoelen(geselecteerd.id)
         .then((data) => setDoelen(data))
         .catch(() => {})
         .finally(() => setDoelenGeladen(true))
@@ -157,55 +163,77 @@ function MijnBeoordelingBlok({ beoordeling, onIngediend, showToast }) {
       setDoelen([])
       setDoelenGeladen(true)
     }
-  }, [beoordeling?.id, beoordeling?.medewerker_ingevuld_at])
+  }, [geselecteerd?.id, geselecteerd?.medewerker_ingevuld_at])
 
-  if (!beoordeling) {
+  if (beoordelingen.length === 0) {
     return <div className="idle-state">Er staat nog geen beoordeling voor je klaar.</div>
   }
 
-  if (beoordeling.status === 'concept') {
-    if (!doelenGeladen) {
-      return <div className="idle-state">Laden…</div>
-    }
+  if (geselecteerd) {
     return (
-      <>
+      <div>
+        <button type="button" className="btn btn-secondary" onClick={() => setGeselecteerdId(null)}>
+          ← Terug naar overzicht
+        </button>
+
         {fout && (
           <p className="form-error" role="alert">
             {fout}
           </p>
         )}
-        <GpbInvulForm
-          titel="Zelfevaluatie"
-          afdeling={beoordeling.afdeling}
-          functieniveau={beoordeling.functieniveau}
-          toontDoelen
-          initialAntwoorden={beoordeling.medewerker_antwoorden ?? undefined}
-          initialDoelen={
-            doelen.length > 0
-              ? doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline }))
-              : undefined
-          }
-          submitLabel="Zelfevaluatie opslaan"
-          submitting={submitting}
-          onSubmit={async (antwoorden, doelenInvoer) => {
-            setSubmitting(true)
-            setFout('')
-            try {
-              await submitGpbMedewerker(beoordeling.id, antwoorden, doelenInvoer)
-              showToast?.('Zelfevaluatie opgeslagen.')
-              await onIngediend()
-            } catch (err) {
-              setFout(err.message)
-            } finally {
-              setSubmitting(false)
-            }
-          }}
-        />
-      </>
+
+        {geselecteerd.status === 'concept' ? (
+          !doelenGeladen ? (
+            <div className="idle-state">Laden…</div>
+          ) : (
+            <GpbInvulForm
+              titel={`Zelfevaluatie — ${geselecteerd.periode}`}
+              afdeling={geselecteerd.afdeling}
+              functieniveau={geselecteerd.functieniveau}
+              toontDoelen
+              initialAntwoorden={geselecteerd.medewerker_antwoorden ?? undefined}
+              initialDoelen={
+                doelen.length > 0
+                  ? doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline }))
+                  : undefined
+              }
+              submitLabel="Zelfevaluatie opslaan"
+              submitting={submitting}
+              onSubmit={async (antwoorden, doelenInvoer) => {
+                setSubmitting(true)
+                setFout('')
+                try {
+                  await submitGpbMedewerker(geselecteerd.id, antwoorden, doelenInvoer)
+                  showToast?.('Zelfevaluatie opgeslagen.')
+                  await onIngediend()
+                } catch (err) {
+                  setFout(err.message)
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
+            />
+          )
+        ) : (
+          <GpbRapport beoordeling={geselecteerd} doelen={doelen} acties={null} />
+        )}
+      </div>
     )
   }
 
-  return <GpbRapport beoordeling={beoordeling} doelen={doelen} acties={null} />
+  return (
+    <div className="proeftijd-grid">
+      {beoordelingen.map((b) => (
+        <button type="button" key={b.id} className="section-card gpb-team-kaart" onClick={() => setGeselecteerdId(b.id)}>
+          <span className="proeftijd-naam">{b.periode}</span>
+          <span className="tool-card-hint">
+            {b.afdeling} · {functieLabel(b.afdeling, b.functieniveau)}
+          </span>
+          <span className="tool-card-hint">{STATUS_LABELS[b.status]}</span>
+        </button>
+      ))}
+    </div>
+  )
 }
 
 /**

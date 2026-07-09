@@ -125,8 +125,11 @@ export function telOpenstaandeGpbActies(beoordelingen, userId, role) {
 
   let aantal = 0
 
-  const eigen = beoordelingen.find((b) => b.medewerker_id === userId)
-  if (eigen && !eigen.medewerker_ingevuld_at) aantal += 1
+  // .filter() i.p.v. .find(): een medewerker kan meerdere beoordelingen
+  // hebben over verschillende periodes heen, niet alleen de meest recente.
+  aantal += beoordelingen.filter(
+    (b) => b.medewerker_id === userId && !b.medewerker_ingevuld_at,
+  ).length
 
   aantal += beoordelingen.filter(
     (b) => b.leidinggevende_id === userId && !b.leidinggevende_ingevuld_at,
