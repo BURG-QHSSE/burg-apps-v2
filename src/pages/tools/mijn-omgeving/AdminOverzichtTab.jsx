@@ -1,17 +1,32 @@
 import { useEffect, useState } from 'react'
 import { burgJobsSupabase } from '../../../lib/burgJobsClient'
-import { GESLOTEN_STATUSSEN } from './constants'
+import { GESLOTEN_STATUSSEN, SALES_STATUSES } from './constants'
+
+const NIEUW_BUCKET = 'nieuw'
+const OVERIG_BUCKET = 'overig'
+
+// Bepaalt in welke kolom een go-vacature valt: geen sales_status is
+// "nieuw" (net als NIEUW_FILTER in MijnVacaturesTab), een herkende
+// SALES_STATUSES-waarde krijgt zijn eigen kolom, en al het overige
+// (bv. de legacy 'Gemaild') valt in "Overig" i.p.v. stilzwijgend te
+// verdwijnen uit de telling.
+function bucketVoor(salesStatus) {
+  if (!salesStatus) return NIEUW_BUCKET
+  return SALES_STATUSES.includes(salesStatus) ? salesStatus : OVERIG_BUCKET
+}
 
 /**
- * Admin-only overzicht: hoeveel goedgekeurde ("go") vacatures staan er per
- * medewerker nog open — puur read-only, bedoeld om de workload-verdeling
- * tussen consultants in de gaten te houden. Los van de swipe-wachtrij (die
- * is sinds kort gedeeld, zie MijnOmgeving.jsx): dit telt alleen vacatures
- * die al zijn goedgekeurd én aan iemand zijn toegewezen (assignGoVacature),
- * met uitzondering van GESLOTEN_STATUSSEN hierboven.
+ * Admin-only overzicht: per medewerker een uitsplitsing van hun
+ * goedgekeurde ("go") vacatures naar status — vooral bedoeld om in één
+ * oogopslag te zien wie nog "Nieuwe vacatures" (nog geen actie) heeft
+ * openstaan, in plaats van dat één opgeteld totaal die piek verbergt.
+ * Los van de swipe-wachtrij (die is gedeeld, zie MijnOmgeving.jsx). Telt
+ * GESLOTEN_STATUSSEN (bv. 'Closed loss') nergens mee — dat zijn afgeronde
+ * zaken, geen openstaande workload.
  */
 export default function AdminOverzichtTab({ visible, employees, employeesLoading, employeesError }) {
-  const [counts, setCounts] = useState(new Map())
+  const [perEmail, setPerEmail] = useState(new Map())
+  const [heeftOverig, setHeeftOverig] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -36,12 +51,20 @@ export default function AdminOverzichtTab({ visible, employees, employeesLoading
       }
 
       const tally = new Map()
+      let overigGezien = false
       ;(data || []).forEach((j) => {
         if (!j.assigned_to) return
         if (GESLOTEN_STATUSSEN.includes(j.sales_status)) return
-        tally.set(j.assigned_to, (tally.get(j.assigned_to) || 0) + 1)
+
+        const bucket = bucketVoor(j.sales_status)
+        if (bucket === OVERIG_BUCKET) overigGezien = true
+
+        if (!tally.has(j.assigned_to)) tally.set(j.assigned_to, {})
+        const rec = tally.get(j.assigned_to)
+        rec[bucket] = (rec[bucket] || 0) + 1
       })
-      setCounts(tally)
+      setPerEmail(tally)
+      setHeeftOverig(overigGezien)
       setLoading(false)
     }
 
@@ -53,15 +76,22 @@ export default function AdminOverzichtTab({ visible, employees, employeesLoading
   }, [])
 
   const rijen = employees
-    .map((emp) => ({ ...emp, aantal: counts.get(emp.email) || 0 }))
-    .sort((a, b) => b.aantal - a.aantal || a.name.localeCompare(b.name, 'nl'))
+    .map((emp) => {
+      const rec = perEmail.get(emp.email) || {}
+      const nieuw = rec[NIEUW_BUCKET] || 0
+      const overig = rec[OVERIG_BUCKET] || 0
+      const perStatus = SALES_STATUSES.map((status) => rec[status] || 0)
+      const totaal = nieuw + overig + perStatus.reduce((a, b) => a + b, 0)
+      return { ...emp, nieuw, overig, perStatus, totaal }
+    })
+    .sort((a, b) => b.nieuw - a.nieuw || a.name.localeCompare(b.name, 'nl'))
 
   const bezig = loading || employeesLoading
   const fout = error || employeesError
 
   return (
     <div className={visible ? 'mo-tab-panel' : 'mo-tab-panel mo-tab-panel-hidden'}>
-      <p className="calc-section-label">Open Go-vacatures per medewerker</p>
+      <p className="calc-section-label">Go-vacatures per medewerker, per status</p>
 
       {bezig && <div className="idle-state">Laden…</div>}
 
@@ -77,14 +107,26 @@ export default function AdminOverzichtTab({ visible, employees, employeesLoading
             <thead>
               <tr>
                 <th>Medewerker</th>
-                <th>Open Go-vacatures</th>
+                <th>Nieuwe vacatures</th>
+                {SALES_STATUSES.map((status) => (
+                  <th key={status}>{status}</th>
+                ))}
+                {heeftOverig && <th>Overig</th>}
+                <th>Totaal</th>
               </tr>
             </thead>
             <tbody>
               {rijen.map((r) => (
                 <tr key={r.id}>
                   <td data-label="Medewerker">{r.name}</td>
-                  <td data-label="Open Go-vacatures">{r.aantal}</td>
+                  <td data-label="Nieuwe vacatures">{r.nieuw}</td>
+                  {SALES_STATUSES.map((status, i) => (
+                    <td data-label={status} key={status}>
+                      {r.perStatus[i]}
+                    </td>
+                  ))}
+                  {heeftOverig && <td data-label="Overig">{r.overig}</td>}
+                  <td data-label="Totaal">{r.totaal}</td>
                 </tr>
               ))}
             </tbody>
