@@ -31,7 +31,7 @@ export const NIVEAUS = {
     { niveau: 3, titel: 'Senior Recruitment Consultant', tagline: 'Top performer' },
   ],
   Corporate: [
-    { niveau: 1, titel: 'Finance Medewerker', tagline: '' },
+    { niveau: 1, titel: 'Finance Officer', tagline: '' },
     { niveau: 2, titel: 'HR-Corporate Recruitment Officer', tagline: '' },
     { niveau: 3, titel: 'Marketing & AI Officer', tagline: '' },
   ],
@@ -78,15 +78,15 @@ export const STELLINGEN = {
       [
         [
           "Ik stem mijn werkzaamheden actief af met collega's en draag bij aan een fijne samenwerking.",
-          'Ik communiceer open, help collega\'s waar ik kan en draag bij aan een positieve sfeer binnen het team.',
+          "Ik communiceer open, help collega's waar ik kan en draag bij aan een positieve sfeer binnen het team.",
         ],
         [
           'Ik sta open voor feedback en onderneem zichtbaar actie op verbeterpunten.',
           'Ik luister, stel vragen, en laat in mijn werk concreet zien dat ik feedback heb toegepast — niet alleen dat ik ze heb gehoord.',
         ],
         [
-          'Ik werk actief aan mijn ontwikkeling via mijn POP en de begeleiding van mijn leidinggevende.',
-          'Ik weet wat mijn leerdoelen zijn en onderneem concrete stappen richting het niveau van Sales Consultant.',
+          'Ik draag actief bij aan een positief groepsgevoel en ben betrokken bij het team en de organisatie.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, toon oprechte interesse in collega's en draag bij aan een sfeer waarin iedereen zich welkom en verbonden voelt.",
         ],
       ],
       [
@@ -151,7 +151,7 @@ export const STELLINGEN = {
       [
         [
           'Ik houd Bullhorn volledig en consistent bij — klantdata, opvolgingen en taken zijn altijd actueel.',
-          'Mijn werk is overdraagbaar en voorspelbaar voor collega\'s en leidinggevende, zonder dat hier door anderen op gestuurd moet worden.',
+          "Mijn werk is overdraagbaar en voorspelbaar voor collega's en leidinggevende, zonder dat hier door anderen op gestuurd moet worden.",
         ],
         [
           'Ik neem volledig eigenaarschap over mijn salesproces van A tot Z, zonder sturing van buitenaf.',
@@ -172,8 +172,8 @@ export const STELLINGEN = {
           "Ik neem zelf initiatief tot feedbackmomenten — zowel het geven aan collega's als het ontvangen — en laat zien wat ik ermee doe.",
         ],
         [
-          'Ik werk zelfstandig aan mijn POP en onderneem concrete acties richting Senior niveau.',
-          'Ik weet wat er van een Senior Sales Consultant wordt verwacht en zet gerichte stappen om daar te komen.',
+          'Ik investeer actief in verbinding met collega\'s en draag bij aan een sterke teamcultuur.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, draag zelf ideeën aan om het groepsgevoel te versterken en zie betrokkenheid als een serieus onderdeel van mijn bijdrage aan het team.",
         ],
       ],
       [
@@ -183,7 +183,7 @@ export const STELLINGEN = {
         ],
         [
           'Ik ontwikkel mij actief als QHSSE-kennisspecialist en deel relevante kennis met mijn team.',
-          'Ik volg sectorontwikkelingen, vertaal dit naar waarde voor klanten, én ik deel deze kennis actief met collega\'s — bijvoorbeeld in teamoverleg.',
+          "Ik volg sectorontwikkelingen, vertaal dit naar waarde voor klanten, én ik deel deze kennis actief met collega's — bijvoorbeeld in teamoverleg.",
         ],
         [
           'Ik lever aantoonbare meerwaarde voor klanten en kandidaten door inhoudelijke expertise.',
@@ -237,86 +237,86 @@ export const STELLINGEN = {
     3: bouwStellingen(
       [
         [
-          'Ik zorg dat processen en systemen op teamniveau op orde zijn en draag bij aan structurele verbetering.',
-          'Ik signaleer knelpunten in werkprocessen en pak deze projectmatig op, niet alleen voor mijn eigen werk maar voor het team.',
+          'Mijn Bullhorn-gebruik is volledig, actueel en foutloos — klantdata, opvolgingen en taken zijn altijd bijgewerkt.',
+          'Mijn pipeline is altijd inzichtelijk en overdraagbaar — ook zonder toelichting van mij.',
         ],
         [
-          'Ik neem eigenaarschap over organisatiebrede vraagstukken en initieer verbeteringen zonder dat dit wordt gevraagd.',
-          'Ik signaleer knelpunten en kom zelf met verbetervoorstellen, ook wanneer niemand mij hierom vraagt — ik wacht niet op een verzoek.',
+          'Ik neem volledig eigenaarschap over mijn salesproces en stuur zelfstandig bij wanneer doelen in gevaar komen.',
+          'Ik heb geen sturing of opvolging nodig — ik signaleer zelf en onderneem actie vóórdat mijn leidinggevende dit hoeft te vragen.',
         ],
         [
-          'Ik draag actief bij aan schaalbaarheid door processen te documenteren en herhaalbaar te maken.',
-          'Ik leg werkwijzen vast in documentatie zodat ze herhaalbaar en overdraagbaar zijn, ook wanneer ik er zelf niet bij ben.',
-        ],
-      ],
-      [
-        [
-          'Ik fungeer als informeel leider en draag actief bij aan een positieve groeicultuur binnen het team.',
-          "Ik inspireer collega's, geef het goede voorbeeld en help anderen concreet groeien — bijvoorbeeld door mee te lopen of te sparren.",
-        ],
-        [
-          'Ik geef gevraagd en ongevraagd constructieve feedback en coach collega\'s actief.',
-          'Ik zie het als mijn verantwoordelijkheid om bij te dragen aan de ontwikkeling van het team, ook wanneer dat niet expliciet bij mijn functie hoort.',
-        ],
-        [
-          'Ik werk aan mijn persoonlijke leiderschapsontwikkeling en bereid me aantoonbaar voor op de rol van Managing Consultant.',
-          'Ik ken de verwachtingen van een leidinggevende rol binnen BURG QHSSE en onderneem gerichte stappen om daar te komen.',
+          'Ik maak zelfstandig planningen die consistent aansluiten op mijn targets en de organisatiedoelen.',
+          'Mijn planning is realistisch, gedisciplineerd en gebaseerd op actuele pipelinedata.',
         ],
       ],
       [
         [
-          'Mijn vakmanschap is een voorbeeld voor het team — ik lever structureel werk van hoge kwaliteit.',
-          'Ik help de kwaliteitslat voor de organisatie omhoog te leggen, onder andere door anderen mee te nemen in mijn aanpak.',
+          "Ik draag bij aan een positieve sfeer en samenwerking binnen het team en ondersteun collega's waar dat past.",
+          'Wanneer een collega ergens mee vastloopt en ik kan helpen, doe ik dat — zonder dat dit ten koste gaat van mijn eigen resultaten.',
         ],
         [
-          'Ik ben een aantoonbare QHSSE-expert en draag actief bij aan de ontwikkeling van BURG QHSSE als geheel.',
-          'Ik deel expertise, begeleid collega\'s inhoudelijk en denk mee over strategische kennisopbouw binnen de organisatie.',
+          'Ik geef en ontvang feedback constructief en gebruik dit aantoonbaar in mijn dagelijkse aanpak.',
+          'Ik zoek actief feedbackmomenten op en laat zien wat ik ermee doe.',
         ],
         [
-          'Ik maak het verschil voor strategische klanten en draag bij aan de inhoudelijke positionering van BURG QHSSE.',
-          'Klanten zoeken mij op als expert en sparringpartner op directieniveau.',
-        ],
-      ],
-      [
-        [
-          'Ik benut Bullhorn, 3CX en overige systemen optimaal en identificeer actief kansen om processen verder te automatiseren.',
-          'Ik ga verder dan correct gebruik — ik zoek naar manieren om systemen slimmer in te zetten voor het hele team.',
-        ],
-        [
-          'Ik initieer verbeterprojecten op het gebied van tooling en processen en trek deze zelfstandig.',
-          'Ik kom niet alleen met ideeën, maar voer verbeteringen ook daadwerkelijk door tot resultaat.',
-        ],
-        [
-          "Ik begeleid collega's structureel in het optimaal benutten van systemen en data.",
-          'Ik fungeer als interne kennisbron op het gebied van tools en efficiëntie.',
+          'Ik neem actief initiatief om verbinding en betrokkenheid binnen het team te versterken.',
+          "Ik initieer of stimuleer teamactiviteiten, moedig collega's aan om deel te nemen en draag actief bij aan een cultuur waarin mensen zich betrokken voelen bij het team én de organisatie.",
         ],
       ],
       [
         [
-          'Ik bouw en onderhoud meerdere strategische key-accounts en ben een vertrouwd gezicht in de markt.',
-          'Klanten beschouwen mij als een langetermijnpartner en raadplegen mij proactief, ook buiten lopende opdrachten.',
+          'Ik beheers het volledige salesproces op hoog niveau en lever structureel kwalitatief sterk werk zonder correctie.',
+          'Van lead tot afsluiting: mijn aanpak is scherp, consistent en vereist geen controle of bijsturing van buitenaf.',
         ],
         [
-          'Ik vertegenwoordig BURG QHSSE op een niveau dat onze reputatie en positionering actief versterkt.',
-          'Ik neem deel aan events, publiceer inhoudelijk op LinkedIn en ben zichtbaar als expert in de markt.',
+          'Ik ben een inhoudelijke QHSSE-specialist en zet deze kennis aantoonbaar in om klanten te overtuigen en langdurige relaties op te bouwen.',
+          'Klanten zoeken mij op als gesprekspartner die meedenkt — niet alleen als iemand die een dienst verkoopt.',
         ],
         [
-          "Ik draag actief bij aan het versterken van onze naam in nieuwe marktsegmenten of regio's.",
-          'Ik signaleer nieuwe marktkansen en vertaal deze naar concrete business.',
+          'Ik lever aantoonbare meerwaarde voor klanten door inhoudelijke scherpte en een persoonlijke aanpak.',
+          'Mijn werk onderscheidt zich door kwaliteit, diepgang en opvolging — klanten merken het verschil.',
         ],
       ],
       [
         [
-          'Ik realiseer structureel de salesdoelstelling voor mijn label of BU en overtref deze aantoonbaar.',
-          'Richtlijn voor de score: 3 = behaalt structureel het overeengekomen individuele target, 4 = overtreft dit target consistent, 5 = overtreft het target structureel en fungeert hierin als voorbeeld voor het team.',
+          'Ik benut Bullhorn, 3CX en overige systemen optimaal en voorkom structureel handmatig of dubbel werk.',
+          'Ik haal maximale waarde uit de beschikbare tooling en werk efficiënt, ook bij complexere trajecten.',
         ],
         [
-          'Ik denk strategisch over marges, rendement en commerciële kansen op organisatieniveau.',
-          'Ik help de organisatie financieel gezonde keuzes te maken en signaleer risico\'s proactief, voordat ze een probleem worden.',
+          'Ik signaleer verbeterkansen in processen en tooling en deel deze proactief met het team.',
+          'Wanneer ik zie dat iets slimmer kan, benoem ik dit — ik wacht niet op een overleg of verzoek.',
         ],
         [
-          'Ik draag bij aan de financiële groei van de organisatie door nieuwe markten, klanten en kansen te ontsluiten.',
-          'Mijn commerciële bijdrage heeft impact die verder gaat dan mijn eigen target.',
+          "Ik help collega's ad hoc bij vragen over systemen en werkwijzen wanneer dit past binnen mijn eigen werkdruk.",
+          'Ik deel mijn kennis wanneer een collega vastloopt — dit is ondersteunend, niet mijn primaire verantwoordelijkheid.',
+        ],
+      ],
+      [
+        [
+          'Ik onderhoud en bouw aantoonbaar duurzame klantrelaties en word door klanten gezien als een betrouwbare partner.',
+          'Klanten benaderen mij proactief en komen terug — mijn netwerk is het resultaat van een consistente aanpak over langere tijd.',
+        ],
+        [
+          'Ik vertegenwoordig BURG QHSSE op een niveau dat onze reputatie actief versterkt.',
+          'Mijn aanpak en zichtbaarheid in de markt — ook via LinkedIn — dragen bij aan de naamsbekendheid van de organisatie.',
+        ],
+        [
+          'Ik ben een herkenbaar gezicht in mijn marktsegment en word erkend als specialist.',
+          'Mijn netwerk en reputatie onderscheiden mij van concurrenten en geven mij een voorsprong bij het binnenhalen van nieuwe opdrachten.',
+        ],
+      ],
+      [
+        [
+          'Ik realiseer structureel mijn individuele omzetdoelstelling en overtref deze aantoonbaar.',
+          'Richtlijn voor de score: 3 = behaalt structureel het overeengekomen individuele target, 4 = overtreft dit target consistent, 5 = overtreft het target structureel over meerdere aaneengesloten periodes.',
+        ],
+        [
+          'Ik ga bewust om met mijn commerciële tijd en focus op trajecten met de hoogste kans op succes en het beste rendement.',
+          'Ik laat mij niet afleiden door kansen die weinig opleveren — ik kies bewust en met oog op rendement.',
+        ],
+        [
+          'Ik signaleer commerciële kansen actief en converteer deze zelfstandig naar resultaat.',
+          'Ik wacht niet op leads of opdrachten — ik genereer ze zelf en zet ze om zonder daarin gestuurd te hoeven worden.',
         ],
       ],
     ),
@@ -340,7 +340,7 @@ export const STELLINGEN = {
       ],
       [
         [
-          'Ik stem mijn werkzaamheden actief af met sales consultants en collega\'s voor een soepel recruitmentproces.',
+          "Ik stem mijn werkzaamheden actief af met sales consultants en collega's voor een soepel recruitmentproces.",
           'Ik communiceer open, help waar ik kan en draag bij aan een positieve samenwerking.',
         ],
         [
@@ -348,8 +348,8 @@ export const STELLINGEN = {
           'Ik luister, stel vragen, en laat in mijn werk concreet zien dat ik feedback heb toegepast.',
         ],
         [
-          'Ik werk actief aan mijn ontwikkeling via mijn POP en de begeleiding van mijn leidinggevende.',
-          'Ik weet wat mijn leerdoelen zijn en onderneem concrete stappen richting het niveau van Recruitment Consultant.',
+          'Ik draag actief bij aan een positief groepsgevoel en ben betrokken bij het team en de organisatie.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, toon oprechte interesse in collega's en draag bij aan een sfeer waarin iedereen zich welkom en verbonden voelt.",
         ],
       ],
       [
@@ -427,7 +427,7 @@ export const STELLINGEN = {
       ],
       [
         [
-          'Ik draag actief bij aan teamresultaat door kennis te delen, mee te denken bij jobpulls en collega\'s te ondersteunen.',
+          "Ik draag actief bij aan teamresultaat door kennis te delen, mee te denken bij jobpulls en collega's te ondersteunen.",
           'Ik zie het succes van het team als mede mijn verantwoordelijkheid, niet alleen mijn eigen plaatsingen.',
         ],
         [
@@ -435,8 +435,8 @@ export const STELLINGEN = {
           "Ik neem zelf initiatief tot feedbackmomenten — zowel het geven aan collega's als het ontvangen — en laat zien wat ik ermee doe.",
         ],
         [
-          'Ik werk zelfstandig aan mijn POP en onderneem concrete acties richting Senior Recruitment Consultant niveau.',
-          'Ik weet wat er van een Senior wordt verwacht en zet gerichte stappen om daar te komen.',
+          'Ik investeer actief in verbinding met collega\'s en draag bij aan een sterke teamcultuur.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, draag zelf ideeën aan om het groepsgevoel te versterken en zie betrokkenheid als een serieus onderdeel van mijn bijdrage aan het team.",
         ],
       ],
       [
@@ -446,7 +446,7 @@ export const STELLINGEN = {
         ],
         [
           'Ik ontwikkel mij actief als QHSSE-kennisspecialist binnen mijn markt en deel dit met het team.',
-          'Ik ben op de hoogte van marktontwikkelingen, salarisranges en beschikbaarheid, vertaal dit naar betere matches, én deel deze kennis actief met collega\'s.',
+          "Ik ben op de hoogte van marktontwikkelingen, salarisranges en beschikbaarheid, vertaal dit naar betere matches, én deel deze kennis actief met collega's.",
         ],
         [
           'Ik lever kwalitatieve matches en kandidaatpresentaties die aantoonbare meerwaarde bieden voor klanten.',
@@ -500,97 +500,97 @@ export const STELLINGEN = {
     3: bouwStellingen(
       [
         [
-          'Ik waak over de kwaliteit van CRM-data en procesdiscipline binnen het team.',
-          'Ik zorg dat Bullhorn-data en recruitmentprocessen op teamniveau structureel op orde en overdraagbaar zijn — los van mijn eigen pipeline.',
+          'Mijn Bullhorn-gebruik is volledig, actueel en foutloos — kandidaatdata, voortgang en contactmomenten zijn altijd bijgewerkt.',
+          'Mijn pipeline is altijd inzichtelijk en overdraagbaar — ook zonder toelichting van mij.',
         ],
         [
-          'Ik neem eigenaarschap over de optimalisatie van recruitmentprocessen en pak verbeteringen projectmatig op.',
-          'Ik signaleer knelpunten in werkwijzen en systemen en initieer concrete verbeteringen, ook zonder dat dit gevraagd wordt.',
+          'Ik neem volledig eigenaarschap over mijn recruitmentproces en stuur zelfstandig bij wanneer doelen in gevaar komen.',
+          'Ik heb geen sturing of opvolging nodig — ik signaleer zelf en onderneem actie vóórdat mijn leidinggevende dit hoeft te vragen.',
         ],
         [
-          'Ik draag actief bij aan schaalbaarheid door recruitmentprocessen te documenteren en herhaalbaar te maken.',
-          'Ik leg recruitmentprocessen vast in werkwijzen of documentatie, zodat ze herhaalbaar en overdraagbaar zijn — ook als ik er zelf niet bij ben.',
-        ],
-      ],
-      [
-        [
-          'Ik ondersteun Associate en Recruitment Consultants actief in hun dagelijkse werkzaamheden en ontwikkeling.',
-          "Ik fungeer als informeel leider, geef het goede voorbeeld en help collega's concreet groeien.",
-        ],
-        [
-          'Ik geef gevraagd en ongevraagd constructieve feedback en draag bij aan een cultuur van leren en verbeteren.',
-          'Ik benoem het ook wanneer iets niet goed gaat — bijvoorbeeld bij CRM-discipline of kwaliteit van werk — en zie de ontwikkeling van het team als mede mijn verantwoordelijkheid.',
-        ],
-        [
-          'Ik werk aan mijn persoonlijke leiderschapsontwikkeling en bereid me aantoonbaar voor op de rol van Managing Consultant.',
-          'Ik ken de verwachtingen van een leidinggevende rol binnen BURG QHSSE en onderneem gerichte stappen om daar te komen.',
+          'Ik maak zelfstandig planningen die consistent aansluiten op mijn targets en bijdragen aan het teamresultaat.',
+          'Mijn planning is realistisch, gedisciplineerd en gebaseerd op actuele kandidaten- en vacaturedata.',
         ],
       ],
       [
         [
-          'Ik beheers complexe vacatures en schaarse profielen binnen de QHSSE-markt volledig zelfstandig.',
-          'Mijn vakmanschap is een voorbeeld voor het team en ik help de kwaliteitslat omhoog te leggen.',
+          "Ik draag bij aan een positieve sfeer en samenwerking binnen het team en ondersteun collega's waar dat past.",
+          'Wanneer een collega ergens mee vastloopt en ik kan helpen, doe ik dat — zonder dat dit ten koste gaat van mijn eigen resultaten.',
         ],
         [
-          'Ik ben een aantoonbare marktkenner en inhoudelijk specialist binnen mijn QHSSE-discipline.',
-          'Ik deel expertise actief, begeleid collega\'s inhoudelijk en denk mee over strategische kennisopbouw.',
+          'Ik geef en ontvang feedback constructief en gebruik dit aantoonbaar in mijn dagelijkse aanpak.',
+          'Ik zoek actief feedbackmomenten op en laat zien wat ik ermee doe.',
         ],
         [
-          'Ik draag actief bij aan de verdere ontwikkeling van recruitment best practices binnen BURG QHSSE.',
-          'Ik initieer en deel verbeteringen in aanpak en methodiek die het hele team sterker maken.',
-        ],
-      ],
-      [
-        [
-          'Ik benut Bullhorn, 3CX en overige systemen optimaal en identificeer actief kansen voor verdere automatisering.',
-          'Ik ga verder dan correct gebruik — ik zoek naar manieren om recruitmentprocessen slimmer in te richten.',
-        ],
-        [
-          'Ik initieer verbeterprojecten op het gebied van tooling en recruitmentprocessen en trek deze zelfstandig.',
-          'Ik kom niet alleen met ideeën, maar voer verbeteringen ook daadwerkelijk door tot resultaat.',
-        ],
-        [
-          "Ik begeleid collega's structureel in het optimaal benutten van systemen en data.",
-          'Ik fungeer als interne kennisbron op het gebied van tools, data en efficiëntie binnen recruitment.',
+          'Ik neem actief initiatief om verbinding en betrokkenheid binnen het team te versterken.',
+          "Ik initieer of stimuleer teamactiviteiten, moedig collega's aan om deel te nemen en draag actief bij aan een cultuur waarin mensen zich betrokken voelen bij het team én de organisatie.",
         ],
       ],
       [
         [
-          'Ik bouw en onderhoud langdurige relaties met key kandidaten en stakeholders in de QHSSE-markt.',
-          'Ik ben een vertrouwd aanspreekpunt voor professionals in mijn specialisme en word proactief benaderd.',
+          'Ik beheers complexe vacatures en schaarse profielen binnen de QHSSE-markt volledig zelfstandig en lever structureel kwalitatief sterk werk.',
+          'Van sourcing tot plaatsing: mijn aanpak is scherp, consistent en vereist geen correctie of controle van buitenaf.',
+        ],
+        [
+          'Ik ben een inhoudelijke marktkenner binnen mijn QHSSE-specialisme en zet deze expertise aantoonbaar in voor betere matches.',
+          'Ik ken de markt, salarisranges en beschikbaarheid door en door — en vertaal dit naar meerwaarde voor zowel klant als kandidaat.',
+        ],
+        [
+          'Ik lever aantoonbare meerwaarde voor klanten en kandidaten door inhoudelijke scherpte en persoonlijke begeleiding.',
+          'Klanten en kandidaten merken het verschil in mijn aanpak — mijn matches zijn sterker en mijn begeleiding is betrouwbaarder dan gemiddeld.',
+        ],
+      ],
+      [
+        [
+          'Ik benut Bullhorn, 3CX en overige systemen optimaal en voorkom structureel handmatig of dubbel werk.',
+          'Ik haal maximale waarde uit de beschikbare tooling en werk efficiënt, ook bij complexere of langlopende trajecten.',
+        ],
+        [
+          'Ik signaleer verbeterkansen in recruitmentprocessen en tooling en deel deze proactief met het team.',
+          'Wanneer ik zie dat iets slimmer kan, benoem ik dit — ik wacht niet op een overleg of verzoek.',
+        ],
+        [
+          "Ik help collega's ad hoc bij vragen over systemen en werkwijzen wanneer dit past binnen mijn eigen werkdruk.",
+          'Ik deel mijn kennis wanneer een collega vastloopt — dit is ondersteunend, niet mijn primaire verantwoordelijkheid.',
+        ],
+      ],
+      [
+        [
+          'Ik onderhoud en bouw aantoonbaar langdurige relaties met kandidaten en stakeholders in de QHSSE-markt.',
+          'Professionals benaderen mij proactief en komen terug — mijn netwerk is het resultaat van een consistente aanpak over langere tijd.',
         ],
         [
           'Ik vertegenwoordig BURG QHSSE op een niveau dat onze reputatie als specialist actief versterkt.',
-          'Mijn zichtbaarheid en aanpak in de markt dragen bij aan de naamsbekendheid van de organisatie.',
+          'Mijn aanpak en zichtbaarheid in de markt — ook via LinkedIn — dragen bij aan de naamsbekendheid van de organisatie.',
         ],
         [
-          'Ik draag actief bij aan het versterken van onze marktpositie door nieuwe netwerken en segmenten aan te boren.',
-          'Ik signaleer nieuwe kansen in de arbeidsmarkt en vertaal deze naar concrete recruitmentactiviteiten.',
+          'Ik ben een herkenbaar gezicht in mijn marktsegment en word erkend als specialist door professionals in de markt.',
+          'Mijn netwerk en reputatie geven mij een voorsprong bij het vinden van schaarse kandidaten.',
         ],
       ],
       [
         [
           'Ik realiseer structureel en zelfstandig mijn recruitmenttargets en overtref deze aantoonbaar.',
-          'Richtlijn voor de score: 3 = behaalt structureel het overeengekomen individuele target, 4 = overtreft dit target consistent, 5 = overtreft het target structureel en fungeert hierin als voorbeeld voor het team.',
+          'Richtlijn voor de score: 3 = behaalt structureel het overeengekomen individuele target, 4 = overtreft dit target consistent, 5 = overtreft het target structureel over meerdere aaneengesloten periodes.',
         ],
         [
-          'Ik denk mee over de financiële impact van recruitmentkeuzes en prioriteer op basis van rendement.',
-          'Ik help het team focussen op vacatures en kandidaten die de meeste waarde genereren.',
+          'Ik ga bewust om met mijn tijd en focus op vacatures en kandidaten met de hoogste kans op plaatsing en het beste rendement.',
+          'Ik laat mij niet afleiden door trajecten die weinig opleveren — ik kies bewust en met oog op resultaat.',
         ],
         [
-          'Ik draag bij aan de groei van de organisatie door schaarse profielen in te vullen en nieuwe markten te ontsluiten.',
-          'Mijn bijdrage aan plaatsingen en netwerk heeft impact die verder gaat dan mijn eigen target.',
+          'Ik signaleer kansen in de markt actief en vertaal deze zelfstandig naar plaatsingen.',
+          'Ik wacht niet op vacatures of kandidaten — ik genereer ze zelf en zet ze om zonder daarin gestuurd te hoeven worden.',
         ],
       ],
     ),
   },
   Corporate: {
-    // 1 = Finance Medewerker
+    // 1 = Finance Officer
     1: bouwStellingen(
       [
         [
           'Ik verwerk inkomende en uitgaande facturen, betalingen en boekingen correct en tijdig in het financiële systeem.',
-          'Mijn verwerking is volledig en foutloos — afwijkingen signaleer ik direct en los ik niet stilzwijgend op.',
+          'Mijn verwerking is volledig — afwijkingen signaleer ik direct en los ik niet stilzwijgend op.',
         ],
         [
           'Ik houd mijn werkoverzicht bij en zorg dat openstaande posten, betalingstermijnen en deadlines altijd actueel zijn.',
@@ -603,7 +603,7 @@ export const STELLINGEN = {
       ],
       [
         [
-          "Ik stem mijn werkzaamheden actief af met collega's en draag bij aan een soepele samenwerking binnen Team Corporate.",
+          "Ik stem mijn werkzaamheden actief af met collega's en draag bij aan een soepele samenwerking binnen Team Corporate en de Business.",
           'Ik communiceer open over deadlines, verwachtingen en knelpunten die effect hebben op het werk van anderen.',
         ],
         [
@@ -611,8 +611,8 @@ export const STELLINGEN = {
           'Ik luister, stel vragen en laat in mijn werk concreet zien dat ik feedback heb toegepast — niet alleen dat ik het gehoord heb.',
         ],
         [
-          'Ik werk actief aan mijn professionele ontwikkeling en stel concrete leerdoelen via mijn POP.',
-          'Ik weet wat ik wil verbeteren en onderneem hier gerichte, aantoonbare stappen in.',
+          'Ik investeer actief in verbinding met collega\'s en draag bij aan een sterke teamcultuur.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, draag zelf ideeën aan om het groepsgevoel te versterken en zie betrokkenheid als een serieus onderdeel van mijn bijdrage aan het team.",
         ],
       ],
       [
@@ -622,7 +622,7 @@ export const STELLINGEN = {
         ],
         [
           'Ik beheers de financiële processen die bij mijn rol horen en weet wat ik wel en niet zelfstandig mag afhandelen.',
-          'Ik handeel binnen de kaders van mijn functie en escaleer tijdig wanneer iets buiten mijn bevoegdheid of kennis valt.',
+          'Ik handel binnen de kaders van mijn functie en geef tijdig aan wanneer iets buiten mijn bevoegdheid of kennis valt.',
         ],
         [
           "Ik signaleer onregelmatigheden, afwijkingen of risico's in de administratie proactief en meld dit direct.",
@@ -640,7 +640,7 @@ export const STELLINGEN = {
         ],
         [
           'Ik sta open voor nieuwe tools en geautomatiseerde werkwijzen en pas me aan wanneer processen worden aangepast.',
-          'Ik draag een positieve houding ten aanzien van digitalisering en optimalisatie binnen Team Corporate.',
+          'Ik draag een positieve houding ten aanzien van digitalisering en optimalisatie binnen Finance.',
         ],
       ],
       [
@@ -660,7 +660,7 @@ export const STELLINGEN = {
       [
         [
           'Ik lever mijn werk tijdig aan en zorg dat financiële verplichtingen worden nagekomen binnen de gestelde termijnen.',
-          'Factuurverwerking, betalingsruns en reconciliaties zijn altijd tijdig afgerond — vertragingen meld ik proactief, niet achteraf.',
+          'Factuurverwerking, betalingsruns en btw-afsluitingen zijn altijd tijdig afgerond — eventuele vertragingen meld ik proactief, niet achteraf.',
         ],
         [
           'Ik denk bij mijn werkzaamheden na over wat ze opleveren en wat ze kosten — ook intern.',
@@ -676,7 +676,7 @@ export const STELLINGEN = {
     2: bouwStellingen(
       [
         [
-          'Ik houd HR-dossiers, recruitmentstatussen en procesinformatie actueel en volledig in de juiste systemen.',
+          'Ik houd HR-dossiers, personeelsmutaties, recruitmentstatussen en procesinformatie actueel en volledig in de juiste systemen.',
           "Collega's en leidinggevende kunnen altijd op mijn data voortbouwen — er zijn geen blinde vlekken in mijn deel van het HR-systeem.",
         ],
         [
@@ -698,22 +698,22 @@ export const STELLINGEN = {
           'Ik luister, stel vragen en laat concreet zien wat ik met feedback heb gedaan — ook wanneer het gaat over onze eigen HR-processen.',
         ],
         [
-          'Ik werk actief aan mijn ontwikkeling als HR- en recruitmentprofessional via mijn POP.',
-          'Ik weet wat mijn leerdoelen zijn en onderneem gerichte stappen om te groeien in kennis en impact binnen de functie.',
+          'Ik investeer actief in verbinding met collega\'s en draag bij aan een sterke teamcultuur.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, draag zelf ideeën aan om het groepsgevoel te versterken en zie betrokkenheid als een serieus onderdeel van mijn bijdrage aan het team.",
         ],
       ],
       [
         [
-          'Ik beheers de volledige werving-en-selectiecyclus voor interne vacatures, van functieprofiel tot contractaanbod.',
-          'Mijn trajecten zijn goed gedocumenteerd, tijdig afgerond en voldoen structureel aan de kwaliteitsnormen.',
+          'Ik voer HR-administratie nauwkeurig en tijdig uit — contracten, mutaties en personeelsdossiers zijn altijd correct en actueel.',
+          'Ik verwerk mutaties en documenten zoals afgesproken en controleer mijn werk voordat ik het aanlever.',
         ],
         [
-          'Ik ondersteun leidinggevenden proactief bij HR-taken zoals contractbeheer, onboarding, GPB-administratie en lopende HR-vraagstukken.',
-          'Ik wacht niet tot leidinggevenden naar mij toe komen — ik anticipeer op deadlines en behoeften en zorg dat zaken op tijd geregeld zijn.',
+          'Ik beantwoord vragen van medewerkers en leidinggevenden over HR-onderwerpen correct en tijdig, en schakel bij twijfel door naar de juiste persoon.',
+          'Ik ben een betrouwbaar eerste aanspreekpunt voor dagelijkse HR-vragen en weet wanneer iets buiten mijn bevoegdheid valt.',
         ],
         [
-          'Ik bouw en onderhoud actief de employer branding van BURG QHSSE via de juiste kanalen.',
-          'Mijn bijdrage aan employer branding is zichtbaar, consistent en aansluitend op onze doelgroep en positionering in de QHSSE-markt.',
+          'Ik begeleid interne kandidaten van eerste contact tot onboarding en zorg dat zij vanaf dag één goed landen bij BURG QHSSE.',
+          'Ik voer het recruitmentproces uit zoals afgesproken, onderhoud contact met kandidaten gedurende het traject en draag bij aan een positieve candidate experience.',
         ],
       ],
       [
@@ -727,7 +727,7 @@ export const STELLINGEN = {
         ],
         [
           'Ik sta open voor AI-ondersteunde werkwijzen en nieuwe tools en pas ze toe wanneer ze aantoonbare meerwaarde bieden.',
-          'Ik experimenteer verantwoord met nieuwe mogelijkheden en draag positief bij aan de digitalisering van Team Corporate.',
+          'Ik experimenteer verantwoord met nieuwe mogelijkheden en draag positief bij aan de digitalisering van onze Corporate Recruitment en HR-processen.',
         ],
       ],
       [
@@ -777,7 +777,7 @@ export const STELLINGEN = {
       ],
       [
         [
-          'Ik maak data, analyses en AI-toepassingen begrijpelijk voor collega\'s zonder technische achtergrond.',
+          "Ik maak data, analyses en AI-toepassingen begrijpelijk voor collega's zonder technische achtergrond.",
           'Ik vertaal resultaten en tools naar heldere inzichten die anderen direct kunnen gebruiken in hun werk.',
         ],
         [
@@ -785,14 +785,14 @@ export const STELLINGEN = {
           'Ik test mijn applicaties en analyses samen met de eindgebruikers en pas ze aan op basis van hun praktijkervaring.',
         ],
         [
-          'Ik werk actief aan mijn ontwikkeling als Marketing- en AI-professional via mijn POP.',
-          'Ik volg relevante ontwikkelingen op het snijvlak van marketing, data en AI en vertaal dit naar concrete toepassingen voor BURG QHSSE.',
+          'Ik investeer actief in verbinding met collega\'s en draag bij aan een sterke teamcultuur.',
+          "Ik ben aanwezig bij teamactiviteiten en bedrijfsuitjes, draag zelf ideeën aan om het groepsgevoel te versterken en zie betrokkenheid als een serieus onderdeel van mijn bijdrage aan het team.",
         ],
       ],
       [
         [
           'Ik beheer en analyseer marketingdata nauwkeurig en lever betrouwbare inzichten op aan de juiste stakeholders.',
-          'Mijn analyses zijn reproduceerbaar, goed gedocumenteerd en vrij van fouten of ongetoetste aannames.',
+          'Mijn analyses zijn reproduceerbaar, goed gedocumenteerd en onderbouwd.',
         ],
         [
           'Ik bouw functionele AI-toepassingen die een aantoonbaar werkend doel dienen voor BURG QHSSE.',
@@ -805,7 +805,7 @@ export const STELLINGEN = {
       ],
       [
         [
-          'Ik zet AI-tools en automatiseringsoplossingen in om repetitieve of tijdrovende marketing- en datataken te vereenvoudigen.',
+          'Ik zet AI-tools en automatiseringsoplossingen in om repetitieve of tijdrovende marketing- en datataken of processen in de Business te vereenvoudigen.',
           'Ik identificeer processen die geautomatiseerd kunnen worden en bouw of implementeer hier gericht oplossingen voor.',
         ],
         [
@@ -813,8 +813,8 @@ export const STELLINGEN = {
           'Ik kom niet alleen met ideeën, maar werk ze uit tot een werkbaar plan of werkend prototype.',
         ],
         [
-          'Ik help collega\'s bij het begrijpen en gebruiken van AI-tools en marketingdashboards.',
-          'Ik fungeer als interne kennisbron op het snijvlak van marketing en technologie binnen Team Corporate.',
+          "Ik help collega's bij het begrijpen en gebruiken van AI-tools en marketingdashboards.",
+          'Ik fungeer als interne kennisbron op het snijvlak van marketing en technologie binnen de organisatie.',
         ],
       ],
       [
@@ -824,16 +824,16 @@ export const STELLINGEN = {
         ],
         [
           'Ik zorg dat marketingkeuzes data-gedreven zijn en aansluiten op onze doelgroep en positionering.',
-          'Ik onderbouw keuzes met cijfers — niet alleen met gevoel — en stel bij op basis van wat de data laat zien.',
+          'Ik onderbouw keuzes met cijfers (niet alleen met gevoel) en stel bij op basis van wat de data laat zien.',
         ],
         [
           'Ik draag bij aan een professionele en consistente digitale aanwezigheid van BURG QHSSE.',
-          'Mijn bijdrage versterkt onze reputatie als specialist in de QHSSE-sector — zowel in content als in de technische laag daaronder.',
+          'Mijn bijdrage versterkt onze reputatie als specialist in de QHSSE-sector, zowel in content als in de technische laag daaronder.',
         ],
       ],
       [
         [
-          'Ik benoem bij elk nieuw project of elke tool de verwachte baten voordat ik begin — niet achteraf.',
+          'Ik benoem bij elk nieuw project of elke tool de verwachte baten en kosten voordat ik begin — niet achteraf.',
           'Ik maak concreet wat het oplevert (tijdsbesparing, bereik, conversie, kostenverlaging) en maak dit bespreekbaar met mijn leidinggevende vóór de uitvoering.',
         ],
         [
