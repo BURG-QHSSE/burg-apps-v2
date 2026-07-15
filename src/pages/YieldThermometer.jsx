@@ -7,8 +7,9 @@ import {
   verwijderPlaatsing,
 } from '../lib/yieldApi'
 
-// H2 2026-target: gemiddeld 0,8 consultants per plaatsing (dus meer dan 1
-// plaatsing per consultant per maand). Hoog dit op bij een nieuw target.
+// H2 2026-target: gemiddeld 0,8 plaatsingen per consultant per maand.
+// Einddoel op termijn: yield 1,0 (bv. 12 consultants op 12 plaatsingen).
+// Hoog YIELD_TARGET op bij een nieuw target.
 const YIELD_TARGET = 0.8
 
 function maandLabel() {
@@ -22,14 +23,39 @@ function fmtYield(n) {
 }
 
 /**
- * Dashboard-widget: yield = aantal consultants (profiles.yield_telt_mee,
- * aan te vinken in het Adminpaneel) gedeeld door aantal plaatsingen deze
- * kalendermaand. Gevisualiseerd als thermometer i.p.v. een kaal getal — de
- * vulling volgt hoe dicht (of hoever voorbij) YIELD_TARGET de huidige
- * waarde zit; leger = verder van target, vol = target gehaald of beter.
- * Loggen/verwijderen van plaatsingen is alleen mogelijk voor hr/admin
- * (afgedwongen via RLS, zie supabase/schema.sql) — de thermometer zelf is
- * voor iedereen zichtbaar.
+ * Motiverende (cursieve) boodschap onder de thermometer: 1 openingsbericht
+ * bij 0 plaatsingen deze maand, daarna 5 oplopende niveaus (25% van target
+ * per stap) tot en met het behalen/overtreffen van de target — een
+ * bouw-metafoor, passend bij BURG.
+ */
+function bepaalNiveau(aantalPlaatsingen, vulPercentage) {
+  if (aantalPlaatsingen === 0) {
+    return { toon: 'brand', boodschap: 'Er staat nog niets — jij kan de eerste zijn richting grootse stappen.' }
+  }
+  if (vulPercentage <= 25) {
+    return { toon: 'brand', boodschap: 'De eerste steen ligt. Zo begint een fundament voor grootse stappen.' }
+  }
+  if (vulPercentage <= 50) {
+    return { toon: 'brand', boodschap: 'De muren komen omhoog — je bouwt gestaag door.' }
+  }
+  if (vulPercentage <= 75) {
+    return { toon: 'amber', boodschap: 'Halverwege en in opmars — de toren krijgt vorm.' }
+  }
+  if (vulPercentage < 100) {
+    return { toon: 'amber', boodschap: 'Bijna bij de top — nog een laatste zet naar het doel.' }
+  }
+  return { toon: 'mos', boodschap: 'De vlag gaat in top — yield-target gehaald, knap werk!' }
+}
+
+/**
+ * Dashboard-widget: yield = aantal plaatsingen deze kalendermaand gedeeld
+ * door aantal consultants (profiles.yield_telt_mee, aan te vinken in het
+ * Adminpaneel) — dus hoger is beter. Gevisualiseerd als thermometer i.p.v.
+ * een kaal getal — de vulling volgt hoe dicht (of hoever voorbij)
+ * YIELD_TARGET de huidige waarde zit; leger = verder van target, vol =
+ * target gehaald of beter. Loggen/verwijderen van plaatsingen is alleen
+ * mogelijk voor hr/admin (afgedwongen via RLS, zie supabase/schema.sql) —
+ * de thermometer zelf is voor iedereen zichtbaar.
  */
 export default function YieldThermometer() {
   const { profile } = useAuth()
@@ -108,18 +134,9 @@ export default function YieldThermometer() {
   }
 
   const aantalPlaatsingen = plaatsingen.length
-  const yieldWaarde = aantalPlaatsingen === 0 ? Infinity : consultants / aantalPlaatsingen
-  const vulPercentage = Math.max(0, Math.min(100, (YIELD_TARGET / yieldWaarde) * 100 || 0))
-
-  let toon = 'brand'
-  let boodschap = 'Nog een weg te gaan deze maand.'
-  if (vulPercentage >= 100) {
-    toon = 'mos'
-    boodschap = 'Yield-target voor deze maand gehaald — knap werk!'
-  } else if (vulPercentage >= 70) {
-    toon = 'amber'
-    boodschap = 'Bijna bij het doel — nog even doorpakken.'
-  }
+  const yieldWaarde = aantalPlaatsingen / consultants
+  const vulPercentage = Math.max(0, Math.min(100, (yieldWaarde / YIELD_TARGET) * 100))
+  const { toon, boodschap } = bepaalNiveau(aantalPlaatsingen, vulPercentage)
 
   return (
     <section className="yield-widget section-card">
@@ -144,7 +161,7 @@ export default function YieldThermometer() {
 
         <div className="yield-stats">
           <span className="metric-card-value">{fmtYield(yieldWaarde)}</span>
-          <span className="metric-card-label">consultants per plaatsing</span>
+          <span className="metric-card-label">plaatsingen per consultant</span>
           <p className="tool-card-hint">
             {consultants} consultants · {aantalPlaatsingen} plaatsing{aantalPlaatsingen === 1 ? '' : 'en'} deze maand
           </p>
