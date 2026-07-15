@@ -301,6 +301,132 @@
   color: var(--inkt-60);
 }
 
+/* ---------- Dashboard: yield-thermometer ---------- */
+
+.yield-widget {
+  margin-bottom: var(--space-6);
+}
+
+.yield-widget-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.yield-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.thermo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.thermo-tube {
+  position: relative;
+  width: 28px;
+  height: 140px;
+  border-radius: 14px;
+  background: var(--lijn);
+  border: 2px solid var(--inkt-60);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.thermo-fill {
+  width: 100%;
+  border-radius: 14px 14px 0 0;
+  transition: height 0.6s ease, background-color 0.4s ease;
+}
+
+.thermo-bulb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  margin-top: -14px;
+  border: 2px solid var(--inkt-60);
+  transition: background-color 0.4s ease;
+}
+
+.thermo-fill-brand,
+.thermo-bulb-brand {
+  background: var(--brand);
+}
+
+.thermo-fill-amber,
+.thermo-bulb-amber {
+  background: var(--amber);
+}
+
+.thermo-fill-mos,
+.thermo-bulb-mos {
+  background: var(--mos);
+}
+
+.yield-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.yield-boodschap {
+  margin-top: var(--space-2);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--inkt-60);
+}
+
+.yield-actions {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--lijn);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.yield-log {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.yield-log-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--blauwgrijs-10);
+  color: var(--blauwgrijs);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.yield-log-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: var(--space-1);
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.yield-log-remove:hover {
+  color: var(--brand);
+}
+
 .featured-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

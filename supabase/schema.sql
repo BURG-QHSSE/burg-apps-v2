@@ -29,6 +29,11 @@ create table profiles (
   -- iemand admin/manager/user is. Vervangt de hardgecodeerde e-mailcheck
   -- uit het originele mijn-omgeving.html.
   mijn_omgeving_uitgebreid boolean not null default false,
+  -- Telt dit profiel mee als consultant in de yield-berekening op het
+  -- dashboard (aantal consultants / aantal plaatsingen deze maand)? Los van
+  -- de rol-hiërarchie, net als mijn_omgeving_uitgebreid — een admin vinkt
+  -- dit per persoon aan in het Adminpaneel, ongeacht rol.
+  yield_telt_mee boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -310,6 +315,74 @@ begin
   update profiles set mijn_omgeving_uitgebreid = new_waarde where id = target_id;
 end;
 $$ language plpgsql security definer;
+
+-- ============================================
+-- Yield-thermometer: wie telt mee als consultant (de)activeren — alleen
+-- admin, vanuit het Adminpaneel. Zelfde patroon als
+-- set_mijn_omgeving_uitgebreid hierboven.
+-- ============================================
+create or replace function set_yield_telt_mee(
+  target_id uuid,
+  new_waarde boolean
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen dit wijzigen';
+  end if;
+
+  update profiles set yield_telt_mee = new_waarde where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- ============================================
+-- Yield-thermometer: aantal consultants dat meetelt — nodig omdat RLS op
+-- profiles een gewone 'user' alleen zijn eigen rij laat lezen (zie
+-- policies hierboven). SECURITY DEFINER + grant aan alle authenticated
+-- gebruikers, en geeft bewust ALLEEN een getal terug (geen namen, rollen of
+-- andere profieldata) — dezelfde aanpak als de eerdere uitgebreid_emails().
+-- ============================================
+create or replace function yield_consultant_count()
+returns int
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select count(*)::int from profiles where yield_telt_mee = true and actief = true;
+$$;
+
+grant execute on function yield_consultant_count() to authenticated;
+
+-- ============================================
+-- Yield-thermometer: log van plaatsingen. Bewust een aparte, simpele tabel
+-- (geen koppeling met jobs/burg-jobs — dat is een los Supabase-project en
+-- gaat over vacatures, niet over plaatsingen) — elke rij is één plaatsing
+-- op een datum. Iedereen mag lezen (alleen datum + wie het toevoegde, geen
+-- gevoelige data), alleen hr/admin mag toevoegen/verwijderen — zie
+-- Dashboard.jsx (YieldThermometer-widget) en AdminPanel.jsx (yield_telt_mee
+-- checkbox).
+-- ============================================
+create table plaatsingen (
+  id uuid default gen_random_uuid() primary key,
+  geplaatst_op date not null default current_date,
+  toegevoegd_door uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table plaatsingen enable row level security;
+
+create policy "iedereen leest plaatsingen"
+  on plaatsingen for select
+  using (true);
+
+create policy "hr/admin voegen plaatsingen toe"
+  on plaatsingen for insert
+  with check (my_role() in ('hr', 'admin'));
+
+create policy "hr/admin verwijderen plaatsingen"
+  on plaatsingen for delete
+  using (my_role() in ('hr', 'admin'));
 
 -- ============================================
 -- PROEFTIJD TRACKER — gedeelde lijst kandidaten in proeftijd.

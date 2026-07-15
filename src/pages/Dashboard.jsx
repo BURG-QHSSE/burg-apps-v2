@@ -7,6 +7,7 @@ import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
 import ToolIcon from '../lib/toolIcons'
+import YieldThermometer from './YieldThermometer'
 
 function getGroet() {
   const uur = new Date().getHours()
@@ -153,6 +154,8 @@ export default function Dashboard() {
       </header>
 
       <main className="page-content">
+        <YieldThermometer />
+
         {featuredTools.length > 0 && (
           <section className="tool-section">
             <p className="section-label">Voor jou · meest gebruikt</p>

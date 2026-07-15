@@ -10,6 +10,7 @@ import {
   createUser,
   deleteUserPermanently,
 } from '../lib/adminApi'
+import { setYieldTeltMee } from '../lib/yieldApi'
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 
@@ -244,6 +245,26 @@ export default function AdminPanel() {
     }
   }
 
+  async function handleYieldToggle(profileId, newWaarde) {
+    const previousProfile = profiles.find((p) => p.id === profileId)
+    const previousWaarde = previousProfile?.yield_telt_mee
+
+    setProfiles((current) => current.map((p) => (p.id === profileId ? { ...p, yield_telt_mee: newWaarde } : p)))
+    setRowErrors((current) => ({ ...current, [profileId]: null }))
+    setPendingIds((current) => ({ ...current, [profileId]: true }))
+
+    try {
+      await setYieldTeltMee(profileId, newWaarde)
+    } catch (err) {
+      setProfiles((current) =>
+        current.map((p) => (p.id === profileId ? { ...p, yield_telt_mee: previousWaarde } : p)),
+      )
+      setRowErrors((current) => ({ ...current, [profileId]: err.message }))
+    } finally {
+      setPendingIds((current) => ({ ...current, [profileId]: false }))
+    }
+  }
+
   async function handleDeleteConfirmed(profileId) {
     setRowErrors((current) => ({ ...current, [profileId]: null }))
     setPendingIds((current) => ({ ...current, [profileId]: true }))
@@ -391,6 +412,7 @@ export default function AdminPanel() {
                   <th>Laatst actief</th>
                   <th>Tool-gebruik</th>
                   <th>Kansen Swiper uitgebreid</th>
+                  <th>Telt mee voor yield</th>
                   <th>Verwijderen</th>
                 </tr>
               </thead>
@@ -491,6 +513,16 @@ export default function AdminPanel() {
                         />
                       </label>
                     </td>
+                    <td data-label="Telt mee voor yield">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!profile.yield_telt_mee}
+                          disabled={pendingIds[profile.id]}
+                          onChange={(e) => handleYieldToggle(profile.id, e.target.checked)}
+                        />
+                      </label>
+                    </td>
                     <td data-label="Verwijderen">
                       {confirmDeleteId === profile.id ? (
                         <div className="admin-confirm-delete">
@@ -530,7 +562,7 @@ export default function AdminPanel() {
                       )}
                     </td>
                     {rowErrors[profile.id] && (
-                      <td colSpan={8} style={{ paddingTop: 0 }}>
+                      <td colSpan={9} style={{ paddingTop: 0 }}>
                         <p className="form-error form-error-inline" role="alert">
                           {rowErrors[profile.id]}
                         </p>
