@@ -682,6 +682,16 @@ a.tool-card:focus-visible {
   font-weight: 500;
 }
 
+.admin-table-details-yield-datum {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-table-details-yield-datum .text-input-wrap {
+  width: 150px;
+}
+
 .admin-naam-edit-email {
   margin: var(--space-1) 0 0;
   font-size: 12px;

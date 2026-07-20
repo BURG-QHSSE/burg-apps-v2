@@ -34,11 +34,15 @@ create table profiles (
   -- de rol-hiërarchie, net als mijn_omgeving_uitgebreid — een admin vinkt
   -- dit per persoon aan in het Adminpaneel, ongeacht rol.
   yield_telt_mee boolean not null default false,
-  -- Sinds welke datum dit profiel meetelt voor yield — los bijgehouden van
-  -- yield_telt_mee zelf (aan/uit-zetten van de vlag mag de datum niet
-  -- overschrijven), zie set_yield_sinds() verderop. Nullable: kan leeg zijn
-  -- als de vlag nog nooit expliciet met een datum is ingesteld.
+  -- Periode waarbinnen dit profiel meetelt voor yield — los bijgehouden van
+  -- yield_telt_mee zelf (uitzetten van de vlag wist beide, zie
+  -- set_yield_telt_mee), zodat een medewerker die uit dienst gaat alleen
+  -- meetelt in de maanden dat die daadwerkelijk werkte. yield_tot is
+  -- nullable: leeg = nog steeds actief/geen einddatum bekend. Beide worden
+  -- ook echt gebruikt in yield_consultant_count() hieronder, niet alleen
+  -- informatief getoond.
   yield_sinds date,
+  yield_tot date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -329,8 +333,8 @@ $$ language plpgsql security definer;
 -- yield_sinds is alleen geldig zolang yield_telt_mee aan staat: uitzetten
 -- wist de datum daarom bewust mee (in dezelfde update, niet via een losse
 -- call) — anders kan een medewerker die niet meer meetelt toch nog een
--- "sinds"-datum tonen. Aanzetten raakt een eventueel al aanwezige datum
--- niet aan (die kan dan nog kloppen).
+-- "sinds"/"tot"-datum tonen. Aanzetten raakt eventueel al aanwezige datums
+-- niet aan (die kunnen dan nog kloppen).
 create or replace function set_yield_telt_mee(
   target_id uuid,
   new_waarde boolean
@@ -343,7 +347,8 @@ begin
 
   update profiles
   set yield_telt_mee = new_waarde,
-      yield_sinds = case when new_waarde then yield_sinds else null end
+      yield_sinds = case when new_waarde then yield_sinds else null end,
+      yield_tot = case when new_waarde then yield_tot else null end
   where id = target_id;
 end;
 $$ language plpgsql security definer;
@@ -365,12 +370,34 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Tegenhanger van set_yield_sinds: einddatum van de yield-periode (bv.
+-- laatste werkdag bij uit-dienst-treding). Los gehouden om dezelfde reden.
+create or replace function set_yield_tot(
+  target_id uuid,
+  nieuwe_datum date
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen dit wijzigen';
+  end if;
+
+  update profiles set yield_tot = nieuwe_datum where id = target_id;
+end;
+$$ language plpgsql security definer;
+
 -- ============================================
 -- Yield-thermometer: aantal consultants dat meetelt — nodig omdat RLS op
 -- profiles een gewone 'user' alleen zijn eigen rij laat lezen (zie
 -- policies hierboven). SECURITY DEFINER + grant aan alle authenticated
 -- gebruikers, en geeft bewust ALLEEN een getal terug (geen namen, rollen of
 -- andere profieldata) — dezelfde aanpak als de eerdere uitgebreid_emails().
+--
+-- yield_sinds/yield_tot maken dit datum-bewust: iemand telt alleen mee als
+-- vandaag binnen die periode valt (null = geen grens aan die kant), zodat
+-- een medewerker die uit dienst gaat automatisch alleen meetelt in de
+-- maanden dat die daadwerkelijk werkte, zonder dat een admin er telkens
+-- aan hoeft te denken om de vlag op tijd uit te zetten.
 -- ============================================
 create or replace function yield_consultant_count()
 returns int
@@ -379,7 +406,11 @@ security definer
 stable
 set search_path = public
 as $$
-  select count(*)::int from profiles where yield_telt_mee = true and actief = true;
+  select count(*)::int from profiles
+  where yield_telt_mee = true
+    and actief = true
+    and (yield_sinds is null or yield_sinds <= current_date)
+    and (yield_tot is null or yield_tot >= current_date);
 $$;
 
 grant execute on function yield_consultant_count() to authenticated;

@@ -85,3 +85,15 @@ export async function setYieldSinds(targetId, datum) {
     throw new Error(error.message)
   }
 }
+
+/** Zet yield_tot voor een profiel — alleen admin (RPC, zie schema.sql). */
+export async function setYieldTot(targetId, datum) {
+  const { error } = await supabase.rpc('set_yield_tot', {
+    target_id: targetId,
+    nieuwe_datum: datum,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}

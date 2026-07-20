@@ -11,7 +11,7 @@ import {
   createUser,
   deleteUserPermanently,
 } from '../lib/adminApi'
-import { setYieldTeltMee, setYieldSinds } from '../lib/yieldApi'
+import { setYieldTeltMee, setYieldSinds, setYieldTot } from '../lib/yieldApi'
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 import { DOORGROEI_SHEET_URL, fetchDoorgroeiRosterNamen, normalizeNaam } from '../lib/doorgroeiTrackerApi'
@@ -315,14 +315,22 @@ export default function AdminPanel() {
     const previousProfile = profiles.find((p) => p.id === profileId)
     const previousWaarde = previousProfile?.yield_telt_mee
     const previousSinds = previousProfile?.yield_sinds ?? null
+    const previousTot = previousProfile?.yield_tot ?? null
 
-    // yield_sinds is alleen geldig zolang telt-mee aan staat — uitzetten wist
-    // 'm hier ook meteen optimistisch (de RPC doet dit ook server-side, zie
-    // set_yield_telt_mee in schema.sql), zodat de UI niet even een datum
-    // toont die niet meer klopt.
+    // yield_sinds/yield_tot zijn alleen geldig zolang telt-mee aan staat —
+    // uitzetten wist ze hier ook meteen optimistisch (de RPC doet dit ook
+    // server-side, zie set_yield_telt_mee in schema.sql), zodat de UI niet
+    // even datums toont die niet meer kloppen.
     setProfiles((current) =>
       current.map((p) =>
-        p.id === profileId ? { ...p, yield_telt_mee: newWaarde, yield_sinds: newWaarde ? p.yield_sinds : null } : p,
+        p.id === profileId
+          ? {
+              ...p,
+              yield_telt_mee: newWaarde,
+              yield_sinds: newWaarde ? p.yield_sinds : null,
+              yield_tot: newWaarde ? p.yield_tot : null,
+            }
+          : p,
       ),
     )
     setRowErrors((current) => ({ ...current, [profileId]: null }))
@@ -333,7 +341,9 @@ export default function AdminPanel() {
     } catch (err) {
       setProfiles((current) =>
         current.map((p) =>
-          p.id === profileId ? { ...p, yield_telt_mee: previousWaarde, yield_sinds: previousSinds } : p,
+          p.id === profileId
+            ? { ...p, yield_telt_mee: previousWaarde, yield_sinds: previousSinds, yield_tot: previousTot }
+            : p,
         ),
       )
       setRowErrors((current) => ({ ...current, [profileId]: err.message }))
@@ -355,6 +365,26 @@ export default function AdminPanel() {
     } catch (err) {
       setProfiles((current) =>
         current.map((p) => (p.id === profileId ? { ...p, yield_sinds: previousDatum } : p)),
+      )
+      setRowErrors((current) => ({ ...current, [profileId]: err.message }))
+    } finally {
+      setPendingIds((current) => ({ ...current, [profileId]: false }))
+    }
+  }
+
+  async function handleYieldTotChange(profileId, newDatum) {
+    const previousProfile = profiles.find((p) => p.id === profileId)
+    const previousDatum = previousProfile?.yield_tot ?? null
+
+    setProfiles((current) => current.map((p) => (p.id === profileId ? { ...p, yield_tot: newDatum } : p)))
+    setRowErrors((current) => ({ ...current, [profileId]: null }))
+    setPendingIds((current) => ({ ...current, [profileId]: true }))
+
+    try {
+      await setYieldTot(profileId, newDatum || null)
+    } catch (err) {
+      setProfiles((current) =>
+        current.map((p) => (p.id === profileId ? { ...p, yield_tot: previousDatum } : p)),
       )
       setRowErrors((current) => ({ ...current, [profileId]: err.message }))
     } finally {
@@ -629,7 +659,6 @@ export default function AdminPanel() {
                   <th>Rol</th>
                   <th>Actief</th>
                   <th>Telt mee voor yield</th>
-                  <th>Yield sinds</th>
                   <th>Details</th>
                   <th>Verwijderen</th>
                 </tr>
@@ -729,16 +758,6 @@ export default function AdminPanel() {
                         />
                       </label>
                     </td>
-                    <td data-label="Yield sinds">
-                      <div className="text-input-wrap">
-                        <input
-                          type="date"
-                          value={profile.yield_sinds ?? ''}
-                          disabled={pendingIds[profile.id] || !profile.yield_telt_mee}
-                          onChange={(e) => handleYieldSindsChange(profile.id, e.target.value)}
-                        />
-                      </div>
-                    </td>
                     <td data-label="Details">
                       <button
                         type="button"
@@ -789,7 +808,7 @@ export default function AdminPanel() {
                   </tr>
                   {expandedIds[profile.id] && (
                     <tr className="admin-table-details-row">
-                      <td colSpan={7}>
+                      <td colSpan={6}>
                         <div className="admin-table-details">
                           <span>
                             <strong>Laatste login:</strong> {fmtDatum(lastSignIns.get(profile.id))}
@@ -809,13 +828,35 @@ export default function AdminPanel() {
                             />
                             Kansen Swiper uitgebreid
                           </label>
+                          <span className="admin-table-details-yield-datum">
+                            <strong>Yield sinds:</strong>
+                            <div className="text-input-wrap">
+                              <input
+                                type="date"
+                                value={profile.yield_sinds ?? ''}
+                                disabled={pendingIds[profile.id] || !profile.yield_telt_mee}
+                                onChange={(e) => handleYieldSindsChange(profile.id, e.target.value)}
+                              />
+                            </div>
+                          </span>
+                          <span className="admin-table-details-yield-datum">
+                            <strong>Yield tot:</strong>
+                            <div className="text-input-wrap">
+                              <input
+                                type="date"
+                                value={profile.yield_tot ?? ''}
+                                disabled={pendingIds[profile.id] || !profile.yield_telt_mee}
+                                onChange={(e) => handleYieldTotChange(profile.id, e.target.value)}
+                              />
+                            </div>
+                          </span>
                         </div>
                       </td>
                     </tr>
                   )}
                   {rowErrors[profile.id] && (
                     <tr>
-                      <td colSpan={7} style={{ paddingTop: 0 }}>
+                      <td colSpan={6} style={{ paddingTop: 0 }}>
                         <p className="form-error form-error-inline" role="alert">
                           {rowErrors[profile.id]}
                         </p>
