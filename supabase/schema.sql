@@ -326,6 +326,11 @@ $$ language plpgsql security definer;
 -- admin, vanuit het Adminpaneel. Zelfde patroon als
 -- set_mijn_omgeving_uitgebreid hierboven.
 -- ============================================
+-- yield_sinds is alleen geldig zolang yield_telt_mee aan staat: uitzetten
+-- wist de datum daarom bewust mee (in dezelfde update, niet via een losse
+-- call) — anders kan een medewerker die niet meer meetelt toch nog een
+-- "sinds"-datum tonen. Aanzetten raakt een eventueel al aanwezige datum
+-- niet aan (die kan dan nog kloppen).
 create or replace function set_yield_telt_mee(
   target_id uuid,
   new_waarde boolean
@@ -336,13 +341,16 @@ begin
     raise exception 'Alleen admins mogen dit wijzigen';
   end if;
 
-  update profiles set yield_telt_mee = new_waarde where id = target_id;
+  update profiles
+  set yield_telt_mee = new_waarde,
+      yield_sinds = case when new_waarde then yield_sinds else null end
+  where id = target_id;
 end;
 $$ language plpgsql security definer;
 
 -- Los van set_yield_telt_mee gehouden (zelfde reden als set_user_naam los
--- van change_user_role): het aan/uit-zetten van de yield-vlag mag de
--- ingestelde datum niet per ongeluk overschrijven.
+-- van change_user_role): het los kunnen zetten van de datum zonder de
+-- yield_telt_mee-vlag aan te raken.
 create or replace function set_yield_sinds(
   target_id uuid,
   nieuwe_datum date

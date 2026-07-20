@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import emailjs from '@emailjs/browser'
 import {
@@ -116,11 +116,20 @@ export default function AdminPanel() {
   // hieronder, want die weet pas na een volgende fetch of de naam ontbreekt.
   const [laatstAangemaakteNaam, setLaatstAangemaakteNaam] = useState(null)
 
-  // doorgroeiOntbrekend: namen van actieve profielen die niet voorkomen in de
-  // Doorgroei Tracker sheet-roster. null = nog niet geladen of check mislukt
-  // (geen uitspraak, dus geen valse meldingen tonen) — zie de useEffect
-  // hieronder die op `profiles` reageert.
+  // doorgroeiOntbrekend: namen van actieve, yield-tellende profielen die niet
+  // voorkomen in de Doorgroei Tracker sheet-roster (niet-yield-medewerkers
+  // hoeven niet in die sheet te staan, dus die worden hier niet in
+  // meegenomen). null = nog niet geladen of check mislukt (geen uitspraak,
+  // dus geen valse meldingen tonen) — zie de useEffect hieronder die op
+  // `profiles` reageert.
   const [doorgroeiOntbrekend, setDoorgroeiOntbrekend] = useState(null)
+  // expandedIds: { [profileId]: boolean } — welke rijen hun secundaire info
+  // (login/gebruik/Kansen Swiper uitgebreid) uitgeklapt tonen.
+  const [expandedIds, setExpandedIds] = useState({})
+
+  function toggleExpanded(profileId) {
+    setExpandedIds((current) => ({ ...current, [profileId]: !current[profileId] }))
+  }
 
   useEffect(() => {
     loadProfiles()
@@ -137,7 +146,7 @@ export default function AdminPanel() {
     fetchDoorgroeiRosterNamen()
       .then((rosterNamen) => {
         const ontbrekend = profiles
-          .filter((p) => p.actief && p.naam?.trim() && !rosterNamen.has(normalizeNaam(p.naam)))
+          .filter((p) => p.actief && p.yield_telt_mee && p.naam?.trim() && !rosterNamen.has(normalizeNaam(p.naam)))
           .map((p) => p.naam)
         setDoorgroeiOntbrekend(ontbrekend)
       })
@@ -305,8 +314,17 @@ export default function AdminPanel() {
   async function handleYieldToggle(profileId, newWaarde) {
     const previousProfile = profiles.find((p) => p.id === profileId)
     const previousWaarde = previousProfile?.yield_telt_mee
+    const previousSinds = previousProfile?.yield_sinds ?? null
 
-    setProfiles((current) => current.map((p) => (p.id === profileId ? { ...p, yield_telt_mee: newWaarde } : p)))
+    // yield_sinds is alleen geldig zolang telt-mee aan staat — uitzetten wist
+    // 'm hier ook meteen optimistisch (de RPC doet dit ook server-side, zie
+    // set_yield_telt_mee in schema.sql), zodat de UI niet even een datum
+    // toont die niet meer klopt.
+    setProfiles((current) =>
+      current.map((p) =>
+        p.id === profileId ? { ...p, yield_telt_mee: newWaarde, yield_sinds: newWaarde ? p.yield_sinds : null } : p,
+      ),
+    )
     setRowErrors((current) => ({ ...current, [profileId]: null }))
     setPendingIds((current) => ({ ...current, [profileId]: true }))
 
@@ -314,7 +332,9 @@ export default function AdminPanel() {
       await setYieldTeltMee(profileId, newWaarde)
     } catch (err) {
       setProfiles((current) =>
-        current.map((p) => (p.id === profileId ? { ...p, yield_telt_mee: previousWaarde } : p)),
+        current.map((p) =>
+          p.id === profileId ? { ...p, yield_telt_mee: previousWaarde, yield_sinds: previousSinds } : p,
+        ),
       )
       setRowErrors((current) => ({ ...current, [profileId]: err.message }))
     } finally {
@@ -608,12 +628,9 @@ export default function AdminPanel() {
                   </th>
                   <th>Rol</th>
                   <th>Actief</th>
-                  <th>Laatste login</th>
-                  <th>Laatst actief</th>
-                  <th>Tool-gebruik</th>
-                  <th>Kansen Swiper uitgebreid</th>
                   <th>Telt mee voor yield</th>
                   <th>Yield sinds</th>
+                  <th>Details</th>
                   <th>Verwijderen</th>
                 </tr>
               </thead>
@@ -624,7 +641,8 @@ export default function AdminPanel() {
                     return naamSortAsc ? cmp : -cmp
                   })
                   .map((profile) => (
-                  <tr key={profile.id}>
+                  <Fragment key={profile.id}>
+                  <tr>
                     <td data-label="Naam">
                       {editingNaamId === profile.id ? (
                         <div className="admin-naam-edit-wrap">
@@ -701,19 +719,6 @@ export default function AdminPanel() {
                         {profile.actief ? 'Actief' : 'Inactief'}
                       </button>
                     </td>
-                    <td data-label="Laatste login">{fmtDatum(lastSignIns.get(profile.id))}</td>
-                    <td data-label="Laatst actief">{fmtDatum(usageByUser.get(profile.id)?.laatstActief)}</td>
-                    <td data-label="Tool-gebruik">{usageByUser.get(profile.id)?.count ?? 0}x</td>
-                    <td data-label="Kansen Swiper uitgebreid">
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        <input
-                          type="checkbox"
-                          checked={!!profile.mijn_omgeving_uitgebreid}
-                          disabled={pendingIds[profile.id]}
-                          onChange={(e) => handleUitgebreidToggle(profile.id, e.target.checked)}
-                        />
-                      </label>
-                    </td>
                     <td data-label="Telt mee voor yield">
                       <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                         <input
@@ -733,6 +738,15 @@ export default function AdminPanel() {
                           onChange={(e) => handleYieldSindsChange(profile.id, e.target.value)}
                         />
                       </div>
+                    </td>
+                    <td data-label="Details">
+                      <button
+                        type="button"
+                        className="admin-table-sort-btn"
+                        onClick={() => toggleExpanded(profile.id)}
+                      >
+                        {expandedIds[profile.id] ? '▾' : '▸'} Details
+                      </button>
                     </td>
                     <td data-label="Verwijderen">
                       {confirmDeleteId === profile.id ? (
@@ -772,14 +786,43 @@ export default function AdminPanel() {
                         </button>
                       )}
                     </td>
-                    {rowErrors[profile.id] && (
-                      <td colSpan={10} style={{ paddingTop: 0 }}>
+                  </tr>
+                  {expandedIds[profile.id] && (
+                    <tr className="admin-table-details-row">
+                      <td colSpan={7}>
+                        <div className="admin-table-details">
+                          <span>
+                            <strong>Laatste login:</strong> {fmtDatum(lastSignIns.get(profile.id))}
+                          </span>
+                          <span>
+                            <strong>Laatst actief:</strong> {fmtDatum(usageByUser.get(profile.id)?.laatstActief)}
+                          </span>
+                          <span>
+                            <strong>Tool-gebruik:</strong> {usageByUser.get(profile.id)?.count ?? 0}x
+                          </span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!profile.mijn_omgeving_uitgebreid}
+                              disabled={pendingIds[profile.id]}
+                              onChange={(e) => handleUitgebreidToggle(profile.id, e.target.checked)}
+                            />
+                            Kansen Swiper uitgebreid
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {rowErrors[profile.id] && (
+                    <tr>
+                      <td colSpan={7} style={{ paddingTop: 0 }}>
                         <p className="form-error form-error-inline" role="alert">
                           {rowErrors[profile.id]}
                         </p>
                       </td>
-                    )}
-                  </tr>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

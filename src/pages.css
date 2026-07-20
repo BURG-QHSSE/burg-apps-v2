@@ -668,15 +668,24 @@ a.tool-card:focus-visible {
   width: 140px;
 }
 
+.admin-table-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 13px;
+  color: var(--inkt-60);
+}
+
+.admin-table-details strong {
+  color: var(--inkt);
+  font-weight: 500;
+}
+
 .admin-naam-edit-email {
   margin: var(--space-1) 0 0;
   font-size: 12px;
   color: var(--inkt-60);
-}
-
-.admin-table td[data-label='Laatste login'],
-.admin-table td[data-label='Laatst actief'] {
-  white-space: nowrap;
 }
 
 .admin-table select {
@@ -805,12 +814,6 @@ a.tool-card:focus-visible {
 
   .admin-table td[data-label='Rol'] {
     align-items: flex-start;
-  }
-
-  .admin-table td[data-label='Laatste login'],
-  .admin-table td[data-label='Laatst actief'] {
-    white-space: normal;
-    text-align: right;
   }
 }
 
