@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import emailjs from '@emailjs/browser'
 import {
   fetchAllProfiles,
   fetchLastSignIns,
@@ -10,12 +11,24 @@ import {
   createUser,
   deleteUserPermanently,
 } from '../lib/adminApi'
-import { setYieldTeltMee } from '../lib/yieldApi'
+import { setYieldTeltMee, setYieldSinds } from '../lib/yieldApi'
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 import { DOORGROEI_SHEET_URL, fetchDoorgroeiRosterNamen, normalizeNaam } from '../lib/doorgroeiTrackerApi'
 
 const ROLE_OPTIONS = ['admin', 'manager', 'hr', 'user']
+
+// Zelfde EmailJS-account als Sales Overdracht (src/pages/tools/SalesOverdracht.jsx),
+// maar een eigen template — inhoud is heel anders (welkomstbericht i.p.v.
+// vacature-overdracht).
+const EMAILJS_PUBLIC_KEY = 'tojkMyUVtV2ZhNoN9'
+const EMAILJS_SERVICE_ID = 'service_tdpa3m9'
+const WELCOME_TEMPLATE_ID = 'template_6unvb8n'
+const LOGIN_URL = 'https://app.burgqhsse.nl'
+
+function vandaagIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 function toolNaam(toolId) {
   return TOOLS.find((t) => t.id === toolId)?.naam ?? toolId
@@ -84,8 +97,20 @@ export default function AdminPanel() {
   const [newPassword, setNewPassword] = useState('')
   const [newNaam, setNewNaam] = useState('')
   const [newRole, setNewRole] = useState('user')
+  // "Meer opties" — yield-deelname bij aanmaken (zelfde velden als de
+  // per-rij-toggle+datum in de tabel hieronder, zie handleYieldToggle/
+  // handleYieldSindsChange).
+  const [newYieldTeltMee, setNewYieldTeltMee] = useState(false)
+  const [newYieldSinds, setNewYieldSinds] = useState('')
+  // Welkomstmail staat los van "Meer opties" — dit is een keuze die je elke
+  // keer opnieuw maakt, geen incidentele optie, dus altijd zichtbaar.
+  const [sendWelkomstmail, setSendWelkomstmail] = useState(true)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState(null)
+  // welkomstmailError: aparte, niet-blokkerende waarschuwing als het
+  // aanmaken wel lukt maar de mail niet — de gebruiker bestaat dan al, dus
+  // dit mag de flow niet laten falen.
+  const [welkomstmailError, setWelkomstmailError] = useState(null)
   // laatstAangemaakteNaam: toont een reminder-banner direct na het aanmaken
   // van een gebruiker met een ingevulde naam — los van de permanente check
   // hieronder, want die weet pas na een volgende fetch of de naam ontbreekt.
@@ -297,6 +322,26 @@ export default function AdminPanel() {
     }
   }
 
+  async function handleYieldSindsChange(profileId, newDatum) {
+    const previousProfile = profiles.find((p) => p.id === profileId)
+    const previousDatum = previousProfile?.yield_sinds ?? null
+
+    setProfiles((current) => current.map((p) => (p.id === profileId ? { ...p, yield_sinds: newDatum } : p)))
+    setRowErrors((current) => ({ ...current, [profileId]: null }))
+    setPendingIds((current) => ({ ...current, [profileId]: true }))
+
+    try {
+      await setYieldSinds(profileId, newDatum || null)
+    } catch (err) {
+      setProfiles((current) =>
+        current.map((p) => (p.id === profileId ? { ...p, yield_sinds: previousDatum } : p)),
+      )
+      setRowErrors((current) => ({ ...current, [profileId]: err.message }))
+    } finally {
+      setPendingIds((current) => ({ ...current, [profileId]: false }))
+    }
+  }
+
   async function handleDeleteConfirmed(profileId) {
     setRowErrors((current) => ({ ...current, [profileId]: null }))
     setPendingIds((current) => ({ ...current, [profileId]: true }))
@@ -316,20 +361,44 @@ export default function AdminPanel() {
     e.preventDefault()
     setCreating(true)
     setCreateError(null)
+    setWelkomstmailError(null)
 
     const aangemaakteNaam = newNaam.trim()
+    const aangemaakteEmail = newEmail.trim()
 
     try {
       await createUser({
-        email: newEmail.trim(),
+        email: aangemaakteEmail,
         password: newPassword,
         naam: aangemaakteNaam || undefined,
         role: newRole,
+        yieldTeltMee: newYieldTeltMee,
+        yieldSinds: newYieldTeltMee ? newYieldSinds || vandaagIso() : undefined,
       })
+
+      // Account is al aangemaakt — een mislukte mail mag dat succes niet
+      // tenietdoen, dus dit staat in een eigen try/catch met een losse,
+      // niet-blokkerende waarschuwing i.p.v. de create-flow te laten falen.
+      if (sendWelkomstmail) {
+        try {
+          await emailjs.send(
+            EMAILJS_SERVICE_ID,
+            WELCOME_TEMPLATE_ID,
+            { naam: aangemaakteNaam || aangemaakteEmail, to_email: aangemaakteEmail, login_url: LOGIN_URL },
+            EMAILJS_PUBLIC_KEY,
+          )
+        } catch (mailErr) {
+          console.error('[AdminPanel] Welkomstmail versturen mislukt:', mailErr)
+          setWelkomstmailError('Gebruiker is aangemaakt, maar de welkomstmail versturen is mislukt.')
+        }
+      }
+
       setNewEmail('')
       setNewPassword('')
       setNewNaam('')
       setNewRole('user')
+      setNewYieldTeltMee(false)
+      setNewYieldSinds('')
       if (aangemaakteNaam) setLaatstAangemaakteNaam(aangemaakteNaam)
       await loadProfiles()
     } catch (err) {
@@ -403,6 +472,45 @@ export default function AdminPanel() {
             </div>
           </div>
 
+          <details className="meer-opties" style={{ marginTop: 'var(--space-4)' }}>
+            <summary>Meer opties</summary>
+            <div className="form-grid form-grid-3" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="field-block">
+                <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={newYieldTeltMee}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setNewYieldTeltMee(checked)
+                      if (checked && !newYieldSinds) setNewYieldSinds(vandaagIso())
+                    }}
+                  />
+                  Telt mee voor yield
+                </label>
+              </div>
+              {newYieldTeltMee && (
+                <div className="field-block">
+                  <label className="field-label">Sinds</label>
+                  <div className={newYieldSinds ? 'text-input-wrap has-input' : 'text-input-wrap needs-input'}>
+                    <input type="date" value={newYieldSinds} onChange={(e) => setNewYieldSinds(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </details>
+
+          <div className="control-row" style={{ marginTop: 'var(--space-4)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <input
+                type="checkbox"
+                checked={sendWelkomstmail}
+                onChange={(e) => setSendWelkomstmail(e.target.checked)}
+              />
+              Welkomstmail versturen
+            </label>
+          </div>
+
           <div className="submit-row" style={{ marginTop: 'var(--space-4)' }}>
             <button type="submit" className="btn btn-primary" disabled={creating}>
               {creating ? 'Bezig met aanmaken…' : 'Gebruiker toevoegen'}
@@ -415,6 +523,21 @@ export default function AdminPanel() {
             </p>
           )}
         </form>
+
+        {welkomstmailError && (
+          <div className="required-banner" style={{ marginTop: 'var(--space-4)' }}>
+            <span className="required-banner-dot"></span>
+            <span>{welkomstmailError}</span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setWelkomstmailError(null)}
+            >
+              Sluiten
+            </button>
+          </div>
+        )}
 
         {laatstAangemaakteNaam && (
           <div className="required-banner" style={{ marginTop: 'var(--space-4)' }}>
@@ -490,6 +613,7 @@ export default function AdminPanel() {
                   <th>Tool-gebruik</th>
                   <th>Kansen Swiper uitgebreid</th>
                   <th>Telt mee voor yield</th>
+                  <th>Yield sinds</th>
                   <th>Verwijderen</th>
                 </tr>
               </thead>
@@ -600,6 +724,16 @@ export default function AdminPanel() {
                         />
                       </label>
                     </td>
+                    <td data-label="Yield sinds">
+                      <div className="text-input-wrap">
+                        <input
+                          type="date"
+                          value={profile.yield_sinds ?? ''}
+                          disabled={pendingIds[profile.id] || !profile.yield_telt_mee}
+                          onChange={(e) => handleYieldSindsChange(profile.id, e.target.value)}
+                        />
+                      </div>
+                    </td>
                     <td data-label="Verwijderen">
                       {confirmDeleteId === profile.id ? (
                         <div className="admin-confirm-delete">
@@ -639,7 +773,7 @@ export default function AdminPanel() {
                       )}
                     </td>
                     {rowErrors[profile.id] && (
-                      <td colSpan={9} style={{ paddingTop: 0 }}>
+                      <td colSpan={10} style={{ paddingTop: 0 }}>
                         <p className="form-error form-error-inline" role="alert">
                           {rowErrors[profile.id]}
                         </p>

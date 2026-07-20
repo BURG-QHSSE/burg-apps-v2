@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
     if (body.action === 'create') {
-      const { email, password, naam, role } = body
+      const { email, password, naam, role, yieldTeltMee, yieldSinds } = body
 
       if (!email || !password) {
         return jsonResponse({ error: 'E-mail en wachtwoord zijn verplicht' }, 400)
@@ -167,6 +167,8 @@ Deno.serve(async (req) => {
       const updates = {}
       if (role && role !== 'user') updates.role = role
       if (naam) updates.naam = naam
+      if (yieldTeltMee) updates.yield_telt_mee = true
+      if (yieldSinds) updates.yield_sinds = yieldSinds
 
       if (Object.keys(updates).length > 0) {
         await adminClient.from('profiles').update(updates).eq('id', created.user.id)

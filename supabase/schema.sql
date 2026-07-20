@@ -34,6 +34,11 @@ create table profiles (
   -- de rol-hiërarchie, net als mijn_omgeving_uitgebreid — een admin vinkt
   -- dit per persoon aan in het Adminpaneel, ongeacht rol.
   yield_telt_mee boolean not null default false,
+  -- Sinds welke datum dit profiel meetelt voor yield — los bijgehouden van
+  -- yield_telt_mee zelf (aan/uit-zetten van de vlag mag de datum niet
+  -- overschrijven), zie set_yield_sinds() verderop. Nullable: kan leeg zijn
+  -- als de vlag nog nooit expliciet met een datum is ingesteld.
+  yield_sinds date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -332,6 +337,23 @@ begin
   end if;
 
   update profiles set yield_telt_mee = new_waarde where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- Los van set_yield_telt_mee gehouden (zelfde reden als set_user_naam los
+-- van change_user_role): het aan/uit-zetten van de yield-vlag mag de
+-- ingestelde datum niet per ongeluk overschrijven.
+create or replace function set_yield_sinds(
+  target_id uuid,
+  nieuwe_datum date
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen dit wijzigen';
+  end if;
+
+  update profiles set yield_sinds = nieuwe_datum where id = target_id;
 end;
 $$ language plpgsql security definer;
 

@@ -1469,6 +1469,24 @@ a.tool-card:focus-visible {
   border-top: 1px solid var(--lijn);
 }
 
+/* Native <details>/<summary> i.p.v. een custom accordion-component — er was
+   nog geen inklapbaar patroon in de app, dit is de lichtste manier om er
+   een te introduceren (geen extra open/dicht-state nodig). */
+.meer-opties {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--lijn);
+}
+
+.meer-opties summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--blauwgrijs);
+  user-select: none;
+}
+
 .conditional-block-full {
   grid-column: 1 / -1;
 }

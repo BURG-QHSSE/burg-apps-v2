@@ -73,3 +73,15 @@ export async function setYieldTeltMee(targetId, waarde) {
     throw new Error(error.message)
   }
 }
+
+/** Zet yield_sinds voor een profiel — alleen admin (RPC, zie schema.sql). */
+export async function setYieldSinds(targetId, datum) {
+  const { error } = await supabase.rpc('set_yield_sinds', {
+    target_id: targetId,
+    nieuwe_datum: datum,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}

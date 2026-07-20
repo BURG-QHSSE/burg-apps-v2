@@ -135,13 +135,13 @@ export async function setMijnOmgevingUitgebreid(targetId, uitgebreid) {
  * service_role-sleutel, die uitsluitend server-side (in de Edge Function)
  * leeft, nooit in de browser.
  *
- * @param {{ email: string, password: string, naam?: string, role?: 'admin'|'manager'|'user' }} input
+ * @param {{ email: string, password: string, naam?: string, role?: 'admin'|'manager'|'user', yieldTeltMee?: boolean, yieldSinds?: string }} input
  * @returns {Promise<string>} het nieuwe user-id
  * @throws {Error}
  */
-export async function createUser({ email, password, naam, role }) {
+export async function createUser({ email, password, naam, role, yieldTeltMee, yieldSinds }) {
   const { data, error } = await supabase.functions.invoke('admin-users', {
-    body: { action: 'create', email, password, naam, role },
+    body: { action: 'create', email, password, naam, role, yieldTeltMee, yieldSinds },
   })
 
   if (error) {
