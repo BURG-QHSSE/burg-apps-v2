@@ -13,6 +13,7 @@ import {
 import { setYieldTeltMee } from '../lib/yieldApi'
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
+import { DOORGROEI_SHEET_URL, fetchDoorgroeiRosterNamen, normalizeNaam } from '../lib/doorgroeiTrackerApi'
 
 const ROLE_OPTIONS = ['admin', 'manager', 'hr', 'user']
 
@@ -85,12 +86,43 @@ export default function AdminPanel() {
   const [newRole, setNewRole] = useState('user')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState(null)
+  // laatstAangemaakteNaam: toont een reminder-banner direct na het aanmaken
+  // van een gebruiker met een ingevulde naam — los van de permanente check
+  // hieronder, want die weet pas na een volgende fetch of de naam ontbreekt.
+  const [laatstAangemaakteNaam, setLaatstAangemaakteNaam] = useState(null)
+
+  // doorgroeiOntbrekend: namen van actieve profielen die niet voorkomen in de
+  // Doorgroei Tracker sheet-roster. null = nog niet geladen of check mislukt
+  // (geen uitspraak, dus geen valse meldingen tonen) — zie de useEffect
+  // hieronder die op `profiles` reageert.
+  const [doorgroeiOntbrekend, setDoorgroeiOntbrekend] = useState(null)
 
   useEffect(() => {
     loadProfiles()
     loadUsageCounts()
     loadPerUserExtras()
   }, [])
+
+  // Herhaalt zich telkens als de profielenlijst ververst (na aanmaken,
+  // naamwijziging, (de)activeren, verwijderen) — zodat de check altijd de
+  // actuele lijst gebruikt in plaats van alleen bij het eerste laden.
+  useEffect(() => {
+    if (profiles.length === 0) return
+
+    fetchDoorgroeiRosterNamen()
+      .then((rosterNamen) => {
+        const ontbrekend = profiles
+          .filter((p) => p.actief && p.naam?.trim() && !rosterNamen.has(normalizeNaam(p.naam)))
+          .map((p) => p.naam)
+        setDoorgroeiOntbrekend(ontbrekend)
+      })
+      .catch((err) => {
+        // Niet-kritiek: dit is een best-effort reminder, geen kernfunctie —
+        // de rest van het Adminpaneel blijft gewoon werken.
+        console.error('[AdminPanel] Kon Doorgroei Tracker roster niet laden:', err.message)
+        setDoorgroeiOntbrekend(null)
+      })
+  }, [profiles])
 
   async function loadPerUserExtras() {
     try {
@@ -285,17 +317,20 @@ export default function AdminPanel() {
     setCreating(true)
     setCreateError(null)
 
+    const aangemaakteNaam = newNaam.trim()
+
     try {
       await createUser({
         email: newEmail.trim(),
         password: newPassword,
-        naam: newNaam.trim() || undefined,
+        naam: aangemaakteNaam || undefined,
         role: newRole,
       })
       setNewEmail('')
       setNewPassword('')
       setNewNaam('')
       setNewRole('user')
+      if (aangemaakteNaam) setLaatstAangemaakteNaam(aangemaakteNaam)
       await loadProfiles()
     } catch (err) {
       setCreateError(err.message)
@@ -380,6 +415,48 @@ export default function AdminPanel() {
             </p>
           )}
         </form>
+
+        {laatstAangemaakteNaam && (
+          <div className="required-banner" style={{ marginTop: 'var(--space-4)' }}>
+            <span className="required-banner-dot"></span>
+            <span>
+              '{laatstAangemaakteNaam}' is aangemaakt in de app. Vergeet niet '{laatstAangemaakteNaam}' ook toe te
+              voegen aan de{' '}
+              <a href={DOORGROEI_SHEET_URL} target="_blank" rel="noopener noreferrer">
+                Doorgroei Tracker sheet
+              </a>{' '}
+              (exact dezelfde schrijfwijze).
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setLaatstAangemaakteNaam(null)}
+            >
+              Sluiten
+            </button>
+          </div>
+        )}
+
+        {doorgroeiOntbrekend && doorgroeiOntbrekend.length > 0 && (
+          <div className="required-banner" style={{ marginTop: 'var(--space-4)' }}>
+            <span className="required-banner-dot"></span>
+            <span>
+              {doorgroeiOntbrekend.length} gebruiker{doorgroeiOntbrekend.length === 1 ? '' : 's'}{' '}
+              {doorgroeiOntbrekend.length === 1 ? 'ontbreekt' : 'ontbreken'} nog in de Doorgroei Tracker sheet:{' '}
+              {doorgroeiOntbrekend.join(', ')}.
+            </span>
+            <a
+              href={DOORGROEI_SHEET_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              style={{ marginLeft: 'auto' }}
+            >
+              Open sheet
+            </a>
+          </div>
+        )}
 
         <h2 style={{ marginTop: 'var(--space-8)' }}>Gebruikers</h2>
 

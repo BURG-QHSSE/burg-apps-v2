@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { useAuth } from '../../lib/AuthProvider'
+import { DOORGROEI_DATA_URL, normalizeNaam } from '../../lib/doorgroeiTrackerApi'
 
 /**
  * Doorgroei Tracker — KPI-dashboard voor de doorgroei van recruitment- en
@@ -9,7 +10,8 @@ import { useAuth } from '../../lib/AuthProvider'
  *
  * Databron: geen Supabase, maar een publieke Google Apps Script GET-endpoint
  * (CORS-open, geen auth) die drie arrays teruggeeft: `roster`, `recruitment`
- * en `sales`. Zie DATA_URL hieronder.
+ * en `sales`. Zie DOORGROEI_DATA_URL in lib/doorgroeiTrackerApi.js (ook
+ * gebruikt door het Adminpaneel om ontbrekende namen te signaleren).
  *
  * BELANGRIJK — rolgebonden zichtbaarheid (client-side, geen server-side
  * afdwingbaarheid mogelijk want de bron kent geen auth-concept):
@@ -19,16 +21,6 @@ import { useAuth } from '../../lib/AuthProvider'
  * - Geen match gevonden voor een 'user': duidelijke uitleg tonen i.p.v. een
  *   stille lege dashboard.
  */
-
-const DATA_URL =
-  'https://script.google.com/macros/s/AKfycbzIicChs1q6DlRUyW-JHFm9lZHyBynl_zyAf8tczD85MJmnAHQT_LNzdkgoWZ29_IkWnQ/exec'
-
-function normalizeNaam(naam) {
-  // String(...) i.p.v. aannemen dat naam al tekst is — zie statusToneClass
-  // hieronder voor dezelfde reden (een kolomverschuiving in de bron kan hier
-  // een getal leveren, en .trim() bestaat niet op number).
-  return String(naam ?? '').trim().toLowerCase()
-}
 
 /**
  * Bepaalt de badge-toon voor een status-string. De bron levert een kant-en-
@@ -202,7 +194,7 @@ export default function DoorgroeiTracker() {
     setLoading(true)
     setLoadError('')
 
-    fetch(DATA_URL)
+    fetch(DOORGROEI_DATA_URL)
       .then((res) => {
         if (!res.ok) throw new Error(`Server antwoordde met status ${res.status}`)
         return res.json()
