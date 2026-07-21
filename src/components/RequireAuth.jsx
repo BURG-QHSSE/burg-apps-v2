@@ -1,6 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthProvider'
+
+// Als `loading` hier langer dan dit blijft hangen (bv. door een trage/
+// hangende netwerkcall die niet via de timeout in fetchProfile() liep),
+// tonen we een handmatige "opnieuw proberen"-optie i.p.v. voor altijd
+// "Laden…" te laten staan zonder uitweg.
+const LANG_LADEN_MS = 8000
 
 /**
  * Beschermt routes die een ingelogde gebruiker vereisen.
@@ -18,6 +24,7 @@ export default function RequireAuth({ children }) {
   const { user, profile, loading, signOut } = useAuth()
   const location = useLocation()
   const isGedeactiveerd = !loading && user && profile && profile.actief === false
+  const [langLaden, setLangLaden] = useState(false)
 
   useEffect(() => {
     if (isGedeactiveerd) {
@@ -25,10 +32,24 @@ export default function RequireAuth({ children }) {
     }
   }, [isGedeactiveerd, signOut])
 
+  useEffect(() => {
+    if (!loading) {
+      setLangLaden(false)
+      return
+    }
+    const id = setTimeout(() => setLangLaden(true), LANG_LADEN_MS)
+    return () => clearTimeout(id)
+  }, [loading])
+
   if (loading) {
     return (
       <div className="center-page">
         <p>Laden…</p>
+        {langLaden && (
+          <button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>
+            Dit duurt langer dan verwacht — opnieuw proberen
+          </button>
+        )}
       </div>
     )
   }

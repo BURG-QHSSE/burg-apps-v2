@@ -3,26 +3,42 @@ import { supabase } from './supabaseClient'
 
 const AuthContext = createContext(undefined)
 
+// Zonder tijdslimiet kan een trage/hangende profiel-fetch (bv. vlak na
+// signInWithPassword, wanneer de auth-state-change-handler en de nieuwe
+// sessie nog door elkaar heen lopen) `loading` voor altijd op true laten
+// staan — RequireAuth toont dan tot in de eeuwigheid "Laden…", met alleen
+// een page-reload als uitweg (precies het gerapporteerde inlog-probleem).
+const PROFIEL_FETCH_TIMEOUT_MS = 8000
+
+function timeout(ms) {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error('Time-out')), ms))
+}
+
 /**
  * Haalt de profiles-rij op die hoort bij een auth user id.
- * Geeft `null` terug (i.p.v. te gooien) als er geen rij is, zodat de
- * UI-laag simpel kan checken op "wel/geen profiel" zonder try/catch.
+ * Geeft `null` terug (i.p.v. te gooien) als er geen rij is of de fetch te
+ * lang duurt, zodat de UI-laag simpel kan checken op "wel/geen profiel"
+ * zonder try/catch en nooit voor altijd blijft hangen.
  */
 async function fetchProfile(userId) {
   if (!userId) return null
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
+  try {
+    const { data, error } = await Promise.race([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      timeout(PROFIEL_FETCH_TIMEOUT_MS),
+    ])
 
-  if (error) {
-    console.error('[AuthProvider] Kon profiel niet ophalen:', error.message)
+    if (error) {
+      console.error('[AuthProvider] Kon profiel niet ophalen:', error.message)
+      return null
+    }
+
+    return data
+  } catch (err) {
+    console.error('[AuthProvider] Profiel ophalen duurde te lang:', err.message)
     return null
   }
-
-  return data
 }
 
 /**
