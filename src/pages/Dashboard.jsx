@@ -44,8 +44,9 @@ function FeaturedToolCard({ tool, entry }) {
       <div className="featured-tool-icon">
         <ToolIcon toolId={tool.id} size={20} />
       </div>
-      <div>
+      <div className="featured-tool-text">
         <div className="featured-tool-name">{tool.naam}</div>
+        <div className="tool-card-rule" />
         <div className="tool-card-hint">{gebruikLabel(entry)}</div>
       </div>
     </Link>
