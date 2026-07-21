@@ -476,8 +476,9 @@
 
 .featured-tool-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-4);
+  min-height: 118px;
   padding: var(--space-5);
   border: 1px solid var(--lijn);
   border-radius: var(--radius-md);
@@ -568,8 +569,9 @@ a.featured-tool-card:hover .tool-card-rule::after {
    tools. */
 .tool-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
+  min-height: 98px;
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--lijn);
   border-radius: var(--radius-md);
