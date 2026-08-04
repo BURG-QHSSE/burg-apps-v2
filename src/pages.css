@@ -1557,7 +1557,49 @@ a.tool-card:hover .tool-card-hint .arrow {
   text-align: center;
 }
 
+/* ---------- Bel Overzicht: datum-navigatie ---------- */
+
+.date-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.date-nav-center {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.date-nav-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--inkt);
+  text-align: center;
+  min-width: 220px;
+}
+
+.date-nav-row .text-input-wrap {
+  width: auto;
+}
+
+.date-nav-row .text-input-wrap input {
+  color-scheme: light dark;
+}
+
 @media (max-width: 640px) {
+  .date-nav-row {
+    flex-wrap: wrap;
+  }
+
+  .date-nav-label {
+    min-width: 0;
+    order: -1;
+    width: 100%;
+  }
+
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }

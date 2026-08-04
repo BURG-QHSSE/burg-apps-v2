@@ -10,6 +10,7 @@ export const TOOLS = [
   { id: 'verdeling-plaatsing', naam: 'Verdeling Plaatsing', minimumRole: 'user', path: '/tools/verdeling-plaatsing', category: 'daily' },
   { id: 'mijn-omgeving', naam: 'Kansen Swiper', minimumRole: 'user', path: '/tools/mijn-omgeving', category: 'daily' },
   { id: 'proeftijd-tracker', naam: 'Proeftijd Tracker', minimumRole: 'user', path: '/tools/proeftijd-tracker', category: 'daily' },
+  { id: 'bel-overzicht', naam: 'Bel Overzicht', minimumRole: 'user', path: '/tools/bel-overzicht', category: 'daily' },
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
 ]

@@ -841,5 +841,92 @@ begin
 end;
 $$;
 
+-- ============================================
+-- Bel Overzicht: belstatistieken per medewerker uit 3CX CDR-data
+--
+-- `call_daily_stats` wordt buiten dit bestand om gevuld (een cron job zet
+-- elke nacht om 00:20 de vorige dag over vanuit de ruwe 3CX-CDR-staging-
+-- tabellen `cdroutput`/`cdrbilling`, die zelf geen onderdeel zijn van het
+-- applicatie-schema en daarom hier niet gedocumenteerd worden). Alleen
+-- daadwerkelijk gevoerde (beantwoorde) gesprekken tellen mee.
+-- `call_weekly_stats`/`call_quarterly_stats` zijn views die daar automatisch
+-- op groeperen — geen aparte opslag, geen aparte schrijf-policy nodig.
+-- ============================================
+create table call_daily_stats (
+  user_id uuid not null references profiles(id) on delete cascade,
+  call_date date not null,
+  calls_in int not null default 0,
+  calls_out int not null default 0,
+  minutes_in numeric not null default 0,
+  minutes_out numeric not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, call_date)
+);
+
+alter table call_daily_stats enable row level security;
+
+-- Iedereen mag elkaars belcijfers zien, geen rol-restrictie: dit is
+-- analytics, geen gevoelige profieldata.
+create policy "authenticated read daily stats"
+  on call_daily_stats for select
+  to authenticated
+  using (true);
+
+create view call_weekly_stats as
+  select
+    user_id,
+    date_trunc('week', call_date::timestamptz)::date as week_start,
+    sum(calls_in) as calls_in,
+    sum(calls_out) as calls_out,
+    sum(minutes_in) as minutes_in,
+    sum(minutes_out) as minutes_out
+  from call_daily_stats
+  group by user_id, date_trunc('week', call_date::timestamptz);
+
+create view call_quarterly_stats as
+  select
+    user_id,
+    date_trunc('quarter', call_date::timestamptz)::date as quarter_start,
+    sum(calls_in) as calls_in,
+    sum(calls_out) as calls_out,
+    sum(minutes_in) as minutes_in,
+    sum(minutes_out) as minutes_out
+  from call_daily_stats
+  group by user_id, date_trunc('quarter', call_date::timestamptz);
+
+-- Koppeling 3CX-toestel <-> profiel: bepaalt welke medewerkers in Bel
+-- Overzicht getoond worden (de "roster"), los van of iemand die specifieke
+-- dag/week/kwartaal daadwerkelijk gebeld heeft.
+create table cx_extension_mapping (
+  extension text primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table cx_extension_mapping enable row level security;
+
+create policy "authenticated read extension mapping"
+  on cx_extension_mapping for select
+  to authenticated
+  using (true);
+
+-- Namen bij de belcijfers: RLS op profiles laat een gewone 'user' alleen de
+-- eigen rij lezen (zie policies hierboven), dus zonder deze functie zou een
+-- gewone gebruiker enkel de eigen naam kunnen tonen en voor collega's niets.
+-- SECURITY DEFINER + grant aan alle authenticated gebruikers, en geeft
+-- bewust ALLEEN id+naam terug (geen e-mail, rol of andere profielvelden) —
+-- dezelfde aanpak als uitgebreid_emails()/yield_consultant_count().
+create or replace function call_stats_profiel_namen()
+returns table (id uuid, naam text)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select id, naam from profiles;
+$$;
+
+grant execute on function call_stats_profiel_namen() to authenticated;
+
 grant execute on function keur_gpb_goed(uuid) to authenticated;
 grant execute on function maak_gpb_definitief(uuid) to authenticated;
