@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PIJLERS, STELLINGEN, SCORE_OPTIES } from './constants'
+
+const AUTOSAVE_DEBOUNCE_MS = 1500
 
 function legeAntwoorden() {
   return PIJLERS.map(() => ({ scores: [null, null, null], toelichtingen: ['', '', ''] }))
@@ -25,6 +27,12 @@ function legeDoelen() {
  * mount (useState-initializer) — een later wijzigende prop synct niet
  * automatisch na, dat is prima zolang de aanroeper wacht tot de initiële
  * data geladen is voordat dit component gemount wordt.
+ *
+ * Autosave: als `onConceptSave` is meegegeven, wordt elke wijziging na
+ * AUTOSAVE_DEBOUNCE_MS stilte weggeschreven als concept (geen indiening —
+ * zie save_gpb_medewerker/leidinggevende_concept in supabase/schema.sql).
+ * Dit voorkomt dataverlies als iemand wegnavigeert vóór het formulier
+ * volledig (en dus indienbaar) is.
  */
 export default function GpbInvulForm({
   titel,
@@ -34,12 +42,40 @@ export default function GpbInvulForm({
   submitLabel,
   submitting,
   onSubmit,
+  onConceptSave,
   initialAntwoorden,
   initialDoelen,
 }) {
   const [antwoorden, setAntwoorden] = useState(() => initialAntwoorden ?? legeAntwoorden())
   const [doelen, setDoelen] = useState(() => (toontDoelen ? initialDoelen ?? legeDoelen() : []))
   const [fout, setFout] = useState('')
+  const [conceptStatus, setConceptStatus] = useState('')
+  const isEersteRender = useRef(true)
+
+  useEffect(() => {
+    if (!onConceptSave || submitting) return undefined
+
+    if (isEersteRender.current) {
+      isEersteRender.current = false
+      return undefined
+    }
+
+    const timer = setTimeout(() => {
+      setConceptStatus('bezig')
+      Promise.resolve(onConceptSave(antwoorden, doelen))
+        .then(() => setConceptStatus('opgeslagen'))
+        .catch(() => setConceptStatus('mislukt'))
+    }, AUTOSAVE_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [antwoorden, doelen])
+
+  useEffect(() => {
+    if (conceptStatus !== 'opgeslagen') return undefined
+    const timer = setTimeout(() => setConceptStatus(''), 2500)
+    return () => clearTimeout(timer)
+  }, [conceptStatus])
 
   const stellingenPerPijler =
     STELLINGEN[afdeling]?.[functieniveau] ?? PIJLERS.map(() => [{ tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }])
@@ -184,9 +220,17 @@ export default function GpbInvulForm({
         </p>
       )}
 
-      <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Bezig met opslaan…' : submitLabel}
-      </button>
+      <div className="gpb-submit-row">
+        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+          {submitting ? 'Bezig met opslaan…' : submitLabel}
+        </button>
+
+        {conceptStatus === 'bezig' && <span className="gpb-concept-status">Concept opslaan…</span>}
+        {conceptStatus === 'opgeslagen' && <span className="gpb-concept-status">Concept automatisch opgeslagen</span>}
+        {conceptStatus === 'mislukt' && (
+          <span className="gpb-concept-status gpb-concept-status-fout">Automatisch opslaan mislukt</span>
+        )}
+      </div>
     </div>
   )
 }

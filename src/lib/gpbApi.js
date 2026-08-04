@@ -89,6 +89,36 @@ export async function submitGpbLeidinggevende(beoordelingId, antwoorden) {
   }
 }
 
+/**
+ * Tussentijdse concept-autosave tijdens het typen — geen indiening, zet dus
+ * nooit medewerker_ingevuld_at (zie save_gpb_medewerker_concept in
+ * supabase/schema.sql). Onvolledige doelen worden stilzwijgend overgeslagen
+ * (gpb_doelen vereist een omschrijving+deadline).
+ */
+export async function saveGpbMedewerkerConcept(beoordelingId, antwoorden, doelen) {
+  const { error } = await supabase.rpc('save_gpb_medewerker_concept', {
+    p_beoordeling_id: beoordelingId,
+    p_antwoorden: antwoorden,
+    p_doelen: doelen,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/** Tussentijdse concept-autosave voor de leidinggevende, zie hierboven. */
+export async function saveGpbLeidinggevendeConcept(beoordelingId, antwoorden) {
+  const { error } = await supabase.rpc('save_gpb_leidinggevende_concept', {
+    p_beoordeling_id: beoordelingId,
+    p_antwoorden: antwoorden,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
 export async function keurGpbGoed(beoordelingId) {
   const { error } = await supabase.rpc('keur_gpb_goed', { p_beoordeling_id: beoordelingId })
 

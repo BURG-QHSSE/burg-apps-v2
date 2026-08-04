@@ -779,6 +779,105 @@ $$;
 grant execute on function submit_gpb_leidinggevende(uuid, jsonb) to authenticated;
 
 -- ============================================
+-- GPB: tussentijdse concept-autosave, los van submit_gpb_medewerker/
+-- submit_gpb_leidinggevende. Bewust GEEN medewerker_ingevuld_at/definitieve
+-- semantiek hier: dit is puur "wat er nu getypt is niet kwijtraken bij
+-- wegnavigeren", geen indiening. ingevuld_at blijft daarom de indicator
+-- voor "heeft de zelfevaluatie/beoordeling echt ingediend" — gebruikt door
+-- de leidinggevende-UI en telOpenstaandeGpbActies() — anders zou die al na
+-- de eerste toets bij een half leeg formulier verdwijnen.
+--
+-- Doelen met een lege omschrijving/deadline worden overgeslagen (niet
+-- opgeslagen als kapotte rij) omdat gpb_doelen.omschrijving/deadline NOT
+-- NULL zijn — een concept mag onvolledig zijn, submit_gpb_medewerker blijft
+-- de plek waar volledige doelen verplicht worden (frontend-validatie).
+-- ============================================
+create or replace function save_gpb_medewerker_concept(
+  p_beoordeling_id uuid,
+  p_antwoorden jsonb,
+  p_doelen jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b gpb_beoordelingen;
+  doel jsonb;
+begin
+  select * into b from gpb_beoordelingen where id = p_beoordeling_id;
+
+  if b.id is null then
+    raise exception 'Beoordeling niet gevonden';
+  end if;
+  if auth.uid() <> b.medewerker_id then
+    raise exception 'Alleen de toegewezen medewerker mag dit invullen';
+  end if;
+  if b.status <> 'concept' then
+    raise exception 'Zelfevaluatie kan niet meer bewerkt worden na goedkeuring door HR';
+  end if;
+  if jsonb_array_length(p_antwoorden) <> 6 then
+    raise exception 'Verwacht 6 pijlers met antwoorden';
+  end if;
+
+  update gpb_beoordelingen
+  set medewerker_antwoorden = p_antwoorden
+  where id = p_beoordeling_id;
+
+  delete from gpb_doelen where beoordeling_id = p_beoordeling_id;
+  for doel in select * from jsonb_array_elements(p_doelen) loop
+    if coalesce(doel->>'omschrijving', '') <> '' and coalesce(doel->>'deadline', '') <> '' then
+      insert into gpb_doelen (beoordeling_id, omschrijving, pijler, deadline)
+      values (
+        p_beoordeling_id,
+        doel->>'omschrijving',
+        (doel->>'pijler')::int,
+        (doel->>'deadline')::date
+      );
+    end if;
+  end loop;
+end;
+$$;
+
+grant execute on function save_gpb_medewerker_concept(uuid, jsonb, jsonb) to authenticated;
+
+create or replace function save_gpb_leidinggevende_concept(
+  p_beoordeling_id uuid,
+  p_antwoorden jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b gpb_beoordelingen;
+begin
+  select * into b from gpb_beoordelingen where id = p_beoordeling_id;
+
+  if b.id is null then
+    raise exception 'Beoordeling niet gevonden';
+  end if;
+  if auth.uid() <> b.leidinggevende_id then
+    raise exception 'Alleen de toegewezen leidinggevende mag dit invullen';
+  end if;
+  if b.status = 'definitief' then
+    raise exception 'Beoordeling is definitief gemaakt en kan niet meer bewerkt worden';
+  end if;
+  if jsonb_array_length(p_antwoorden) <> 6 then
+    raise exception 'Verwacht 6 pijlers met antwoorden';
+  end if;
+
+  update gpb_beoordelingen
+  set leidinggevende_antwoorden = p_antwoorden
+  where id = p_beoordeling_id;
+end;
+$$;
+
+grant execute on function save_gpb_leidinggevende_concept(uuid, jsonb) to authenticated;
+
+-- ============================================
 -- GPB: goedkeuren en definitief maken (alleen HR/admin, in die volgorde —
 -- zie de statuslevenscyclus in het principes-document).
 -- ============================================

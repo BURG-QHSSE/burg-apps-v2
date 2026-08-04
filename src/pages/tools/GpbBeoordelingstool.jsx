@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
-import { fetchMijnGpb, fetchDoelen, submitGpbMedewerker, submitGpbLeidinggevende } from '../../lib/gpbApi'
+import {
+  fetchMijnGpb,
+  fetchDoelen,
+  submitGpbMedewerker,
+  submitGpbLeidinggevende,
+  saveGpbMedewerkerConcept,
+  saveGpbLeidinggevendeConcept,
+} from '../../lib/gpbApi'
 import { functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './gpb/constants'
 import GpbInvulForm from './gpb/GpbInvulForm'
 import GpbRapport from './gpb/GpbRapport'
@@ -199,6 +206,13 @@ function MijnBeoordelingBlok({ beoordelingen, onIngediend, showToast }) {
               }
               submitLabel="Zelfevaluatie opslaan"
               submitting={submitting}
+              onConceptSave={(antwoorden, doelenInvoer) =>
+                // .then(onIngediend) ververst de lijst op de achtergrond, zodat
+                // heen-en-weer schakelen tussen de Mijn/Team-tabs (wat dit
+                // formulier unmount) bij terugkomst de net ge-autosavede
+                // versie toont i.p.v. de stand van vóór het typen.
+                saveGpbMedewerkerConcept(geselecteerd.id, antwoorden, doelenInvoer).then(onIngediend)
+              }
               onSubmit={async (antwoorden, doelenInvoer) => {
                 setSubmitting(true)
                 setFout('')
@@ -288,6 +302,7 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
             initialAntwoorden={geselecteerd.leidinggevende_antwoorden ?? undefined}
             submitLabel="Beoordeling opslaan"
             submitting={submitting}
+            onConceptSave={(antwoorden) => saveGpbLeidinggevendeConcept(geselecteerd.id, antwoorden).then(onIngediend)}
             onSubmit={async (antwoorden) => {
               setSubmitting(true)
               setFout('')

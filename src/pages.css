@@ -2906,6 +2906,21 @@ a.tool-card:hover .tool-card-hint .arrow {
   margin-bottom: 0;
 }
 
+.gpb-submit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.gpb-concept-status {
+  font-size: 12px;
+  color: var(--inkt-60);
+}
+
+.gpb-concept-status-fout {
+  color: var(--brand);
+}
+
 .gpb-rapport-header {
   display: flex;
   align-items: flex-start;
