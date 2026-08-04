@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchCallStatsForPeriod, fetchCallStatsRoster } from '../../lib/callStatsApi'
+import { fetchCallStatsForPeriod, fetchCallStatsRoster, fetchCallStatsLastUpdated } from '../../lib/callStatsApi'
 
 /**
  * Bel Overzicht — belstatistieken per medewerker uit 3CX CDR-data.
@@ -104,6 +104,31 @@ function fmtMinuten(n) {
   return (Math.round((n || 0) * 10) / 10).toLocaleString('nl-NL')
 }
 
+/**
+ * "Laatst bijgewerkt om 14:32" (vandaag) of "Laatst bijgewerkt op 3 augustus
+ * om 14:32" (andere dag) — in de lokale tijdzone van de gebruiker, want dit
+ * is een echt moment (updated_at, timestamptz), in tegenstelling tot de
+ * tijdloze UTC-ankerdatums die de rest van dit bestand gebruikt voor
+ * dag/week/kwartaal-navigatie.
+ */
+function formatLaatstBijgewerkt(iso) {
+  if (!iso) return ''
+
+  const datum = new Date(iso)
+  const nu = new Date()
+  const tijd = datum.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
+
+  const isVandaag =
+    datum.getFullYear() === nu.getFullYear() &&
+    datum.getMonth() === nu.getMonth() &&
+    datum.getDate() === nu.getDate()
+
+  if (isVandaag) return `Laatst bijgewerkt om ${tijd}`
+
+  const datumLabel = datum.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })
+  return `Laatst bijgewerkt op ${datumLabel} om ${tijd}`
+}
+
 export default function BelOverzicht() {
   const [period, setPeriod] = useState('dag')
   const [anchor, setAnchor] = useState(() => todayUTC())
@@ -115,6 +140,8 @@ export default function BelOverzicht() {
   const [stats, setStats] = useState([])
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState('')
+
+  const [laatstBijgewerkt, setLaatstBijgewerkt] = useState(null)
 
   // Roster (naam + welke medewerkers meetellen) hoeft maar één keer geladen
   // te worden — verandert niet bij het wisselen van periode.
@@ -131,6 +158,23 @@ export default function BelOverzicht() {
       .finally(() => {
         if (isMounted) setRosterLoading(false)
       })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  // Puur informatief (freshness-indicatie), dus bewust los van de
+  // hoofd-loading/error-state: als dit ene verzoek faalt, blijft de rest van
+  // de tool gewoon werken — het tekstregeltje verschijnt dan simpelweg niet.
+  useEffect(() => {
+    let isMounted = true
+
+    fetchCallStatsLastUpdated()
+      .then((iso) => {
+        if (isMounted) setLaatstBijgewerkt(iso)
+      })
+      .catch(() => {})
 
     return () => {
       isMounted = false
@@ -225,6 +269,8 @@ export default function BelOverzicht() {
       </header>
 
       <main className="page-content">
+        {laatstBijgewerkt && <p className="bel-laatst-bijgewerkt">{formatLaatstBijgewerkt(laatstBijgewerkt)}</p>}
+
         <div className="control-row">
           <span className="control-label">Periode</span>
           <div className="btn-toggle-group">

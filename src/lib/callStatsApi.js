@@ -43,6 +43,31 @@ export async function fetchCallStatsForPeriod(period, periodValue) {
 }
 
 /**
+ * Tijdstip waarop de belcijfers voor het laatst zijn bijgewerkt — de cron
+ * ververst `call_daily_stats` elke 15 minuten vanuit 3CX, dit is dus geen
+ * live/real-time data. Simpelweg de meest recente `updated_at` over de hele
+ * tabel (ongeacht welke periode er bekeken wordt) is voldoende en robuuster
+ * dan filteren op de actieve periode: ook als de huidige dag/week/kwartaal
+ * toevallig nog geen rijen heeft, geeft dit nog steeds een zinnig antwoord.
+ *
+ * @returns {Promise<string|null>} ISO-timestamp, of null als de tabel leeg is.
+ */
+export async function fetchCallStatsLastUpdated() {
+  const { data, error } = await supabase
+    .from('call_daily_stats')
+    .select('updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data?.updated_at ?? null
+}
+
+/**
  * De medewerkers-roster voor het Bel Overzicht: iedereen met een gekoppeld
  * 3CX-toestel (`cx_extension_mapping`), met naam. RLS op beide bronnen staat
  * dit toe voor elke ingelogde gebruiker:

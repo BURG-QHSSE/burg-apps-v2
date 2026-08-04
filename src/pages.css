@@ -1559,6 +1559,12 @@ a.tool-card:hover .tool-card-hint .arrow {
 
 /* ---------- Bel Overzicht: datum-navigatie ---------- */
 
+.bel-laatst-bijgewerkt {
+  font-size: 13px;
+  color: var(--inkt-60);
+  margin: 0 0 var(--space-3);
+}
+
 .date-nav-row {
   display: flex;
   align-items: center;
