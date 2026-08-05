@@ -330,6 +330,10 @@ export default function BelOverzicht() {
         {!loading && !loadError && rijen.length > 0 && (
           <>
             <div className="metric-grid">
+              <div className="metric-card metric-card-accent">
+                <span className="metric-card-label">Totaal gesprekken</span>
+                <span className="metric-card-value">{fmtAantal(totalen.callsTotaal)}</span>
+              </div>
               <div className="metric-card">
                 <span className="metric-card-label">Inkomend</span>
                 <span className="metric-card-value">{fmtAantal(totalen.callsIn)}</span>
@@ -337,10 +341,6 @@ export default function BelOverzicht() {
               <div className="metric-card">
                 <span className="metric-card-label">Uitgaand</span>
                 <span className="metric-card-value">{fmtAantal(totalen.callsOut)}</span>
-              </div>
-              <div className="metric-card metric-card-accent">
-                <span className="metric-card-label">Totaal gesprekken</span>
-                <span className="metric-card-value">{fmtAantal(totalen.callsTotaal)}</span>
               </div>
               <div className="metric-card">
                 <span className="metric-card-label">Totaal belminuten</span>
@@ -353,9 +353,9 @@ export default function BelOverzicht() {
                 <thead>
                   <tr>
                     <th>Naam</th>
+                    <th>Totaal gesprekken</th>
                     <th>Inkomend</th>
                     <th>Uitgaand</th>
-                    <th>Totaal gesprekken</th>
                     <th>Min. inkomend</th>
                     <th>Min. uitgaand</th>
                     <th>Totaal minuten</th>
@@ -365,11 +365,11 @@ export default function BelOverzicht() {
                   {rijen.map((r) => (
                     <tr key={r.userId}>
                       <td data-label="Naam">{r.naam}</td>
-                      <td data-label="Inkomend">{fmtAantal(r.callsIn)}</td>
-                      <td data-label="Uitgaand">{fmtAantal(r.callsOut)}</td>
                       <td data-label="Totaal gesprekken">
                         <strong>{fmtAantal(r.callsTotaal)}</strong>
                       </td>
+                      <td data-label="Inkomend">{fmtAantal(r.callsIn)}</td>
+                      <td data-label="Uitgaand">{fmtAantal(r.callsOut)}</td>
                       <td data-label="Min. inkomend">{fmtMinuten(r.minutesIn)}</td>
                       <td data-label="Min. uitgaand">{fmtMinuten(r.minutesOut)}</td>
                       <td data-label="Totaal minuten">
