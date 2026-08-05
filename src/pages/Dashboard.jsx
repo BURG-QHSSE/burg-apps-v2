@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/AuthProvider'
 import { useTheme } from '../lib/useTheme'
-import { TOOLS, TOOL_CATEGORIES, hasAccess, roleLabel } from '../lib/toolRegistry'
+import { TOOLS, TOOL_CATEGORIES, canAccessTool, roleLabel } from '../lib/toolRegistry'
 import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
@@ -123,7 +123,7 @@ export default function Dashboard() {
 
   const featuredTools = gebruik
     .map((entry) => ({ entry, tool: TOOLS.find((t) => t.id === entry.toolId) }))
-    .filter(({ tool }) => tool && hasAccess(profile?.role, tool.minimumRole))
+    .filter(({ tool }) => tool && canAccessTool(profile, tool))
     .slice(0, 2)
 
   return (
@@ -175,7 +175,9 @@ export default function Dashboard() {
         )}
 
         {TOOL_CATEGORIES.map((category) => {
-          const toolsInCategory = TOOLS.filter((tool) => tool.category === category.id)
+          const toolsInCategory = TOOLS.filter(
+            (tool) => tool.category === category.id && (!profile?.restricted_to_tool || canAccessTool(profile, tool)),
+          )
 
           if (toolsInCategory.length === 0) return null
 
@@ -187,7 +189,7 @@ export default function Dashboard() {
                   <ToolCard
                     key={tool.id}
                     tool={tool}
-                    unlocked={hasAccess(profile?.role, tool.minimumRole)}
+                    unlocked={canAccessTool(profile, tool)}
                     badgeAantal={
                       tool.id === 'gpb-beoordelingstool'
                         ? gpbOpenstaand

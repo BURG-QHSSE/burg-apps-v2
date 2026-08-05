@@ -50,6 +50,18 @@ export function hasAccess(userRole, minimumRole) {
   return userLevel >= requiredLevel
 }
 
+/**
+ * Bepaalt of `profile` toegang heeft tot `tool`. Is `restricted_to_tool`
+ * gezet op het profiel, dan mag het profiel UITSLUITEND die ene tool zien,
+ * ongeacht `role` — overschrijft de normale rol-ladder volledig.
+ */
+export function canAccessTool(profile, tool) {
+  if (profile?.restricted_to_tool) {
+    return profile.restricted_to_tool === tool.id
+  }
+  return hasAccess(profile?.role, tool.minimumRole)
+}
+
 const ROLE_LABELS = {
   admin: 'Admin',
   manager: 'Manager',

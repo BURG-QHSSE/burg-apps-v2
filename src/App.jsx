@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthProvider'
-import { TOOLS } from './lib/toolRegistry'
+import { TOOLS, canAccessTool } from './lib/toolRegistry'
 import { logToolUsage } from './lib/toolUsage'
 import RoleGate from './components/RoleGate'
 import RequireAuth from './components/RequireAuth'
@@ -122,15 +122,13 @@ function AppRoutes() {
             path={tool.path}
             element={
               <RequireAuth>
-                <RoleGate
-                  minimumRole={tool.minimumRole}
-                  userRole={userRole}
-                  fallback={<GeenToegang />}
-                >
+                {canAccessTool(profile, tool) ? (
                   <ToolUsageTracker toolId={tool.id} userId={user?.id}>
                     {toolElement}
                   </ToolUsageTracker>
-                </RoleGate>
+                ) : (
+                  <GeenToegang />
+                )}
               </RequireAuth>
             }
           />
