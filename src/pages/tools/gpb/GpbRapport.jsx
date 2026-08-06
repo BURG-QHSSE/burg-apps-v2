@@ -1,4 +1,4 @@
-import { PIJLERS, scoreBetekenis, eindscoreKwalificatie, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
+import { PIJLERS, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
@@ -39,7 +39,6 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
         <div className="section-card gpb-eindscore-card">
           <span className="metric-card-label">Eindscore (leidinggevende leidend)</span>
           <span className="metric-card-value">{fmtScore(eindscore)}</span>
-          <span className="badge badge-blauwgrijs">{eindscoreKwalificatie(eindscore)}</span>
         </div>
       )}
 

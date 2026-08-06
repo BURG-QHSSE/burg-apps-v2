@@ -860,12 +860,6 @@ export function scoreBetekenis(score) {
   return 'Onder niveau'
 }
 
-export function eindscoreKwalificatie(eindscore) {
-  if (eindscore >= 4) return 'Promotie bespreekbaar'
-  if (eindscore >= 3.5) return 'Richting promotie'
-  return 'Op of onder niveau'
-}
-
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
 }
