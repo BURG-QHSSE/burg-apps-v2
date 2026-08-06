@@ -56,10 +56,30 @@ export default function AdminOverzichtTab({ visible, employees, employeesLoading
       setLoading(true)
       setError('')
 
-      const { data, error: loadError } = await burgJobsSupabase
-        .from('jobs')
-        .select('assigned_to, sales_status, sales_status_at')
-        .eq('review_status', 'go')
+      // Supabase/PostgREST geeft standaard maximaal 1000 rijen per query
+      // terug, ook zonder expliciete .limit(). Bij >1000 go-vacatures (dit
+      // project zit daar inmiddels overheen) werden de laatste rijen dus
+      // stilzwijgend niet meegeteld. Hier in pagina's van 1000 ophalen tot
+      // een pagina leeg/korter dan de paginagrootte is.
+      const PAGE_SIZE = 1000
+      const data = []
+      let loadError = null
+
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data: page, error: pageError } = await burgJobsSupabase
+          .from('jobs')
+          .select('assigned_to, sales_status, sales_status_at')
+          .eq('review_status', 'go')
+          .range(from, from + PAGE_SIZE - 1)
+
+        if (pageError) {
+          loadError = pageError
+          break
+        }
+
+        data.push(...(page || []))
+        if (!page || page.length < PAGE_SIZE) break
+      }
 
       if (cancelled) return
 
@@ -73,7 +93,7 @@ export default function AdminOverzichtTab({ visible, employees, employeesLoading
 
       const tally = new Map()
       let overigGezien = false
-      ;(data || []).forEach((j) => {
+      data.forEach((j) => {
         if (!j.assigned_to) return
         if (GESLOTEN_STATUSSEN.includes(j.sales_status)) return
 
