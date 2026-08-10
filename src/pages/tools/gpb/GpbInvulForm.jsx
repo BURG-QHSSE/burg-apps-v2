@@ -100,7 +100,7 @@ export default function GpbInvulForm({
     setDoelen((current) => current.map((d, i) => (i !== idx ? d : { ...d, [veld]: waarde })))
   }
 
-  function valideer() {
+  function vindFout() {
     for (const pijler of antwoorden) {
       for (let i = 0; i < 3; i++) {
         if (pijler.scores[i] === null) return 'Vul bij elke stelling een score in.'
@@ -117,7 +117,7 @@ export default function GpbInvulForm({
   }
 
   function handleSubmit() {
-    const foutmelding = valideer()
+    const foutmelding = vindFout()
     if (foutmelding) {
       setFout(foutmelding)
       return
@@ -125,6 +125,14 @@ export default function GpbInvulForm({
     setFout('')
     onSubmit(antwoorden, doelen)
   }
+
+  // Autosave (hierboven) bewaart alleen een concept — pas de klik op de
+  // submitLabel-knop dient 'm echt in. Zonder dit onderscheid duidelijk te
+  // maken dachten medewerkers dat "Concept automatisch opgeslagen" al de
+  // indiening was, en klikten ze de knop nooit aan (zie GPB-onderzoek
+  // 6-8-2026: 4 medewerkers hadden alle 18 antwoorden getypt maar stonden
+  // nergens als "ingediend" geregistreerd).
+  const compleet = vindFout() === ''
 
   return (
     <div className="gpb-invulform">
@@ -220,13 +228,22 @@ export default function GpbInvulForm({
         </p>
       )}
 
+      {compleet && !submitting && (
+        <p className="form-success">
+          Alles ingevuld — klik op "{submitLabel}" om dit in te dienen. Automatisch opslaan bewaart alleen een
+          concept, indienen is een aparte stap.
+        </p>
+      )}
+
       <div className="gpb-submit-row">
         <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
           {submitting ? 'Bezig met opslaan…' : submitLabel}
         </button>
 
         {conceptStatus === 'bezig' && <span className="gpb-concept-status">Concept opslaan…</span>}
-        {conceptStatus === 'opgeslagen' && <span className="gpb-concept-status">Concept automatisch opgeslagen</span>}
+        {conceptStatus === 'opgeslagen' && (
+          <span className="gpb-concept-status">Concept opgeslagen — nog niet ingediend</span>
+        )}
         {conceptStatus === 'mislukt' && (
           <span className="gpb-concept-status gpb-concept-status-fout">Automatisch opslaan mislukt</span>
         )}

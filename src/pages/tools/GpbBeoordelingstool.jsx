@@ -339,7 +339,9 @@ function TeamBlok({ beoordelingen, onIngediend, showToast }) {
                 ? 'Opgeslagen — nog te bewerken'
                 : b.medewerker_ingevuld_at
                   ? 'Klaar om te beoordelen'
-                  : 'Klaar om te beoordelen (zelfevaluatie loopt nog)'}
+                  : b.medewerker_antwoorden
+                    ? 'Klaar om te beoordelen (zelfevaluatie is concept, nog niet ingediend)'
+                    : 'Klaar om te beoordelen (zelfevaluatie loopt nog)'}
           </span>
         </button>
       ))}

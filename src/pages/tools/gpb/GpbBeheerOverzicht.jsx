@@ -10,6 +10,18 @@ function fmtDatum(isoString) {
 }
 
 /**
+ * "—" bij een ontbrekende ingevuld_at is dubbelzinnig: niemand begonnen, of
+ * wél alles getypt maar de indien-knop nooit geklikt (autosave zet deze
+ * datum bewust niet, zie GpbInvulForm.jsx). Met antwoorden erbij kunnen we
+ * die twee gevallen uit elkaar houden i.p.v. beide als "—" te tonen.
+ */
+function fmtIngevuld(isoString, antwoorden) {
+  if (isoString) return fmtDatum(isoString)
+  if (antwoorden) return 'Concept — nog niet ingediend'
+  return '—'
+}
+
+/**
  * "Dashboard-gebruiker"-weergave uit GPB-Principes.md: HR/admin ziet alle
  * beoordelingen, maakt nieuwe aan, en keurt goed/maakt definitief. Alle
  * schrijfacties lopen via RPC's (zie supabase/schema.sql) i.p.v. directe
@@ -280,8 +292,10 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
                 </td>
                 <td data-label="Periode">{b.periode}</td>
                 <td data-label="Status">{STATUS_LABELS[b.status]}</td>
-                <td data-label="Medewerker ingevuld">{fmtDatum(b.medewerker_ingevuld_at)}</td>
-                <td data-label="Leidinggevende ingevuld">{fmtDatum(b.leidinggevende_ingevuld_at)}</td>
+                <td data-label="Medewerker ingevuld">{fmtIngevuld(b.medewerker_ingevuld_at, b.medewerker_antwoorden)}</td>
+                <td data-label="Leidinggevende ingevuld">
+                  {fmtIngevuld(b.leidinggevende_ingevuld_at, b.leidinggevende_antwoorden)}
+                </td>
                 <td data-label="Verwijderen" onClick={(e) => e.stopPropagation()}>
                   {confirmDeleteId === b.id ? (
                     <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
