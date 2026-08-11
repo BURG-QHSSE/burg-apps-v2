@@ -6,6 +6,7 @@ import { TOOLS, TOOL_CATEGORIES, canAccessTool, roleLabel } from '../lib/toolReg
 import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
+import { fetchNieuweTroubleshootCount } from '../lib/troubleshootApi'
 import ToolIcon from '../lib/toolIcons'
 import YieldThermometer from './YieldThermometer'
 
@@ -94,6 +95,7 @@ export default function Dashboard() {
   const [gebruik, setGebruik] = useState([])
   const [gpbOpenstaand, setGpbOpenstaand] = useState(0)
   const [nieuweVacaturesCount, setNieuweVacaturesCount] = useState(0)
+  const [nieuweTicketsCount, setNieuweTicketsCount] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -114,6 +116,17 @@ export default function Dashboard() {
       fetchNieuweVacaturesCount(profile.email).then((count) => {
         if (isMounted) setNieuweVacaturesCount(count)
       })
+    }
+
+    // RLS staat lezen van troubleshoot_items sowieso alleen aan admin toe,
+    // dus deze fetch overslaan voor iedereen anders voorkomt een nutteloze
+    // (en foutmeldende) call.
+    if (profile?.role === 'admin') {
+      fetchNieuweTroubleshootCount()
+        .then((count) => {
+          if (isMounted) setNieuweTicketsCount(count)
+        })
+        .catch((err) => console.error('[Dashboard] Kon ticket-teller niet laden:', err.message))
     }
 
     return () => {
@@ -137,15 +150,20 @@ export default function Dashboard() {
           <p className="topbar-greeting-sub">{vandaagLabel()} — hier zijn je tools voor vandaag.</p>
         </div>
         <div className="topbar-actions">
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Schakel naar lichte modus' : 'Schakel naar donkere modus'}
-            title={theme === 'dark' ? 'Lichte modus' : 'Donkere modus'}
-          >
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
+          <span className="theme-toggle-wrap">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Schakel naar lichte modus' : 'Schakel naar donkere modus'}
+              title={theme === 'dark' ? 'Lichte modus' : 'Donkere modus'}
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
+            {nieuweTicketsCount > 0 && (
+              <span className="topbar-notificatie-stip" title="Nieuwe melding(en) in Ontwikkeling" />
+            )}
+          </span>
           {profile?.role === 'admin' && (
             <Link to="/admin" className="btn btn-secondary">
               Adminpaneel
@@ -195,7 +213,9 @@ export default function Dashboard() {
                         ? gpbOpenstaand
                         : tool.id === 'mijn-omgeving'
                           ? nieuweVacaturesCount
-                          : 0
+                          : tool.id === 'dev-projecten'
+                            ? nieuweTicketsCount
+                            : 0
                     }
                   />
                 ))}

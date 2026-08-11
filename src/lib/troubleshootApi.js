@@ -19,6 +19,17 @@ export async function fetchTroubleshootItems() {
   return data
 }
 
+/** Aantal nog niet opgepakte meldingen ('nieuw') — voor de rode stip/badge bij Ontwikkeling. RLS staat lezen sowieso alleen aan admin toe. */
+export async function fetchNieuweTroubleshootCount() {
+  const { count, error } = await supabase.from(TABLE).select('id', { count: 'exact', head: true }).eq('status', 'nieuw')
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return count ?? 0
+}
+
 export async function updateTroubleshootStatus(id, status) {
   const { error } = await supabase.from(TABLE).update({ status }).eq('id', id)
 
