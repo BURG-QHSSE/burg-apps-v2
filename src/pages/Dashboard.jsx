@@ -160,7 +160,7 @@ export default function Dashboard() {
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
-          {profile?.role === 'admin' && <NotificatiesMenu />}
+          <NotificatiesMenu />
           {profile?.role === 'admin' && (
             <Link to="/admin" className="btn btn-secondary">
               Adminpaneel

@@ -1,17 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchNieuweTroubleshootItems } from '../lib/troubleshootApi'
-import { toolNaamVoorPad } from '../pages/tools/dev-projecten/MeldingenTab'
+import { fetchOnbekekenNotificaties } from '../lib/notificatiesApi'
+
+const TYPE_BADGE = {
+  troubleshoot_nieuw: { label: 'Melding', className: 'badge-brand' },
+  gpb_medewerker_invullen: { label: 'GPB', className: 'badge-blauwgrijs' },
+  gpb_leidinggevende_invullen: { label: 'GPB', className: 'badge-blauwgrijs' },
+  gpb_wacht_op_goedkeuring: { label: 'GPB', className: 'badge-mos' },
+}
 
 function fmtDatum(iso) {
   return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
 }
 
 /**
- * Notificatieknop in de topbar (admin-only, zie Dashboard.jsx) — toont de
- * nog niet opgepakte troubleshoot-meldingen ('nieuw'). Klikken op een
- * melding stuurt naar de Meldingen-tab van Ontwikkeling; de status zelf
- * wijzigen kan alleen daar (dit paneel is puur "wat is er binnengekomen").
+ * Generiek, persoonlijk notificatiepaneel in de topbar (Dashboard.jsx) —
+ * voor elke ingelogde gebruiker. Toont wat voor DIE specifieke gebruiker
+ * relevant is (RLS op `notificaties` beperkt dit al tot auth.uid(), dus
+ * geen rolcheck hier nodig): admins zien nieuwe troubleshoot-meldingen,
+ * iedereen ziet daarnaast zijn eigen openstaande GPB-acties.
+ *
+ * Rijen worden uitsluitend door database-triggers geschreven/opgelost
+ * (zie de notificaties-sectie in supabase/schema.sql) — er is bewust geen
+ * "markeer als gelezen"-knop, dat gebeurt automatisch zodra de
+ * onderliggende actie (ticket afgehandeld, GPB ingevuld/goedgekeurd) is
+ * afgerond.
  */
 export default function NotificatiesMenu() {
   const navigate = useNavigate()
@@ -22,11 +35,11 @@ export default function NotificatiesMenu() {
   useEffect(() => {
     let isMounted = true
 
-    fetchNieuweTroubleshootItems()
+    fetchOnbekekenNotificaties()
       .then((data) => {
         if (isMounted) setItems(data)
       })
-      .catch((err) => console.error('[NotificatiesMenu] Kon meldingen niet laden:', err.message))
+      .catch((err) => console.error('[NotificatiesMenu] Kon notificaties niet laden:', err.message))
 
     return () => {
       isMounted = false
@@ -46,9 +59,9 @@ export default function NotificatiesMenu() {
     return () => document.removeEventListener('mousedown', handleClickBuiten)
   }, [open])
 
-  function openMelding() {
+  function openNotificatie(item) {
     setOpen(false)
-    navigate('/tools/dev-projecten?tab=meldingen')
+    if (item.link) navigate(item.link)
   }
 
   return (
@@ -66,24 +79,28 @@ export default function NotificatiesMenu() {
       {open && (
         <div className="notificaties-panel">
           {items.length === 0 ? (
-            <p className="notificaties-leeg">Geen nieuwe meldingen.</p>
+            <p className="notificaties-leeg">Geen nieuwe notificaties.</p>
           ) : (
             <ul className="notificaties-lijst">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <button type="button" className="notificaties-item" onClick={openMelding}>
-                    <span className={item.type === 'probleem' ? 'badge badge-brand' : 'badge badge-blauwgrijs'}>
-                      {item.type === 'probleem' ? 'Probleem' : 'Idee'}
-                    </span>
-                    <span className="notificaties-item-tekst">
-                      <strong>{item.ingediend_door?.naam || 'Onbekend'}</strong> · {toolNaamVoorPad(item.vanuit_tool)} ·{' '}
-                      {fmtDatum(item.created_at)}
-                      <br />
-                      {item.omschrijving}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {items.map((item) => {
+                const badge = TYPE_BADGE[item.type] || { label: item.type, className: 'badge-blauwgrijs' }
+                return (
+                  <li key={item.id}>
+                    <button type="button" className="notificaties-item" onClick={() => openNotificatie(item)}>
+                      <span className={`badge ${badge.className}`}>{badge.label}</span>
+                      <span className="notificaties-item-tekst">
+                        <strong>{item.titel}</strong> · {fmtDatum(item.created_at)}
+                        {item.omschrijving && (
+                          <>
+                            <br />
+                            {item.omschrijving}
+                          </>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
