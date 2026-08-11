@@ -1,4 +1,4 @@
-import { PIJLERS, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
+import { PIJLERS, STELLINGEN, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
@@ -18,6 +18,14 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
     medewerker: medewerkerAntwoorden ? gemiddelde(medewerkerAntwoorden[i].scores) : null,
     leidinggevende: leidinggevendeAntwoorden ? gemiddelde(leidinggevendeAntwoorden[i].scores) : null,
   }))
+
+  // Zelfde stellingen-tekst als in GpbInvulForm — zonder deze zie je in het
+  // rapport alleen een los cijfer + toelichting, niet welke stelling erbij
+  // hoort. Bij het bespreken van het rapport (functioneringsgesprek) is dat
+  // net de context die nodig is.
+  const stellingenPerPijler =
+    STELLINGEN[beoordeling.afdeling]?.[beoordeling.functieniveau] ??
+    PIJLERS.map(() => [{ tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }])
 
   const eindscore = berekenEindscore(beoordeling)
 
@@ -49,41 +57,44 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
             leidinggevende {fmtScore(pijlerGemiddeldes[i].leidinggevende)}
           </p>
 
-          <div className="gpb-vergelijk-grid">
-            <div>
-              <p className="control-label">Zelfevaluatie</p>
-              {medewerkerAntwoorden ? (
-                medewerkerAntwoorden[i].scores.map((score, j) => (
-                  <div className="gpb-vergelijk-item" key={j}>
-                    <span className="badge badge-blauwgrijs">
-                      {score} · {scoreBetekenis(score)}
-                    </span>
-                    <p>{medewerkerAntwoorden[i].toelichtingen[j]}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="idle-state">Nog niet ingevuld.</p>
-              )}
-            </div>
+          {stellingenPerPijler[i].map((stelling, j) => (
+            <div className="gpb-stelling" key={j}>
+              <p className="gpb-stelling-tekst">{stelling.tekst}</p>
+              {stelling.voorbeeld && <p className="gpb-stelling-voorbeeld">{stelling.voorbeeld}</p>}
 
-            <div>
-              <p className="control-label">Leidinggevende</p>
-              {leidinggevendeAntwoorden ? (
-                leidinggevendeAntwoorden[i].scores.map((score, j) => (
-                  <div className="gpb-vergelijk-item" key={j}>
-                    <span className="badge badge-mos">
-                      {score} · {scoreBetekenis(score)}
-                    </span>
-                    <p>{leidinggevendeAntwoorden[i].toelichtingen[j]}</p>
-                  </div>
-                ))
-              ) : beoordeling.leidinggevende_ingevuld_at ? (
-                <p className="idle-state">Ingevuld — zichtbaar na goedkeuring door HR.</p>
-              ) : (
-                <p className="idle-state">Nog niet ingevuld.</p>
-              )}
+              <div className="gpb-vergelijk-grid">
+                <div>
+                  <p className="control-label">Zelfevaluatie</p>
+                  {medewerkerAntwoorden ? (
+                    <div className="gpb-vergelijk-item">
+                      <span className="badge badge-blauwgrijs">
+                        {medewerkerAntwoorden[i].scores[j]} · {scoreBetekenis(medewerkerAntwoorden[i].scores[j])}
+                      </span>
+                      <p>{medewerkerAntwoorden[i].toelichtingen[j]}</p>
+                    </div>
+                  ) : (
+                    <p className="idle-state">Nog niet ingevuld.</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="control-label">Leidinggevende</p>
+                  {leidinggevendeAntwoorden ? (
+                    <div className="gpb-vergelijk-item">
+                      <span className="badge badge-mos">
+                        {leidinggevendeAntwoorden[i].scores[j]} · {scoreBetekenis(leidinggevendeAntwoorden[i].scores[j])}
+                      </span>
+                      <p>{leidinggevendeAntwoorden[i].toelichtingen[j]}</p>
+                    </div>
+                  ) : beoordeling.leidinggevende_ingevuld_at ? (
+                    <p className="idle-state">Ingevuld — zichtbaar na goedkeuring door HR.</p>
+                  ) : (
+                    <p className="idle-state">Nog niet ingevuld.</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       ))}
 
