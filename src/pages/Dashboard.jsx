@@ -6,8 +6,9 @@ import { TOOLS, TOOL_CATEGORIES, canAccessTool, roleLabel } from '../lib/toolReg
 import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
-import { fetchNieuweTroubleshootCount } from '../lib/troubleshootApi'
+import { fetchNieuweTroubleshootItems } from '../lib/troubleshootApi'
 import ToolIcon from '../lib/toolIcons'
+import NotificatiesMenu from '../components/NotificatiesMenu'
 import YieldThermometer from './YieldThermometer'
 
 function getGroet() {
@@ -122,9 +123,9 @@ export default function Dashboard() {
     // dus deze fetch overslaan voor iedereen anders voorkomt een nutteloze
     // (en foutmeldende) call.
     if (profile?.role === 'admin') {
-      fetchNieuweTroubleshootCount()
-        .then((count) => {
-          if (isMounted) setNieuweTicketsCount(count)
+      fetchNieuweTroubleshootItems()
+        .then((items) => {
+          if (isMounted) setNieuweTicketsCount(items.length)
         })
         .catch((err) => console.error('[Dashboard] Kon ticket-teller niet laden:', err.message))
     }
@@ -150,20 +151,16 @@ export default function Dashboard() {
           <p className="topbar-greeting-sub">{vandaagLabel()} — hier zijn je tools voor vandaag.</p>
         </div>
         <div className="topbar-actions">
-          <span className="theme-toggle-wrap">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Schakel naar lichte modus' : 'Schakel naar donkere modus'}
-              title={theme === 'dark' ? 'Lichte modus' : 'Donkere modus'}
-            >
-              {theme === 'dark' ? '☀' : '☾'}
-            </button>
-            {nieuweTicketsCount > 0 && (
-              <span className="topbar-notificatie-stip" title="Nieuwe melding(en) in Ontwikkeling" />
-            )}
-          </span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Schakel naar lichte modus' : 'Schakel naar donkere modus'}
+            title={theme === 'dark' ? 'Lichte modus' : 'Donkere modus'}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+          {profile?.role === 'admin' && <NotificatiesMenu />}
           {profile?.role === 'admin' && (
             <Link to="/admin" className="btn btn-secondary">
               Adminpaneel

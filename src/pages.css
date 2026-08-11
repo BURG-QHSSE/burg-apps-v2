@@ -107,20 +107,95 @@
   outline-offset: 1px;
 }
 
-.theme-toggle-wrap {
+/* ---------- Notificatiepaneel (NotificatiesMenu.jsx) ---------- */
+
+.notificaties-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.topbar-notificatie-stip {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 9px;
-  height: 9px;
+.notificaties-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--inkt);
+  background: transparent;
+  color: var(--inkt);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notificaties-btn:hover {
+  background: var(--surface);
+}
+
+.notificaties-stip {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--brand);
-  border: 1.5px solid var(--steen);
+  flex-shrink: 0;
+}
+
+.notificaties-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  width: min(360px, calc(100vw - var(--space-5) * 2));
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(27, 29, 31, 0.25);
+  z-index: 45;
+}
+
+.notificaties-leeg {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: 13px;
+  color: var(--inkt-60);
+}
+
+.notificaties-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notificaties-lijst li + li {
+  border-top: 1px solid var(--lijn);
+}
+
+.notificaties-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notificaties-item:hover {
+  background: var(--blauwgrijs-10);
+}
+
+.notificaties-item-tekst {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--inkt);
 }
 
 /* ---------- Layout: page met topbar ---------- */

@@ -10,7 +10,7 @@ const STATUS_LABELS = {
   afgehandeld: 'Afgehandeld',
 }
 
-function toolNaamVoorPad(pad) {
+export function toolNaamVoorPad(pad) {
   if (!pad || pad === '/') return 'Dashboard'
   return TOOLS.find((t) => t.path === pad)?.naam ?? pad
 }
