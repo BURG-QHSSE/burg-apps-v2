@@ -1028,4 +1028,77 @@ $$;
 grant execute on function call_stats_profiel_namen() to authenticated;
 
 grant execute on function keur_gpb_goed(uuid) to authenticated;
+
+-- ============================================
+-- ONTWIKKELING (admin-only tabblad) — dev_projects + troubleshoot_items.
+--
+-- dev_projects: gedeelde project/idee-lijst voor Max en Nils. Volledig
+-- admin-only (ALL-policy), geen aparte insert/update/delete-policies nodig.
+-- uren_per_week/tijd_bespaard_minuten zijn gedeelde velden ("laatste
+-- wijziging wint") — de _aangepast_door/_aangepast_at-kolommen worden
+-- vanuit de client gezet bij het opslaan (zie devProjectsApi.js), niet via
+-- een trigger, want alleen díe twee velden hebben dit nodig, niet elke
+-- update van de rij.
+--
+-- troubleshoot_items: meldingen (ideeen/problemen) ingediend door ALLE
+-- gebruikers via het floating helpdesk-widgetje (TroubleshootWidget.jsx),
+-- maar alleen admin (Max/Nils/Amber) kan de inbox lezen en de status
+-- wijzigen. vanuit_tool is het pathname op moment van indienen (bv.
+-- '/tools/fee-checker'), puur informatief voor de admin-inbox.
+-- ============================================
+create table dev_projects (
+  id uuid default gen_random_uuid() primary key,
+  titel text not null,
+  notities text,
+  prioriteit text not null default 'midden' check (prioriteit in ('laag', 'midden', 'hoog')),
+  deadline date,
+  status text not null default 'open' check (status in ('open', 'bezig', 'klaar')),
+  uren_per_week numeric,
+  uren_per_week_aangepast_door uuid references profiles(id) on delete set null,
+  uren_per_week_aangepast_at timestamptz,
+  tijd_bespaard_minuten numeric,
+  tijd_bespaard_aangepast_door uuid references profiles(id) on delete set null,
+  tijd_bespaard_aangepast_at timestamptz,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table dev_projects is 'Gedeelde project/idee-lijst voor Max en Nils (BURG Apps intern tabblad). Alleen zichtbaar/bewerkbaar voor admin.';
+comment on column dev_projects.uren_per_week is 'Gedeeld veld: door zowel Max als Nils aan te passen, laatste wijziging wint.';
+comment on column dev_projects.tijd_bespaard_minuten is 'Geschatte tijdsbesparing per eenmalig gebruik door een consultant, in minuten. Gedeeld veld, laatste wijziging wint.';
+
+alter table dev_projects enable row level security;
+
+create policy "admin volledige toegang dev_projects"
+  on dev_projects for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+create table troubleshoot_items (
+  id uuid default gen_random_uuid() primary key,
+  type text not null check (type in ('idee', 'probleem')),
+  omschrijving text not null,
+  ingediend_door uuid references profiles(id) on delete set null,
+  vanuit_tool text,
+  status text not null default 'nieuw' check (status in ('nieuw', 'in_behandeling', 'afgehandeld')),
+  created_at timestamptz not null default now()
+);
+
+comment on table troubleshoot_items is 'Meldingen (ideeen/problemen) ingediend door alle gebruikers via het helpdesk-widgetje. Alleen admin (Max/Nils/Amber) kan de inbox lezen en status wijzigen.';
+
+alter table troubleshoot_items enable row level security;
+
+create policy "iedereen kan een melding indienen"
+  on troubleshoot_items for insert
+  with check (auth.uid() = ingediend_door);
+
+create policy "admin leest meldingen"
+  on troubleshoot_items for select
+  using (my_role() = 'admin');
+
+create policy "admin wijzigt status meldingen"
+  on troubleshoot_items for update
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
 grant execute on function maak_gpb_definitief(uuid) to authenticated;
