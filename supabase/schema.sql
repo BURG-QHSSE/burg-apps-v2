@@ -1101,4 +1101,60 @@ create policy "admin wijzigt status meldingen"
   on troubleshoot_items for update
   using (my_role() = 'admin')
   with check (my_role() = 'admin');
+
+-- Slack-notificatie bij een nieuwe troubleshoot-melding, via een Incoming
+-- Webhook naar #developer-gods (Slack-app "BURG App Meldingen").
+--
+-- De webhook-URL staat NIET hier, maar in Supabase Vault onder de naam
+-- 'troubleshoot_slack_webhook_url' — zelfde reden als BURG_JOBS_SERVICE_ROLE_KEY
+-- niet in dit bestand staat: een geheim hoort niet in git. Eenmalig handmatig
+-- gezet via SQL editor:
+--   select vault.create_secret('<webhook-url>', 'troubleshoot_slack_webhook_url', '...');
+-- Vereist ook eenmalig: create extension if not exists pg_net;
+create or replace function notify_slack_troubleshoot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  webhook_url text;
+  submitter_naam text;
+  type_label text;
+begin
+  select decrypted_secret into webhook_url
+  from vault.decrypted_secrets
+  where name = 'troubleshoot_slack_webhook_url';
+
+  if webhook_url is null then
+    return new;
+  end if;
+
+  select naam into submitter_naam from profiles where id = new.ingediend_door;
+  type_label := case new.type when 'idee' then 'Idee' when 'probleem' then 'Probleem' else new.type end;
+
+  perform net.http_post(
+    url := webhook_url,
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    body := jsonb_build_object(
+      'text',
+      format(
+        E'*Nieuwe %s in BURG App*\nDoor: %s\nVanuit: %s\n\n%s\n\n<https://app.burgqhsse.nl/tools/dev-projecten|Bekijk in Ontwikkeling → Meldingen>',
+        type_label,
+        coalesce(submitter_naam, 'Onbekend'),
+        coalesce(new.vanuit_tool, '-'),
+        new.omschrijving
+      )
+    )
+  );
+
+  return new;
+end;
+$$;
+
+create trigger troubleshoot_items_notify_slack
+  after insert on troubleshoot_items
+  for each row
+  execute function notify_slack_troubleshoot();
+
 grant execute on function maak_gpb_definitief(uuid) to authenticated;

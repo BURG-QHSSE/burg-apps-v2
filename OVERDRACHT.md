@@ -18,6 +18,7 @@ Dit document beschrijft alle externe diensten waar deze app van afhankelijk is, 
 | EmailJS | Verzenden van mails (Sales Overdracht, welkomstmail) | Account-e-mailadres gewijzigd naar `office@burgbedrijven.nl` | ✅ Overgedragen |
 | Google Sheet + Apps Script | Doorgroei Tracker databron | Eigendomsoverdracht naar `office@burgbedrijven.nl` geaccepteerd (Apps Script-bewerktoegang volgt automatisch mee via Sheet-eigenaarschap) | ✅ Overgedragen |
 | Domein `burgqhsse.nl` / DNS | Custom domain `app.burgqhsse.nl` → Vercel | DNS-record bijgewerkt naar de nieuwe Vercel-CNAME | ✅ Bevestigd |
+| Slack | Notificatie bij nieuwe troubleshoot-melding (Incoming Webhook → #developer-gods) | App "BURG App Meldingen" aangemaakt in workspace `BURG` door Max van Leeuwen, 2026-08-11 | ⬜ Nog te checken wie eigenaar hoort te zijn |
 
 **Nog open:**
 - `BURG-Apps` (het originele GitHub Pages-project) overzetten — bewust even blijven staan, apart oppakken met Max.
@@ -94,6 +95,17 @@ Er is een **tweede, ouder Supabase-project** (`ziwqshuabwcthqjspuso`, zie `VITE_
 ## 6. Domein / DNS — ✅ bevestigd
 
 `app.burgqhsse.nl` hoort bij het bedrijfsdomein `burgqhsse.nl`. De DNS wordt beheerd bij de domeinprovider van `burgqhsse.nl` (niet bij Nils persoonlijk) — de CNAME-record voor `app` is tijdens deze overdracht bijgewerkt naar de nieuwe Vercel-bestemming.
+
+---
+
+## 7. Slack — notificatie bij nieuwe troubleshoot-melding — ⬜ eigenaarschap nog te bepalen
+
+**Wat:** zodra iemand een melding indient via het helpdesk-widgetje (`TroubleshootWidget.jsx`, tabel `troubleshoot_items`), post een database-trigger in Supabase (`notify_slack_troubleshoot()`, zie `supabase/schema.sql`) automatisch een bericht in het Slack-kanaal **#developer-gods**, met wie de melding indiende, vanuit welke pagina, de omschrijving, en een link naar de Meldingen-tab in Ontwikkeling.
+
+- Slack-app: **"BURG App Meldingen"** (workspace `BURG`), alleen een Incoming Webhook, geen verdere permissies.
+- De webhook-URL zelf staat **niet** in git, maar versleuteld in Supabase Vault onder de naam `troubleshoot_slack_webhook_url` (zie comment boven `notify_slack_troubleshoot()` in `schema.sql` voor hoe je 'm opnieuw zou zetten, bv. als het kanaal ooit verandert).
+- Aangemaakt door Max van Leeuwen op 2026-08-11, als vervanger van een oorspronkelijk geplande e-mailnotificatie (EmailJS had geen vrij template-slot meer op het gratis plan).
+- **Nog te doen:** bepalen of de Slack-app op een gedeeld/team-account moet komen i.p.v. Max' persoonlijke aanmaak, zodra daar meer duidelijkheid over is (zelfde soort overweging als bij GitHub/Vercel/Supabase bovenaan dit document).
 
 ---
 
