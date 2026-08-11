@@ -43,6 +43,11 @@ create table profiles (
   -- informatief getoond.
   yield_sinds date,
   yield_tot date,
+  -- Of deze hr/admin-gebruiker "GPB wacht op goedkeuring"-notificaties
+  -- krijgt (zie sync_notificaties_gpb_update() verderop) — standaard aan,
+  -- individueel uit te zetten voor wie deze meldingen niet wil (bv. een
+  -- admin die geen HR-achtige taken doet).
+  gpb_goedkeuring_notificaties boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1365,6 +1370,7 @@ begin
     from profiles p
     where p.role in ('hr', 'admin')
       and p.actief = true
+      and p.gpb_goedkeuring_notificaties
     on conflict (user_id, bron_tabel, bron_id, type) do nothing;
   end if;
 
