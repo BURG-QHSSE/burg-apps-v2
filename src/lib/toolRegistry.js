@@ -13,6 +13,7 @@ export const TOOLS = [
   { id: 'bel-overzicht', naam: 'Bel Overzicht', minimumRole: 'user', path: '/tools/bel-overzicht', category: 'daily' },
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
+  { id: 'dev-projecten', naam: 'Ontwikkeling', minimumRole: 'admin', path: '/tools/dev-projecten', category: 'beheer' },
 ]
 
 /**
@@ -22,6 +23,7 @@ export const TOOLS = [
 export const TOOL_CATEGORIES = [
   { id: 'daily', label: 'Tools' },
   { id: 'groei', label: 'Persoonlijke groei' },
+  { id: 'beheer', label: 'Beheer' },
 ]
 
 /**

@@ -107,6 +107,97 @@
   outline-offset: 1px;
 }
 
+/* ---------- Notificatiepaneel (NotificatiesMenu.jsx) ---------- */
+
+.notificaties-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.notificaties-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--inkt);
+  background: transparent;
+  color: var(--inkt);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notificaties-btn:hover {
+  background: var(--surface);
+}
+
+.notificaties-stip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
+}
+
+.notificaties-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  width: min(360px, calc(100vw - var(--space-5) * 2));
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(27, 29, 31, 0.25);
+  z-index: 45;
+}
+
+.notificaties-leeg {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: 13px;
+  color: var(--inkt-60);
+}
+
+.notificaties-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notificaties-lijst li + li {
+  border-top: 1px solid var(--lijn);
+}
+
+.notificaties-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notificaties-item:hover {
+  background: var(--blauwgrijs-10);
+}
+
+.notificaties-item-tekst {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--inkt);
+}
+
 /* ---------- Layout: page met topbar ---------- */
 
 .page {
@@ -3025,7 +3116,173 @@ a.tool-card:hover .tool-card-hint .arrow {
 @media print {
   .topbar,
   .mo-tab-bar,
-  .gpb-print-hide {
+  .gpb-print-hide,
+  .helpdesk-widget-btn,
+  .helpdesk-widget-panel {
     display: none !important;
+  }
+}
+
+/* ---------- Ontwikkeling: projecten (dev_projects) ---------- */
+
+.dev-project-new-form {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.dev-project-new-input {
+  flex: 1;
+}
+
+.dev-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dev-project-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dev-project-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dev-project-titel-wrap {
+  flex: 1;
+}
+
+.dev-project-titel-wrap input {
+  font-weight: 500;
+}
+
+.dev-project-confirm-delete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--inkt-60);
+  flex-shrink: 0;
+}
+
+.dev-project-meta {
+  margin: var(--space-1) 0 0;
+  font-size: 11px;
+  color: var(--inkt-60);
+}
+
+/* ---------- Floating helpdesk-widget (TroubleshootWidget.jsx) ---------- */
+
+.helpdesk-widget-btn {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: 999px;
+  border: 1px solid var(--blauwgrijs);
+  background: var(--blauwgrijs);
+  color: var(--steen);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(27, 29, 31, 0.3);
+  z-index: 45;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.helpdesk-widget-btn svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.helpdesk-widget-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(27, 29, 31, 0.35);
+}
+
+.helpdesk-widget-panel {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  width: min(320px, calc(100vw - var(--space-5) * 2));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(27, 29, 31, 0.25);
+  z-index: 45;
+}
+
+.helpdesk-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.helpdesk-widget-title {
+  font-weight: 500;
+  color: var(--inkt);
+}
+
+.helpdesk-widget-textarea {
+  min-height: 80px;
+}
+
+.helpdesk-widget-bevestiging {
+  font-size: 14px;
+  color: var(--mos);
+}
+
+.helpdesk-widget-intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--blauwgrijs-10);
+  border-radius: var(--radius-md);
+}
+
+.helpdesk-widget-intro p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--inkt);
+}
+
+.helpdesk-widget-intro-sluit {
+  align-self: flex-end;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blauwgrijs);
+  cursor: pointer;
+}
+
+.helpdesk-widget-intro-sluit:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .helpdesk-widget-btn,
+  .helpdesk-widget-panel {
+    right: var(--space-4);
+    bottom: var(--space-4);
   }
 }

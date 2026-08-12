@@ -24,6 +24,8 @@ import MijnOmgeving from './pages/tools/MijnOmgeving'
 import ProeftijdTracker from './pages/tools/ProeftijdTracker'
 import GpbBeoordelingstool from './pages/tools/GpbBeoordelingstool'
 import BelOverzicht from './pages/tools/BelOverzicht'
+import Ontwikkeling from './pages/tools/Ontwikkeling'
+import TroubleshootWidget from './components/TroubleshootWidget'
 import './App.css'
 import './pages.css'
 
@@ -39,6 +41,7 @@ const TOOL_COMPONENTS = {
   'proeftijd-tracker': ProeftijdTracker,
   'gpb-beoordelingstool': GpbBeoordelingstool,
   'bel-overzicht': BelOverzicht,
+  'dev-projecten': Ontwikkeling,
 }
 
 /**
@@ -73,7 +76,9 @@ function AppRoutes() {
   const userRole = profile?.role
 
   return (
-    <Routes>
+    <>
+      {user && <TroubleshootWidget />}
+      <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/wachtwoord-vergeten" element={<WachtwoordVergeten />} />
       <Route path="/wachtwoord-resetten" element={<WachtwoordResetten />} />
@@ -144,6 +149,7 @@ function AppRoutes() {
         }
       />
     </Routes>
+    </>
   )
 }
 

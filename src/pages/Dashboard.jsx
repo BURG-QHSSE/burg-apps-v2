@@ -6,7 +6,9 @@ import { TOOLS, TOOL_CATEGORIES, canAccessTool, roleLabel } from '../lib/toolReg
 import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
+import { fetchNieuweTroubleshootItems } from '../lib/troubleshootApi'
 import ToolIcon from '../lib/toolIcons'
+import NotificatiesMenu from '../components/NotificatiesMenu'
 import YieldThermometer from './YieldThermometer'
 
 function getGroet() {
@@ -94,6 +96,7 @@ export default function Dashboard() {
   const [gebruik, setGebruik] = useState([])
   const [gpbOpenstaand, setGpbOpenstaand] = useState(0)
   const [nieuweVacaturesCount, setNieuweVacaturesCount] = useState(0)
+  const [nieuweTicketsCount, setNieuweTicketsCount] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -114,6 +117,17 @@ export default function Dashboard() {
       fetchNieuweVacaturesCount(profile.email).then((count) => {
         if (isMounted) setNieuweVacaturesCount(count)
       })
+    }
+
+    // RLS staat lezen van troubleshoot_items sowieso alleen aan admin toe,
+    // dus deze fetch overslaan voor iedereen anders voorkomt een nutteloze
+    // (en foutmeldende) call.
+    if (profile?.role === 'admin') {
+      fetchNieuweTroubleshootItems()
+        .then((items) => {
+          if (isMounted) setNieuweTicketsCount(items.length)
+        })
+        .catch((err) => console.error('[Dashboard] Kon ticket-teller niet laden:', err.message))
     }
 
     return () => {
@@ -146,6 +160,7 @@ export default function Dashboard() {
           >
             {theme === 'dark' ? '☀' : '☾'}
           </button>
+          <NotificatiesMenu />
           {profile?.role === 'admin' && (
             <Link to="/admin" className="btn btn-secondary">
               Adminpaneel
@@ -195,7 +210,9 @@ export default function Dashboard() {
                         ? gpbOpenstaand
                         : tool.id === 'mijn-omgeving'
                           ? nieuweVacaturesCount
-                          : 0
+                          : tool.id === 'dev-projecten'
+                            ? nieuweTicketsCount
+                            : 0
                     }
                   />
                 ))}

@@ -43,6 +43,11 @@ create table profiles (
   -- informatief getoond.
   yield_sinds date,
   yield_tot date,
+  -- Of deze hr/admin-gebruiker "GPB wacht op goedkeuring"-notificaties
+  -- krijgt (zie sync_notificaties_gpb_update() verderop) — standaard aan,
+  -- individueel uit te zetten voor wie deze meldingen niet wil (bv. een
+  -- admin die geen HR-achtige taken doet).
+  gpb_goedkeuring_notificaties boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1153,4 +1158,384 @@ $$;
 grant execute on function call_stats_profiel_namen() to authenticated;
 
 grant execute on function keur_gpb_goed(uuid) to authenticated;
+
+-- ============================================
+-- ONTWIKKELING (admin-only tabblad) — dev_projects + troubleshoot_items.
+--
+-- dev_projects: gedeelde project/idee-lijst voor Max en Nils. Volledig
+-- admin-only (ALL-policy), geen aparte insert/update/delete-policies nodig.
+-- uren_per_week/tijd_bespaard_minuten zijn gedeelde velden ("laatste
+-- wijziging wint") — de _aangepast_door/_aangepast_at-kolommen worden
+-- vanuit de client gezet bij het opslaan (zie devProjectsApi.js), niet via
+-- een trigger, want alleen díe twee velden hebben dit nodig, niet elke
+-- update van de rij.
+--
+-- troubleshoot_items: meldingen (ideeen/problemen) ingediend door ALLE
+-- gebruikers via het floating helpdesk-widgetje (TroubleshootWidget.jsx),
+-- maar alleen admin (Max/Nils/Amber) kan de inbox lezen en de status
+-- wijzigen. vanuit_tool is het pathname op moment van indienen (bv.
+-- '/tools/fee-checker'), puur informatief voor de admin-inbox.
+-- ============================================
+create table dev_projects (
+  id uuid default gen_random_uuid() primary key,
+  titel text not null,
+  notities text,
+  prioriteit text not null default 'midden' check (prioriteit in ('laag', 'midden', 'hoog')),
+  deadline date,
+  status text not null default 'open' check (status in ('open', 'bezig', 'klaar')),
+  uren_per_week numeric,
+  uren_per_week_aangepast_door uuid references profiles(id) on delete set null,
+  uren_per_week_aangepast_at timestamptz,
+  tijd_bespaard_minuten numeric,
+  tijd_bespaard_aangepast_door uuid references profiles(id) on delete set null,
+  tijd_bespaard_aangepast_at timestamptz,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table dev_projects is 'Gedeelde project/idee-lijst voor Max en Nils (BURG Apps intern tabblad). Alleen zichtbaar/bewerkbaar voor admin.';
+comment on column dev_projects.uren_per_week is 'Gedeeld veld: door zowel Max als Nils aan te passen, laatste wijziging wint.';
+comment on column dev_projects.tijd_bespaard_minuten is 'Geschatte tijdsbesparing per eenmalig gebruik door een consultant, in minuten. Gedeeld veld, laatste wijziging wint.';
+
+alter table dev_projects enable row level security;
+
+create policy "admin volledige toegang dev_projects"
+  on dev_projects for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+create table troubleshoot_items (
+  id uuid default gen_random_uuid() primary key,
+  type text not null check (type in ('idee', 'probleem')),
+  omschrijving text not null,
+  ingediend_door uuid references profiles(id) on delete set null,
+  vanuit_tool text,
+  status text not null default 'nieuw' check (status in ('nieuw', 'in_behandeling', 'afgehandeld')),
+  created_at timestamptz not null default now()
+);
+
+comment on table troubleshoot_items is 'Meldingen (ideeen/problemen) ingediend door alle gebruikers via het helpdesk-widgetje. Alleen admin (Max/Nils/Amber) kan de inbox lezen en status wijzigen.';
+
+alter table troubleshoot_items enable row level security;
+
+create policy "iedereen kan een melding indienen"
+  on troubleshoot_items for insert
+  with check (auth.uid() = ingediend_door);
+
+create policy "admin leest meldingen"
+  on troubleshoot_items for select
+  using (my_role() = 'admin');
+
+create policy "admin wijzigt status meldingen"
+  on troubleshoot_items for update
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+-- Slack-notificatie bij een nieuwe troubleshoot-melding, via een Incoming
+-- Webhook naar #developer-gods (Slack-app "BURG App Meldingen").
+--
+-- De webhook-URL staat NIET hier, maar in Supabase Vault onder de naam
+-- 'troubleshoot_slack_webhook_url' — zelfde reden als BURG_JOBS_SERVICE_ROLE_KEY
+-- niet in dit bestand staat: een geheim hoort niet in git. Eenmalig handmatig
+-- gezet via SQL editor:
+--   select vault.create_secret('<webhook-url>', 'troubleshoot_slack_webhook_url', '...');
+-- Vereist ook eenmalig: create extension if not exists pg_net;
+create or replace function notify_slack_troubleshoot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  webhook_url text;
+  submitter_naam text;
+  type_label text;
+begin
+  select decrypted_secret into webhook_url
+  from vault.decrypted_secrets
+  where name = 'troubleshoot_slack_webhook_url';
+
+  if webhook_url is null then
+    return new;
+  end if;
+
+  select naam into submitter_naam from profiles where id = new.ingediend_door;
+  type_label := case new.type when 'idee' then 'Idee' when 'probleem' then 'Probleem' else new.type end;
+
+  perform net.http_post(
+    url := webhook_url,
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    body := jsonb_build_object(
+      'text',
+      format(
+        E'*Nieuwe %s in BURG App*\nDoor: %s\nVanuit: %s\n\n%s\n\n<https://app.burgqhsse.nl/tools/dev-projecten|Bekijk in Ontwikkeling → Meldingen>',
+        type_label,
+        coalesce(submitter_naam, 'Onbekend'),
+        coalesce(new.vanuit_tool, '-'),
+        new.omschrijving
+      )
+    )
+  );
+
+  return new;
+end;
+$$;
+
+create trigger troubleshoot_items_notify_slack
+  after insert on troubleshoot_items
+  for each row
+  execute function notify_slack_troubleshoot();
+
+-- ============================================
+-- NOTIFICATIES — generiek, persoonlijk notificatiesysteem voor de topbar
+-- (NotificatiesMenu.jsx, voor ELKE ingelogde gebruiker, niet admin-only).
+--
+-- Eén rij = één notificatie voor één specifieke user_id. Wordt UITSLUITEND
+-- geschreven door de triggers hieronder (op troubleshoot_items en
+-- gpb_beoordelingen) — nooit direct vanuit de client, vandaar geen insert/
+-- update-policy voor authenticated. `gelezen` wordt automatisch op true
+-- gezet zodra de onderliggende brontoestand oplost (ticket niet meer
+-- 'nieuw', GPB-timestamp ingevuld, GPB-status weg van 'concept') — er is
+-- bewust GEEN handmatige "markeer als gelezen"-actie in de UI.
+--
+-- bron_tabel/bron_id zijn GEEN foreign key (kan niet: bron_tabel wisselt
+-- per rij tussen troubleshoot_items/gpb_beoordelingen) — opruimen bij
+-- verwijdering van de bronrij gebeurt daarom expliciet via een eigen
+-- AFTER DELETE-trigger op gpb_beoordelingen (troubleshoot_items-rijen
+-- worden door deze app nooit verwijderd, alleen van status gewisseld, dus
+-- daar is geen cleanup-trigger voor nodig).
+--
+-- unique(user_id, bron_tabel, bron_id, type) + `on conflict do nothing` in
+-- elke fan-out insert maakt alle triggers idempotent.
+-- ============================================
+create table notificaties (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  type text not null check (type in (
+    'troubleshoot_nieuw',
+    'gpb_medewerker_invullen',
+    'gpb_leidinggevende_invullen',
+    'gpb_wacht_op_goedkeuring'
+  )),
+  titel text not null,
+  omschrijving text,
+  link text,
+  bron_tabel text not null,
+  bron_id uuid not null,
+  gelezen boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (user_id, bron_tabel, bron_id, type)
+);
+
+comment on table notificaties is 'Persoonlijk, generiek notificatiesysteem. Rijen worden uitsluitend door triggers geschreven (troubleshoot_items, gpb_beoordelingen); gelezen wordt automatisch gesynchroniseerd met de brontoestand, nooit handmatig door de gebruiker.';
+
+create index notificaties_unread_idx on notificaties (user_id) where gelezen = false;
+create index notificaties_bron_idx on notificaties (bron_tabel, bron_id);
+
+alter table notificaties enable row level security;
+
+create policy "gebruiker leest eigen notificaties"
+  on notificaties for select
+  using (auth.uid() = user_id);
+
+-- Troubleshoot: fan-out naar alle actieve admins bij een nieuwe melding
+-- (behalve naar de indiener zelf, als die toevallig admin is). Coëxisteert
+-- met notify_slack_troubleshoot() hierboven — twee onafhankelijke AFTER
+-- INSERT-triggers op dezelfde tabel.
+create or replace function notify_notificaties_troubleshoot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  submitter_naam text;
+  type_label text;
+begin
+  select naam into submitter_naam from profiles where id = new.ingediend_door;
+  type_label := case new.type when 'idee' then 'Idee' when 'probleem' then 'Probleem' else new.type end;
+
+  insert into notificaties (user_id, type, titel, omschrijving, link, bron_tabel, bron_id)
+  select
+    p.id,
+    'troubleshoot_nieuw',
+    format('%s van %s', type_label, coalesce(submitter_naam, 'onbekend')),
+    new.omschrijving,
+    '/tools/dev-projecten?tab=meldingen',
+    'troubleshoot_items',
+    new.id
+  from profiles p
+  where p.role = 'admin'
+    and p.actief = true
+    and (new.ingediend_door is null or p.id <> new.ingediend_door)
+  on conflict (user_id, bron_tabel, bron_id, type) do nothing;
+
+  return new;
+end;
+$$;
+
+create trigger troubleshoot_items_notify_notificaties
+  after insert on troubleshoot_items
+  for each row
+  execute function notify_notificaties_troubleshoot();
+
+revoke execute on function notify_notificaties_troubleshoot() from public, anon, authenticated;
+
+-- Troubleshoot: zodra status weg is uit 'nieuw', de bijbehorende
+-- notificatie(s) op gelezen zetten.
+create or replace function resolve_notificaties_troubleshoot()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.status = 'nieuw' and new.status <> 'nieuw' then
+    update notificaties
+    set gelezen = true
+    where bron_tabel = 'troubleshoot_items' and bron_id = new.id and not gelezen;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger troubleshoot_items_resolve_notificaties
+  after update on troubleshoot_items
+  for each row
+  execute function resolve_notificaties_troubleshoot();
+
+revoke execute on function resolve_notificaties_troubleshoot() from public, anon, authenticated;
+
+-- GPB: bij aanmaken een persoonlijke notificatie voor zowel de medewerker
+-- als de leidinggevende (elk alleen als het id niet null is).
+create or replace function notify_notificaties_gpb_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.medewerker_id is not null then
+    insert into notificaties (user_id, type, titel, omschrijving, link, bron_tabel, bron_id)
+    values (
+      new.medewerker_id,
+      'gpb_medewerker_invullen',
+      'Vul je GPB-zelfevaluatie in',
+      format('Periode %s — %s', new.periode, new.afdeling),
+      '/tools/gpb-beoordelingstool?tab=mijn',
+      'gpb_beoordelingen',
+      new.id
+    )
+    on conflict (user_id, bron_tabel, bron_id, type) do nothing;
+  end if;
+
+  if new.leidinggevende_id is not null then
+    insert into notificaties (user_id, type, titel, omschrijving, link, bron_tabel, bron_id)
+    values (
+      new.leidinggevende_id,
+      'gpb_leidinggevende_invullen',
+      format('Vul beoordeling in voor %s', new.medewerker_naam),
+      format('Periode %s — %s', new.periode, new.afdeling),
+      '/tools/gpb-beoordelingstool?tab=team',
+      'gpb_beoordelingen',
+      new.id
+    )
+    on conflict (user_id, bron_tabel, bron_id, type) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger gpb_beoordelingen_notify_insert
+  after insert on gpb_beoordelingen
+  for each row
+  execute function notify_notificaties_gpb_insert();
+
+revoke execute on function notify_notificaties_gpb_insert() from public, anon, authenticated;
+
+-- GPB: resolve per kant zodra ingevuld, fan-out naar hr/admin zodra beide
+-- kanten klaar zijn (status nog concept), en die hr/admin-notificaties
+-- weer resolven zodra de status concept verlaat (goedgekeurd/definitief).
+create or replace function sync_notificaties_gpb_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.medewerker_ingevuld_at is null and new.medewerker_ingevuld_at is not null then
+    update notificaties
+    set gelezen = true
+    where bron_tabel = 'gpb_beoordelingen' and bron_id = new.id
+      and type = 'gpb_medewerker_invullen' and not gelezen;
+  end if;
+
+  if old.leidinggevende_ingevuld_at is null and new.leidinggevende_ingevuld_at is not null then
+    update notificaties
+    set gelezen = true
+    where bron_tabel = 'gpb_beoordelingen' and bron_id = new.id
+      and type = 'gpb_leidinggevende_invullen' and not gelezen;
+  end if;
+
+  if new.medewerker_ingevuld_at is not null
+     and new.leidinggevende_ingevuld_at is not null
+     and new.status = 'concept' then
+    insert into notificaties (user_id, type, titel, omschrijving, link, bron_tabel, bron_id)
+    select
+      p.id,
+      'gpb_wacht_op_goedkeuring',
+      format('GPB wacht op goedkeuring voor %s', new.medewerker_naam),
+      format('Periode %s — %s', new.periode, new.afdeling),
+      '/tools/gpb-beoordelingstool?tab=beheer',
+      'gpb_beoordelingen',
+      new.id
+    from profiles p
+    where p.role in ('hr', 'admin')
+      and p.actief = true
+      and p.gpb_goedkeuring_notificaties
+    on conflict (user_id, bron_tabel, bron_id, type) do nothing;
+  end if;
+
+  if old.status = 'concept' and new.status <> 'concept' then
+    update notificaties
+    set gelezen = true
+    where bron_tabel = 'gpb_beoordelingen' and bron_id = new.id
+      and type = 'gpb_wacht_op_goedkeuring' and not gelezen;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger gpb_beoordelingen_sync_notificaties
+  after update on gpb_beoordelingen
+  for each row
+  execute function sync_notificaties_gpb_update();
+
+revoke execute on function sync_notificaties_gpb_update() from public, anon, authenticated;
+
+-- GPB: bij verwijderen van een beoordeling de bijbehorende notificaties
+-- opruimen (bron_id is geen FK, dus geen automatische cascade).
+create or replace function cleanup_notificaties_gpb_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from notificaties where bron_tabel = 'gpb_beoordelingen' and bron_id = old.id;
+  return old;
+end;
+$$;
+
+create trigger gpb_beoordelingen_cleanup_notificaties
+  after delete on gpb_beoordelingen
+  for each row
+  execute function cleanup_notificaties_gpb_delete();
+
+revoke execute on function cleanup_notificaties_gpb_delete() from public, anon, authenticated;
+
 grant execute on function maak_gpb_definitief(uuid) to authenticated;

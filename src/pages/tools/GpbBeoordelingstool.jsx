@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthProvider'
 import {
   fetchMijnGpb,
@@ -28,11 +28,18 @@ import GpbBeheerOverzicht from './gpb/GpbBeheerOverzicht'
  */
 export default function GpbBeoordelingstool() {
   const { user, profile } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [beoordelingen, setBeoordelingen] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [tab, setTab] = useState('mijn')
+  // ?tab= (bv. vanuit een GPB-notificatie, zie NotificatiesMenu.jsx) mag
+  // op een tab wijzen die deze gebruiker niet mag zien — de tabs-array
+  // hieronder rendert dan simpelweg geen bijbehorende knop/inhoud, dus dit
+  // hoeft niet expliciet gevalideerd te worden tegen de rol.
+  const [tab, setTab] = useState(
+    ['mijn', 'team', 'beheer'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'mijn',
+  )
   const [toast, setToast] = useState('')
 
   const isHrOfAdmin = profile?.role === 'hr' || profile?.role === 'admin'
