@@ -62,6 +62,11 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
       .catch((err) => console.error('[GpbBeheerOverzicht] Kon doelen niet laden:', err.message))
   }, [geselecteerdId])
 
+  async function handleRapportOpgeslagen() {
+    await Promise.all([onVerversen(), fetchDoelen(geselecteerdId).then(setDoelen)])
+    showToast?.('Wijzigingen opgeslagen.')
+  }
+
   async function handleAanmaken() {
     if (!medewerkerId || !leidinggevendeId || !periode.trim()) {
       setAanmakenFout('Vul medewerker, leidinggevende en periode in.')
@@ -153,6 +158,8 @@ export default function GpbBeheerOverzicht({ beoordelingen, onVerversen, showToa
         <GpbRapport
           beoordeling={geselecteerd}
           doelen={doelen}
+          hrBewerkbaar
+          onOpgeslagen={handleRapportOpgeslagen}
           acties={
             <>
               {geselecteerd.status === 'concept' && beideIngevuld && (

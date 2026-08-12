@@ -941,6 +941,131 @@ end;
 $$;
 
 -- ============================================
+-- GPB: HR/admin corrigeert scores/toelichtingen/doelen vanuit het
+-- vergelijkingsscherm (Beheer-overzicht) — feedback was dat tijdens het
+-- bespreken van een GPB (functioneringsgesprek) soms nog een score of
+-- argumentatie moet worden bijgesteld, zonder dat de medewerker/
+-- leidinggevende het formulier zelf opnieuw hoeft te openen. Bewust los
+-- van submit_gpb_medewerker/leidinggevende (die blijven "ik dien mijn
+-- eigen antwoorden in"; dit is "HR corrigeert bestaande antwoorden") en
+-- raakt daarom ook bewust NIET de _ingevuld_at-tijdstempels aan. Net als
+-- de leidinggevende-kant blijft dit mogelijk tot 'definitief', daarna is
+-- het rapport vastgezet.
+-- ============================================
+create or replace function hr_update_gpb_medewerker(
+  p_beoordeling_id uuid,
+  p_antwoorden jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b gpb_beoordelingen;
+begin
+  if my_role() not in ('hr', 'admin') then
+    raise exception 'Alleen HR of admin mag dit aanpassen';
+  end if;
+
+  select * into b from gpb_beoordelingen where id = p_beoordeling_id;
+
+  if b.id is null then
+    raise exception 'Beoordeling niet gevonden';
+  end if;
+  if b.status = 'definitief' then
+    raise exception 'Beoordeling is definitief gemaakt en kan niet meer bewerkt worden';
+  end if;
+  if jsonb_array_length(p_antwoorden) <> 6 then
+    raise exception 'Verwacht 6 pijlers met antwoorden';
+  end if;
+
+  update gpb_beoordelingen
+  set medewerker_antwoorden = p_antwoorden
+  where id = p_beoordeling_id;
+end;
+$$;
+
+grant execute on function hr_update_gpb_medewerker(uuid, jsonb) to authenticated;
+
+create or replace function hr_update_gpb_leidinggevende(
+  p_beoordeling_id uuid,
+  p_antwoorden jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b gpb_beoordelingen;
+begin
+  if my_role() not in ('hr', 'admin') then
+    raise exception 'Alleen HR of admin mag dit aanpassen';
+  end if;
+
+  select * into b from gpb_beoordelingen where id = p_beoordeling_id;
+
+  if b.id is null then
+    raise exception 'Beoordeling niet gevonden';
+  end if;
+  if b.status = 'definitief' then
+    raise exception 'Beoordeling is definitief gemaakt en kan niet meer bewerkt worden';
+  end if;
+  if jsonb_array_length(p_antwoorden) <> 6 then
+    raise exception 'Verwacht 6 pijlers met antwoorden';
+  end if;
+
+  update gpb_beoordelingen
+  set leidinggevende_antwoorden = p_antwoorden
+  where id = p_beoordeling_id;
+end;
+$$;
+
+grant execute on function hr_update_gpb_leidinggevende(uuid, jsonb) to authenticated;
+
+create or replace function hr_update_gpb_doelen(
+  p_beoordeling_id uuid,
+  p_doelen jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b gpb_beoordelingen;
+  doel jsonb;
+begin
+  if my_role() not in ('hr', 'admin') then
+    raise exception 'Alleen HR of admin mag dit aanpassen';
+  end if;
+
+  select * into b from gpb_beoordelingen where id = p_beoordeling_id;
+
+  if b.id is null then
+    raise exception 'Beoordeling niet gevonden';
+  end if;
+  if b.status = 'definitief' then
+    raise exception 'Beoordeling is definitief gemaakt en kan niet meer bewerkt worden';
+  end if;
+
+  delete from gpb_doelen where beoordeling_id = p_beoordeling_id;
+  for doel in select * from jsonb_array_elements(p_doelen) loop
+    insert into gpb_doelen (beoordeling_id, omschrijving, pijler, deadline)
+    values (
+      p_beoordeling_id,
+      doel->>'omschrijving',
+      (doel->>'pijler')::int,
+      (doel->>'deadline')::date
+    );
+  end loop;
+end;
+$$;
+
+grant execute on function hr_update_gpb_doelen(uuid, jsonb) to authenticated;
+
+-- ============================================
 -- Bel Overzicht: belstatistieken per medewerker uit 3CX CDR-data
 --
 -- `call_daily_stats` wordt buiten dit bestand om gevuld (een cron job zet

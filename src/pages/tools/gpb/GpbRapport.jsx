@@ -1,4 +1,6 @@
-import { PIJLERS, STELLINGEN, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
+import { useState } from 'react'
+import { PIJLERS, STELLINGEN, SCORE_OPTIES, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
+import { hrUpdateGpbMedewerker, hrUpdateGpbLeidinggevende, hrUpdateGpbDoelen } from '../../../lib/gpbApi'
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
@@ -9,10 +11,27 @@ function gemiddelde(waarden) {
  * GPB-Principes.md: dit zijn twee weergaven van dezelfde vastgelegde data).
  * Scores van de leidinggevende zijn leidend voor de eindscore — de
  * zelfevaluatie van de medewerker is ter vergelijking zichtbaar.
+ *
+ * hrBewerkbaar (alleen doorgegeven vanuit het Beheer-overzicht, dus alleen
+ * bereikbaar voor hr/admin — de RPC's hieronder controleren de rol ook
+ * zelf) zet een "Bewerken"-toggle aan waarmee HR tijdens het bespreken van
+ * de GPB (functioneringsgesprek) een score, toelichting of doel kan
+ * corrigeren zonder dat de medewerker/leidinggevende het formulier
+ * opnieuw hoeft in te vullen. onOpgeslagen ververst de data bij de
+ * aanroeper na een geslaagde save.
  */
-export default function GpbRapport({ beoordeling, doelen, acties }) {
+export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, onOpgeslagen }) {
   const medewerkerAntwoorden = beoordeling.medewerker_antwoorden
   const leidinggevendeAntwoorden = beoordeling.leidinggevende_antwoorden
+
+  const [bewerken, setBewerken] = useState(false)
+  const [conceptMedewerker, setConceptMedewerker] = useState(medewerkerAntwoorden)
+  const [conceptLeidinggevende, setConceptLeidinggevende] = useState(leidinggevendeAntwoorden)
+  const [conceptDoelen, setConceptDoelen] = useState(
+    doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline })),
+  )
+  const [opslaan, setOpslaan] = useState(false)
+  const [fout, setFout] = useState('')
 
   const pijlerGemiddeldes = PIJLERS.map((_, i) => ({
     medewerker: medewerkerAntwoorden ? gemiddelde(medewerkerAntwoorden[i].scores) : null,
@@ -28,6 +47,67 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
     PIJLERS.map(() => [{ tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }, { tekst: '—', voorbeeld: '' }])
 
   const eindscore = berekenEindscore(beoordeling)
+  const kanBewerken = hrBewerkbaar && beoordeling.status !== 'definitief'
+
+  function startBewerken() {
+    setConceptMedewerker(medewerkerAntwoorden)
+    setConceptLeidinggevende(leidinggevendeAntwoorden)
+    setConceptDoelen(doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline })))
+    setFout('')
+    setBewerken(true)
+  }
+
+  function setMedewerkerScore(pijlerIdx, stellingIdx, score) {
+    setConceptMedewerker((current) =>
+      current.map((p, i) =>
+        i !== pijlerIdx ? p : { ...p, scores: p.scores.map((s, j) => (j === stellingIdx ? score : s)) },
+      ),
+    )
+  }
+
+  function setMedewerkerToelichting(pijlerIdx, stellingIdx, tekst) {
+    setConceptMedewerker((current) =>
+      current.map((p, i) =>
+        i !== pijlerIdx ? p : { ...p, toelichtingen: p.toelichtingen.map((t, j) => (j === stellingIdx ? tekst : t)) },
+      ),
+    )
+  }
+
+  function setLeidinggevendeScore(pijlerIdx, stellingIdx, score) {
+    setConceptLeidinggevende((current) =>
+      current.map((p, i) =>
+        i !== pijlerIdx ? p : { ...p, scores: p.scores.map((s, j) => (j === stellingIdx ? score : s)) },
+      ),
+    )
+  }
+
+  function setLeidinggevendeToelichting(pijlerIdx, stellingIdx, tekst) {
+    setConceptLeidinggevende((current) =>
+      current.map((p, i) =>
+        i !== pijlerIdx ? p : { ...p, toelichtingen: p.toelichtingen.map((t, j) => (j === stellingIdx ? tekst : t)) },
+      ),
+    )
+  }
+
+  function setDoel(idx, veld, waarde) {
+    setConceptDoelen((current) => current.map((d, i) => (i !== idx ? d : { ...d, [veld]: waarde })))
+  }
+
+  async function handleOpslaan() {
+    setOpslaan(true)
+    setFout('')
+    try {
+      if (conceptMedewerker) await hrUpdateGpbMedewerker(beoordeling.id, conceptMedewerker)
+      if (conceptLeidinggevende) await hrUpdateGpbLeidinggevende(beoordeling.id, conceptLeidinggevende)
+      if (conceptDoelen.length > 0) await hrUpdateGpbDoelen(beoordeling.id, conceptDoelen)
+      await onOpgeslagen?.()
+      setBewerken(false)
+    } catch (err) {
+      setFout(err.message)
+    } finally {
+      setOpslaan(false)
+    }
+  }
 
   return (
     <div className="gpb-rapport">
@@ -38,10 +118,23 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
             {beoordeling.afdeling} · {functieLabel(beoordeling.afdeling, beoordeling.functieniveau)} · {beoordeling.periode}
           </p>
         </div>
-        <span className={`badge badge-${beoordeling.status === 'definitief' ? 'mos' : 'blauwgrijs'}`}>
-          {STATUS_LABELS[beoordeling.status]}
-        </span>
+        <div className="gpb-rapport-header-acties gpb-print-hide">
+          {kanBewerken && !bewerken && (
+            <button type="button" className="btn btn-secondary" onClick={startBewerken}>
+              Bewerken
+            </button>
+          )}
+          <span className={`badge badge-${beoordeling.status === 'definitief' ? 'mos' : 'blauwgrijs'}`}>
+            {STATUS_LABELS[beoordeling.status]}
+          </span>
+        </div>
       </div>
+
+      {fout && (
+        <p className="form-error" role="alert">
+          {fout}
+        </p>
+      )}
 
       {eindscore !== null && (
         <div className="section-card gpb-eindscore-card">
@@ -65,31 +158,77 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
               <div className="gpb-vergelijk-grid">
                 <div>
                   <p className="control-label">Zelfevaluatie</p>
-                  {medewerkerAntwoorden ? (
+                  {!medewerkerAntwoorden ? (
+                    <p className="idle-state">Nog niet ingevuld.</p>
+                  ) : bewerken ? (
+                    <div className="gpb-vergelijk-item">
+                      <div className="btn-group">
+                        {SCORE_OPTIES.map((optie) => (
+                          <button
+                            type="button"
+                            key={optie}
+                            className={conceptMedewerker[i].scores[j] === optie ? 'btn-group-btn active' : 'btn-group-btn'}
+                            onClick={() => setMedewerkerScore(i, j, optie)}
+                            disabled={opslaan}
+                          >
+                            {optie}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        className="field-textarea"
+                        value={conceptMedewerker[i].toelichtingen[j]}
+                        onChange={(e) => setMedewerkerToelichting(i, j, e.target.value)}
+                        disabled={opslaan}
+                      />
+                    </div>
+                  ) : (
                     <div className="gpb-vergelijk-item">
                       <span className="badge badge-blauwgrijs">
                         {medewerkerAntwoorden[i].scores[j]} · {scoreBetekenis(medewerkerAntwoorden[i].scores[j])}
                       </span>
                       <p>{medewerkerAntwoorden[i].toelichtingen[j]}</p>
                     </div>
-                  ) : (
-                    <p className="idle-state">Nog niet ingevuld.</p>
                   )}
                 </div>
 
                 <div>
                   <p className="control-label">Leidinggevende</p>
-                  {leidinggevendeAntwoorden ? (
+                  {!leidinggevendeAntwoorden ? (
+                    <p className="idle-state">
+                      {beoordeling.leidinggevende_ingevuld_at ? 'Ingevuld — zichtbaar na goedkeuring door HR.' : 'Nog niet ingevuld.'}
+                    </p>
+                  ) : bewerken ? (
+                    <div className="gpb-vergelijk-item">
+                      <div className="btn-group">
+                        {SCORE_OPTIES.map((optie) => (
+                          <button
+                            type="button"
+                            key={optie}
+                            className={
+                              conceptLeidinggevende[i].scores[j] === optie ? 'btn-group-btn active' : 'btn-group-btn'
+                            }
+                            onClick={() => setLeidinggevendeScore(i, j, optie)}
+                            disabled={opslaan}
+                          >
+                            {optie}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        className="field-textarea"
+                        value={conceptLeidinggevende[i].toelichtingen[j]}
+                        onChange={(e) => setLeidinggevendeToelichting(i, j, e.target.value)}
+                        disabled={opslaan}
+                      />
+                    </div>
+                  ) : (
                     <div className="gpb-vergelijk-item">
                       <span className="badge badge-mos">
                         {leidinggevendeAntwoorden[i].scores[j]} · {scoreBetekenis(leidinggevendeAntwoorden[i].scores[j])}
                       </span>
                       <p>{leidinggevendeAntwoorden[i].toelichtingen[j]}</p>
                     </div>
-                  ) : beoordeling.leidinggevende_ingevuld_at ? (
-                    <p className="idle-state">Ingevuld — zichtbaar na goedkeuring door HR.</p>
-                  ) : (
-                    <p className="idle-state">Nog niet ingevuld.</p>
                   )}
                 </div>
               </div>
@@ -102,6 +241,39 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
         <p className="calc-section-label">Persoonlijke doelen</p>
         {doelen.length === 0 ? (
           <p className="idle-state">Nog geen doelen vastgelegd.</p>
+        ) : bewerken ? (
+          conceptDoelen.map((doel, idx) => (
+            <div className="gpb-doel-row" key={idx}>
+              <label className="field">
+                <span>Doel {idx + 1}</span>
+                <input
+                  type="text"
+                  value={doel.omschrijving}
+                  onChange={(e) => setDoel(idx, 'omschrijving', e.target.value)}
+                  disabled={opslaan}
+                />
+              </label>
+              <label className="field">
+                <span>Gekoppelde pijler</span>
+                <select value={doel.pijler} onChange={(e) => setDoel(idx, 'pijler', Number(e.target.value))} disabled={opslaan}>
+                  {PIJLERS.map((p, i) => (
+                    <option key={p} value={i + 1}>
+                      {i + 1}. {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Deadline</span>
+                <input
+                  type="date"
+                  value={doel.deadline}
+                  onChange={(e) => setDoel(idx, 'deadline', e.target.value)}
+                  disabled={opslaan}
+                />
+              </label>
+            </div>
+          ))
         ) : (
           doelen.map((doel) => (
             <div className="gpb-doel-item" key={doel.id}>
@@ -115,10 +287,23 @@ export default function GpbRapport({ beoordeling, doelen, acties }) {
       </div>
 
       <div className="gpb-rapport-acties gpb-print-hide">
-        {acties}
-        <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
-          Afdrukken / opslaan als PDF
-        </button>
+        {bewerken ? (
+          <>
+            <button type="button" className="btn btn-primary" onClick={handleOpslaan} disabled={opslaan}>
+              {opslaan ? 'Bezig met opslaan…' : 'Wijzigingen opslaan'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setBewerken(false)} disabled={opslaan}>
+              Annuleren
+            </button>
+          </>
+        ) : (
+          <>
+            {acties}
+            <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
+              Afdrukken / opslaan als PDF
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

@@ -2939,6 +2939,12 @@ a.tool-card:hover .tool-card-hint .arrow {
   margin: 0;
 }
 
+.gpb-rapport-header-acties {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .gpb-eindscore-card {
   display: flex;
   align-items: center;

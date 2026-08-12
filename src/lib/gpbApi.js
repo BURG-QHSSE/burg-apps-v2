@@ -119,6 +119,45 @@ export async function saveGpbLeidinggevendeConcept(beoordelingId, antwoorden) {
   }
 }
 
+/**
+ * HR/admin corrigeert bestaande antwoorden/doelen vanuit het
+ * vergelijkingsscherm (Beheer-overzicht) — zie hr_update_gpb_* in
+ * supabase/schema.sql. Raakt bewust geen _ingevuld_at-tijdstempels aan:
+ * dit is een correctie op al ingediende data, geen nieuwe indiening.
+ */
+export async function hrUpdateGpbMedewerker(beoordelingId, antwoorden) {
+  const { error } = await supabase.rpc('hr_update_gpb_medewerker', {
+    p_beoordeling_id: beoordelingId,
+    p_antwoorden: antwoorden,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+export async function hrUpdateGpbLeidinggevende(beoordelingId, antwoorden) {
+  const { error } = await supabase.rpc('hr_update_gpb_leidinggevende', {
+    p_beoordeling_id: beoordelingId,
+    p_antwoorden: antwoorden,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+export async function hrUpdateGpbDoelen(beoordelingId, doelen) {
+  const { error } = await supabase.rpc('hr_update_gpb_doelen', {
+    p_beoordeling_id: beoordelingId,
+    p_doelen: doelen,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
 export async function keurGpbGoed(beoordelingId) {
   const { error } = await supabase.rpc('keur_gpb_goed', { p_beoordeling_id: beoordelingId })
 
