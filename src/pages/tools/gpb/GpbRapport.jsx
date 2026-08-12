@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PIJLERS, STELLINGEN, SCORE_OPTIES, scoreBetekenis, functieLabel, berekenEindscore, fmtScore, STATUS_LABELS } from './constants'
 import { hrUpdateGpbMedewerker, hrUpdateGpbLeidinggevende, hrUpdateGpbDoelen } from '../../../lib/gpbApi'
+
+const AUTOSAVE_DEBOUNCE_MS = 1500
 
 function gemiddelde(waarden) {
   return waarden.reduce((a, b) => a + b, 0) / waarden.length
@@ -19,6 +21,15 @@ function gemiddelde(waarden) {
  * corrigeren zonder dat de medewerker/leidinggevende het formulier
  * opnieuw hoeft in te vullen. onOpgeslagen ververst de data bij de
  * aanroeper na een geslaagde save.
+ *
+ * Autosave tijdens bewerken (zelfde AUTOSAVE_DEBOUNCE_MS-patroon als
+ * GpbInvulForm — gebouwd naar aanleiding van hetzelfde soort dataverlies-
+ * risico: HR kan een tijdje bezig zijn met corrigeren tijdens een
+ * functioneringsgesprek, en zonder tussentijds opslaan gaat dat verloren
+ * als de tab dichtgaat of de sessie verloopt vóór er op "Wijzigingen
+ * opslaan" is geklikt). Doelen worden pas meegestuurd zodra ze compleet
+ * zijn (omschrijving + deadline) — anders faalt de datum-cast in
+ * hr_update_gpb_doelen terwijl iemand nog gewoon aan het typen is.
  */
 export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, onOpgeslagen }) {
   const medewerkerAntwoorden = beoordeling.medewerker_antwoorden
@@ -32,6 +43,8 @@ export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, 
   )
   const [opslaan, setOpslaan] = useState(false)
   const [fout, setFout] = useState('')
+  const [conceptStatus, setConceptStatus] = useState('')
+  const isEersteWijziging = useRef(true)
 
   const pijlerGemiddeldes = PIJLERS.map((_, i) => ({
     medewerker: medewerkerAntwoorden ? gemiddelde(medewerkerAntwoorden[i].scores) : null,
@@ -54,8 +67,41 @@ export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, 
     setConceptLeidinggevende(leidinggevendeAntwoorden)
     setConceptDoelen(doelen.map((d) => ({ omschrijving: d.omschrijving, pijler: d.pijler, deadline: d.deadline })))
     setFout('')
+    setConceptStatus('')
+    isEersteWijziging.current = true
     setBewerken(true)
   }
+
+  useEffect(() => {
+    if (!bewerken || opslaan) return undefined
+
+    if (isEersteWijziging.current) {
+      isEersteWijziging.current = false
+      return undefined
+    }
+
+    const geldigeDoelen = conceptDoelen.filter((d) => d.omschrijving.trim() !== '' && d.deadline !== '')
+
+    const timer = setTimeout(() => {
+      setConceptStatus('bezig')
+      Promise.all([
+        conceptMedewerker ? hrUpdateGpbMedewerker(beoordeling.id, conceptMedewerker) : null,
+        conceptLeidinggevende ? hrUpdateGpbLeidinggevende(beoordeling.id, conceptLeidinggevende) : null,
+        geldigeDoelen.length > 0 ? hrUpdateGpbDoelen(beoordeling.id, geldigeDoelen) : null,
+      ])
+        .then(() => setConceptStatus('opgeslagen'))
+        .catch(() => setConceptStatus('mislukt'))
+    }, AUTOSAVE_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conceptMedewerker, conceptLeidinggevende, conceptDoelen, bewerken])
+
+  useEffect(() => {
+    if (conceptStatus !== 'opgeslagen') return undefined
+    const timer = setTimeout(() => setConceptStatus(''), 2500)
+    return () => clearTimeout(timer)
+  }, [conceptStatus])
 
   function setMedewerkerScore(pijlerIdx, stellingIdx, score) {
     setConceptMedewerker((current) =>
@@ -101,12 +147,18 @@ export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, 
       if (conceptLeidinggevende) await hrUpdateGpbLeidinggevende(beoordeling.id, conceptLeidinggevende)
       if (conceptDoelen.length > 0) await hrUpdateGpbDoelen(beoordeling.id, conceptDoelen)
       await onOpgeslagen?.()
+      setConceptStatus('')
       setBewerken(false)
     } catch (err) {
       setFout(err.message)
     } finally {
       setOpslaan(false)
     }
+  }
+
+  function annuleerBewerken() {
+    setConceptStatus('')
+    setBewerken(false)
   }
 
   return (
@@ -297,9 +349,14 @@ export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, 
             <button type="button" className="btn btn-primary" onClick={handleOpslaan} disabled={opslaan}>
               {opslaan ? 'Bezig met opslaan…' : 'Wijzigingen opslaan'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setBewerken(false)} disabled={opslaan}>
+            <button type="button" className="btn btn-secondary" onClick={annuleerBewerken} disabled={opslaan}>
               Annuleren
             </button>
+            {conceptStatus === 'bezig' && <span className="gpb-concept-status">Tussentijds opslaan…</span>}
+            {conceptStatus === 'opgeslagen' && <span className="gpb-concept-status">Tussentijds opgeslagen</span>}
+            {conceptStatus === 'mislukt' && (
+              <span className="gpb-concept-status gpb-concept-status-fout">Automatisch opslaan mislukt</span>
+            )}
           </>
         ) : (
           <>
