@@ -152,7 +152,12 @@ export default function GpbRapport({ beoordeling, doelen, acties, hrBewerkbaar, 
 
           {stellingenPerPijler[i].map((stelling, j) => (
             <div className="gpb-stelling" key={j}>
-              <p className="gpb-stelling-tekst">{stelling.tekst}</p>
+              <p className="gpb-stelling-tekst">
+                <span className="gpb-stelling-nummer">
+                  {i + 1}.{j + 1}
+                </span>
+                {stelling.tekst}
+              </p>
               {stelling.voorbeeld && <p className="gpb-stelling-voorbeeld">{stelling.voorbeeld}</p>}
 
               <div className="gpb-vergelijk-grid">

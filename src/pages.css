@@ -2985,6 +2985,14 @@ a.tool-card:hover .tool-card-hint .arrow {
   font-weight: 600;
 }
 
+.gpb-stelling-nummer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blauwgrijs);
+  margin-right: var(--space-2);
+}
+
 .gpb-stelling-voorbeeld {
   margin: 0;
   font-size: 13px;
