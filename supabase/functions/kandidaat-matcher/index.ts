@@ -39,6 +39,10 @@ const BATCH_SIZE = Number(Deno.env.get('MATCHER_BATCH_SIZE')) || 6
 // blijven sequentieel, want die delen een mutable sessie-object dat bij een
 // 401 vervangen wordt — zie bullhorn.ts).
 const CLAUDE_CONCURRENCY = 3
+// Zelfde grens als MAX_CV_LENGTE in server.py (kandidaat-ranker) — boven dit
+// aantal tekens is het CV-veld vrijwel zeker corrupt (bijlage-/e-mailruis),
+// geen scoorbare inhoud.
+const MAX_CV_LENGTE = 25000
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -184,7 +188,14 @@ Deno.serve(async (req) => {
       // Stap 1: Bullhorn-profielen ophalen — sequentieel, want de sessie is
       // een mutable object dat bij een 401 vervangen wordt (zie bullhorn.ts).
       let session = await getBullhornSession(admin)
-      const voorbereid: { rowId: string; bullhornId: number; label: string; payload: Record<string, string> | null; foutmelding: string | null }[] = []
+      const voorbereid: {
+        rowId: string
+        bullhornId: number
+        label: string
+        payload: Record<string, string> | null
+        foutmelding: string | null
+        klaarZonderScore: string | null
+      }[] = []
 
       for (let i = 0; i < batchRows.length; i++) {
         const row = batchRows[i]
@@ -197,12 +208,42 @@ Deno.serve(async (req) => {
           const cvRuw = profiel.description ? stripHtml(profiel.description).trim() : ''
 
           if (!cvRuw) {
-            voorbereid.push({ rowId: row.id, bullhornId: row.bullhorn_id, label, payload: null, foutmelding: null })
+            voorbereid.push({
+              rowId: row.id,
+              bullhornId: row.bullhorn_id,
+              label,
+              payload: null,
+              foutmelding: null,
+              klaarZonderScore: 'Geen CV-tekst beschikbaar in Bullhorn voor deze kandidaat.',
+            })
+            continue
+          }
+
+          // Zelfde grens als MAX_CV_LENGTE in server.py: boven dit aantal
+          // tekens is het CV-veld vrijwel zeker corrupt (bv. bijlage- of
+          // e-mailruis die in description terecht is gekomen via de sync) —
+          // overslaan i.p.v. dat als "CV" naar Claude te sturen.
+          if (cvRuw.length > MAX_CV_LENGTE) {
+            voorbereid.push({
+              rowId: row.id,
+              bullhornId: row.bullhorn_id,
+              label,
+              payload: null,
+              foutmelding: null,
+              klaarZonderScore: `Overgeslagen — CV-veld te lang (${cvRuw.length} tekens, limiet is ${MAX_CV_LENGTE}).`,
+            })
             continue
           }
 
           const geanonimiseerd = anonimiseerVrijeTekst(cvRuw, label, naamVolledig)
-          voorbereid.push({ rowId: row.id, bullhornId: row.bullhorn_id, label, payload: { CV: geanonimiseerd }, foutmelding: null })
+          voorbereid.push({
+            rowId: row.id,
+            bullhornId: row.bullhorn_id,
+            label,
+            payload: { CV: geanonimiseerd },
+            foutmelding: null,
+            klaarZonderScore: null,
+          })
         } catch (err) {
           voorbereid.push({
             rowId: row.id,
@@ -210,6 +251,7 @@ Deno.serve(async (req) => {
             label,
             payload: null,
             foutmelding: err instanceof Error ? err.message : String(err),
+            klaarZonderScore: null,
           })
         }
       }
@@ -224,16 +266,19 @@ Deno.serve(async (req) => {
             .eq('id', item.rowId)
           return
         }
-        if (!item.payload) {
+        if (item.klaarZonderScore) {
           await admin
             .from('matching_resultaten')
             .update({
               status: 'klaar',
               score: 0,
-              onderbouwing: 'Geen CV-tekst beschikbaar in Bullhorn voor deze kandidaat.',
+              onderbouwing: item.klaarZonderScore,
               updated_at: new Date().toISOString(),
             })
             .eq('id', item.rowId)
+          return
+        }
+        if (!item.payload) {
           return
         }
         try {
