@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
           vacaturetekst,
           aantal_kandidaten: candidateIds.length,
           status: candidateIds.length > 0 ? 'bezig' : 'fout',
-          foutmelding: candidateIds.length > 0 ? null : 'Tearsheet bevat geen kandidaten',
+          foutmelding: candidateIds.length > 0 ? null : 'Distributielijst bevat geen kandidaten',
         })
         .select('id')
         .single()
