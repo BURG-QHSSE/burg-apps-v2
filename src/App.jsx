@@ -25,6 +25,7 @@ import ProeftijdTracker from './pages/tools/ProeftijdTracker'
 import GpbBeoordelingstool from './pages/tools/GpbBeoordelingstool'
 import BelOverzicht from './pages/tools/BelOverzicht'
 import Ontwikkeling from './pages/tools/Ontwikkeling'
+import KandidaatMatcher from './pages/tools/KandidaatMatcher'
 import TroubleshootWidget from './components/TroubleshootWidget'
 import './App.css'
 import './pages.css'
@@ -42,6 +43,7 @@ const TOOL_COMPONENTS = {
   'gpb-beoordelingstool': GpbBeoordelingstool,
   'bel-overzicht': BelOverzicht,
   'dev-projecten': Ontwikkeling,
+  'kandidaat-matcher': KandidaatMatcher,
 }
 
 /**

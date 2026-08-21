@@ -10,14 +10,15 @@ React/Vite multi-tool portal voor BURG QHSSE met een rollen-systeem (admin/manag
 - **Frontend**: React + Vite, gehost op Vercel
 - **Database/auth**: Supabase (project-ref `kthriaekxqxijhqboxkd`, regio eu-west-1) — zie `supabase/schema.sql` voor de complete, actuele structuur (tabellen, RLS-policies, RPC-functies)
 - **Edge Function**: `admin-users` (`supabase/functions/admin-users/index.ts`) — enige plek die de Supabase `service_role`-sleutel gebruikt, voor het aanmaken/verwijderen van gebruikersaccounts. Deployen via `npx supabase functions deploy admin-users`.
+- **Edge Function**: `kandidaat-matcher` (`supabase/functions/kandidaat-matcher/`) — Bullhorn OAuth + Claude-scoring voor de Kandidaat Matcher-tool (admin-only). Bevat de AVG-kritieke anonimisering (`anonimiseren.ts`) die persoonsgegevens uit het CV/intake-veld haalt vóórdat er iets naar Claude gaat. Gebruikt secrets `BH_CLIENT_ID`/`BH_CLIENT_SECRET`/`BH_USERNAME`/`BH_PASSWORD`/`ANTHROPIC_API_KEY` en optioneel `MATCHER_BATCH_SIZE`. Deployen via `npx supabase functions deploy kandidaat-matcher`.
 - **E-mail**: EmailJS (Sales Overdracht + welkomstmail bij nieuwe gebruiker)
 - **Doorgroei Tracker**: leest géén Supabase, maar een extern Google Apps Script-endpoint gekoppeld aan een Google Sheet (zie `src/lib/doorgroeiTrackerApi.js`)
 - **Los, ouder Supabase-project** (`ziwqshuabwcthqjspuso`): levert data voor "Mijn Omgeving" (vacatures/employees), zie `VITE_BURG_JOBS_URL` in `.env`
 
 ## Structuur
 - `src/pages/` — routepagina's (Dashboard, AdminPanel, Login, etc.)
-- `src/pages/tools/` — losse tools (Fee Checker, Definitief Honorarium, Verdeling Plaatsing, Sales Overdracht, Doorgroei Tracker, GPB Beoordelingstool, Proeftijd Tracker, Mijn Omgeving)
-- `src/lib/` — Supabase-clients en API-helpers per feature (adminApi, yieldApi, doorgroeiTrackerApi, proeftijdApi, gpbApi, burgJobsClient)
+- `src/pages/tools/` — losse tools (Fee Checker, Definitief Honorarium, Verdeling Plaatsing, Sales Overdracht, Doorgroei Tracker, GPB Beoordelingstool, Proeftijd Tracker, Mijn Omgeving, Kandidaat Matcher)
+- `src/lib/` — Supabase-clients en API-helpers per feature (adminApi, yieldApi, doorgroeiTrackerApi, proeftijdApi, gpbApi, burgJobsClient, kandidaatMatcherApi)
 - `src/lib/toolRegistry.js` — centrale lijst van tools + minimale rol per tool
 - `supabase/schema.sql` — volledige database-schema, RLS-policies, RPC-functies (altijd up-to-date houden bij wijzigingen)
 

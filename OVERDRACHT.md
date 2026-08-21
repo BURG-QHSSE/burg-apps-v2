@@ -19,6 +19,8 @@ Dit document beschrijft alle externe diensten waar deze app van afhankelijk is, 
 | Google Sheet + Apps Script | Doorgroei Tracker databron | Eigendomsoverdracht naar `office@burgbedrijven.nl` geaccepteerd (Apps Script-bewerktoegang volgt automatisch mee via Sheet-eigenaarschap) | ✅ Overgedragen |
 | Domein `burgqhsse.nl` / DNS | Custom domain `app.burgqhsse.nl` → Vercel | DNS-record bijgewerkt naar de nieuwe Vercel-CNAME | ✅ Bevestigd |
 | Slack | Notificatie bij nieuwe troubleshoot-melding (Incoming Webhook → #developer-gods) | App "BURG App Meldingen" aangemaakt in workspace `BURG` door Max van Leeuwen, 2026-08-11 | ⬜ Nog te checken wie eigenaar hoort te zijn |
+| Bullhorn (ATS) | Kandidaat Matcher-tool haalt tearsheet-kandidaten + CV/intake op via de Bullhorn REST API (OAuth2, `kandidaat-matcher` Edge Function) | API-credentials (`BH_CLIENT_ID`/`BH_CLIENT_SECRET`/`BH_USERNAME`/`BH_PASSWORD`) als Supabase-secret gezet, 2026-08-21 — zelfde service-account (`Burgn8n.api`) als elders al in gebruik bij BURG | ⬜ Eigenaarschap van dit Bullhorn-serviceaccount niet gecontroleerd in deze sessie |
+| Anthropic (Claude API) | Claude scoort geanonimiseerde kandidaatprofielen tegen de vacaturetekst in de Kandidaat Matcher-tool | `ANTHROPIC_API_KEY` als Supabase-secret gezet, 2026-08-21 — bewust dezelfde key als de losstaande `kandidaat-ranker`-tool al gebruikte | ⬜ Eigenaarschap/facturatie van deze Anthropic Console-account niet gecontroleerd in deze sessie |
 
 **Nog open:**
 - `BURG-Apps` (het originele GitHub Pages-project) overzetten — bewust even blijven staan, apart oppakken met Max.
@@ -108,6 +110,16 @@ Er is een **tweede, ouder Supabase-project** (`ziwqshuabwcthqjspuso`, zie `VITE_
 - **Nog te doen:** bepalen of de Slack-app op een gedeeld/team-account moet komen i.p.v. Max' persoonlijke aanmaak, zodra daar meer duidelijkheid over is (zelfde soort overweging als bij GitHub/Vercel/Supabase bovenaan dit document).
 
 ---
+
+## 8. Bullhorn & Anthropic — Kandidaat Matcher-tool
+
+**Wat:** de Kandidaat Matcher-tool (admin-only, `src/pages/tools/KandidaatMatcher.jsx`) haalt de kandidaten van een door de consultant gekozen Bullhorn-tearsheet op, anonimiseert per kandidaat het CV/intake-veld (`kandidaat-matcher` Edge Function, `anonimiseren.ts` — namen, e-mail, telefoon, LinkedIn en postcode gaan nooit naar Claude) en laat Claude scoren tegen de vacaturetekst.
+
+- Bullhorn-credentials: hetzelfde service-account (`Burgn8n.api`) dat ook elders bij BURG in gebruik is, als Supabase-secrets gezet op 2026-08-21.
+- Anthropic-key: bewust dezelfde key als de losstaande `kandidaat-ranker`-Python-tool (`maxvl1009/kandidaat-ranker`) al gebruikte — geen aparte Anthropic Console-account aangemaakt voor deze tool.
+- **Nog te doen:** de "klik door naar Bullhorn"-link per kandidaat gebruikt het patroon `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id={id}` — controleren of dit voor alle gebruikers werkt (Bullhorn-tenants kunnen per cluster verschillen).
+- **Nog te doen:** tijdelijk uitsluitend `minimumRole: 'admin'` (zie `src/lib/toolRegistry.js`) — er lopen nog open AVG-/Bullhorn-rechten-vragen bij Sam voordat dit breder naar alle consultants uitrolt.
+- **Nog te doen:** de postcode-anonimisering (nieuw t.o.v. de oude Python-tool) is NIET gevalideerd tegen echte Bullhorn-CV's (geen live toegang tijdens het bouwen) — de eerste live runs extra goed controleren op gemiste of onterecht weggehaalde postcodes.
 
 ## Als iemand anders dit project weer wil oppakken (met of zonder Claude Code)
 

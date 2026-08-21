@@ -14,6 +14,7 @@ export const TOOLS = [
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
   { id: 'dev-projecten', naam: 'Ontwikkeling', minimumRole: 'admin', path: '/tools/dev-projecten', category: 'beheer' },
+  { id: 'kandidaat-matcher', naam: 'Kandidaat Matcher', minimumRole: 'admin', path: '/tools/kandidaat-matcher', category: 'beheer' },
 ]
 
 /**

@@ -1539,3 +1539,123 @@ create trigger gpb_beoordelingen_cleanup_notificaties
 revoke execute on function cleanup_notificaties_gpb_delete() from public, anon, authenticated;
 
 grant execute on function maak_gpb_definitief(uuid) to authenticated;
+
+-- ============================================
+-- KANDIDAAT MATCHER (admin-only tool) — matching_runs + matching_resultaten
+-- + bullhorn_session_cache.
+--
+-- Doel: een consultant zet in Bullhorn zelf een boolean-search-resultaat op
+-- een tearsheet; deze tool haalt de kandidaten van die tearsheet op via de
+-- Bullhorn REST API, anonimiseert per kandidaat het CV/intake-veld
+-- (geen namen/mail/telefoon/LinkedIn/postcode naar Claude — zie de
+-- kandidaat-matcher Edge Function voor de anonimiseringslogica) en laat
+-- Claude scoren tegen de vacaturetekst.
+--
+-- Tijdelijk uitsluitend voor admin (zie toolRegistry.js) — er lopen nog
+-- open AVG-/Bullhorn-rechten-vragen bij Sam voordat dit breder uitrolt.
+-- Daarom hier bewust dezelfde simpele "admin mag alles"-RLS als
+-- dev_projects, geen fijnmaziger rolonderscheid.
+--
+-- Een Edge Function-aanroep mag maar ~150s duren (Supabase's wall-clock-
+-- limiet per invocatie, geldt op zowel Free als Pro voor een normale
+-- request/response-aanroep — er is geen manier om dit te verhogen op een
+-- gehost project). Daarom is het ophalen + scoren opgeknipt in een
+-- "start-run" (maakt de rijen hieronder aan met status 'wacht') en een
+-- herhaaldelijk aan te roepen "process-batch" (pakt een klein aantal
+-- 'wacht'-rijen per keer) — zie kandidaat-matcher/index.ts.
+-- ============================================
+create table matching_runs (
+  id uuid default gen_random_uuid() primary key,
+  created_by uuid references profiles(id) on delete set null,
+  created_by_naam text,
+  tearsheet_id bigint not null,
+  tearsheet_naam text not null,
+  vacaturetekst text not null,
+  aantal_kandidaten int not null default 0,
+  status text not null default 'bezig' check (status in ('bezig', 'klaar', 'fout')),
+  foutmelding text,
+  created_at timestamptz not null default now()
+);
+
+comment on table matching_runs is 'Eén matching-run = één tearsheet + vacaturetekst-combinatie. aantal_kandidaten is het totaal bij start-run, voor de voortgangsindicatie in de UI.';
+
+alter table matching_runs enable row level security;
+
+create policy "admin volledige toegang matching_runs"
+  on matching_runs for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+create table matching_resultaten (
+  id uuid default gen_random_uuid() primary key,
+  run_id uuid not null references matching_runs(id) on delete cascade,
+  bullhorn_id bigint not null,
+  score int check (score between 0 and 100),
+  onderbouwing text,
+  status text not null default 'wacht' check (status in ('wacht', 'bezig', 'klaar', 'fout')),
+  foutmelding text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (run_id, bullhorn_id)
+);
+
+comment on table matching_resultaten is 'Eén rij per kandidaat op de tearsheet van een matching-run. Naam/overige PII staan hier bewust NIET in — alleen bullhorn_id, de score en de onderbouwing (die zelf ook nooit de kandidaatnaam bevat, want Claude zag alleen het geanonimiseerde profiel). De consultant klikt door naar Bullhorn zelf voor de naam.';
+
+create index matching_resultaten_run_status_idx on matching_resultaten (run_id, status);
+
+alter table matching_resultaten enable row level security;
+
+create policy "admin volledige toegang matching_resultaten"
+  on matching_resultaten for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+-- Bullhorn-sessies leven ~20 minuten; een run bestaat uit meerdere losse
+-- process-batch-aanroepen (elk een eigen Edge Function-invocatie zonder
+-- gedeeld geheugen), dus wordt de sessie hier gecachet i.p.v. elke keer
+-- opnieuw in te loggen. Enkele-rij-tabel (id vastgezet op 1). Bewust GEEN
+-- RLS-policies (tabel blijft met RLS aan maar zonder policies = dicht voor
+-- anon/authenticated) — alleen de Edge Function met de service-role-key
+-- mag dit lezen/schrijven, een Bullhorn-sessietoken hoort nooit naar een
+-- client te kunnen lekken.
+create table bullhorn_session_cache (
+  id smallint primary key default 1 check (id = 1),
+  bh_rest_token text,
+  rest_url text,
+  verloopt_op timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+comment on table bullhorn_session_cache is 'Eén-rij cache van de Bullhorn REST-sessie (BhRestToken/restUrl), alleen gebruikt door de kandidaat-matcher Edge Function via de service-role-client. Geen RLS-policies: ontoegankelijk voor anon/authenticated.';
+
+alter table bullhorn_session_cache enable row level security;
+
+-- Pakt atomisch een batch 'wacht'-rijen van een run en zet ze op 'bezig' —
+-- FOR UPDATE SKIP LOCKED voorkomt dat twee gelijktijdige process-batch-
+-- aanroepen (bv. de browser die een vorige aanroep nog niet had verwerkt
+-- vóór een volgende) dezelfde kandidaat dubbel oppakken. Uitsluitend
+-- aangeroepen door de Edge Function via de service-role-client, vandaar de
+-- revoke hieronder i.p.v. een grant aan authenticated.
+create or replace function matching_pak_batch(p_run_id uuid, p_aantal int)
+returns setof matching_resultaten
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+    update matching_resultaten
+    set status = 'bezig', updated_at = now()
+    where id in (
+      select id from matching_resultaten
+      where run_id = p_run_id and status = 'wacht'
+      order by created_at
+      limit p_aantal
+      for update skip locked
+    )
+    returning *;
+end;
+$$;
+
+revoke execute on function matching_pak_batch(uuid, int) from public, anon, authenticated;
+grant execute on function matching_pak_batch(uuid, int) to service_role;

@@ -3294,3 +3294,168 @@ a.tool-card:hover .tool-card-hint .arrow {
     bottom: var(--space-4);
   }
 }
+
+/* ---------- Kandidaat Matcher ---------- */
+
+.matcher-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 640px;
+}
+
+.matcher-tearsheet-field {
+  position: relative;
+}
+
+.matcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--steen);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.matcher-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--lijn);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--inkt);
+  cursor: pointer;
+}
+
+.matcher-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.matcher-dropdown-item:hover {
+  background: var(--surface);
+}
+
+.matcher-dropdown-leeg {
+  color: var(--inkt-60);
+  cursor: default;
+}
+
+.matcher-dropdown-leeg:hover {
+  background: none;
+}
+
+.matcher-dropdown-sub {
+  color: var(--inkt-60);
+  font-size: 12px;
+}
+
+.matcher-textarea {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--lijn);
+  background: var(--steen);
+  color: var(--inkt);
+  font-family: var(--font-body);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.matcher-textarea:focus-visible {
+  outline: 2px solid var(--blauwgrijs);
+  outline-offset: 1px;
+}
+
+.matcher-upload-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+
+.matcher-eerdere-runs h2 {
+  font-size: 14px;
+  color: var(--inkt-60);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.matcher-eerdere-runs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.matcher-run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.matcher-run-header h2 {
+  margin: 0;
+}
+
+.matcher-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.matcher-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.matcher-progress-fill {
+  height: 100%;
+  background: var(--blauwgrijs);
+  transition: width 0.3s ease;
+}
+
+.matcher-resultaten {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.matcher-resultaat-card {
+  padding: var(--space-3);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-sm);
+  background: var(--steen);
+}
+
+.matcher-resultaat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.matcher-onderbouwing {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--inkt-60);
+}
