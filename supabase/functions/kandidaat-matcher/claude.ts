@@ -5,6 +5,19 @@
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6'
 const CLAUDE_MAX_TOKENS = 400
+// Zelfde read-timeout als CLAUDE_TIMEOUT in server.py (httpx.Timeout(read=90.0)) —
+// zonder dit kan één hangende aanroep de hele ~150s Edge Function-batch opsouperen.
+const CLAUDE_TIMEOUT_MS = 90_000
+
+async function fetchMetTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // Anthropic-minimum voor een cache-entry is 1024 tokens; richten op een
 // veiligheidsmarge daarboven, zelfde constanten als in server.py.
@@ -94,6 +107,45 @@ export interface RankResultaat {
   onderbouwing: string
 }
 
+/**
+ * Schrijft systeemprompt + vacaturetekst naar de Anthropic prompt-cache —
+ * poort van prewarm_cache(). max_tokens: 0 zodat er geen outputkosten zijn;
+ * de cache-entry ontstaat al door het verwerken van de input. Wordt vóór de
+ * (parallelle) kandidaat-scoring van een batch aangeroepen, want zonder dit
+ * racen de eerste N gelijktijdige rankKandidaat()-aanroepen om dezelfde
+ * cache-entry en missen ze 'm allemaal (elk betaalt dan cache_creation
+ * i.p.v. cache_read) — zelfde reden als in server.py.
+ */
+export async function prewarmCache(vacatureTekstVoorCache: string): Promise<void> {
+  const response = await fetchMetTimeout(
+    'https://api.anthropic.com/v1/messages',
+    {
+      method: 'POST',
+      headers: claudeHeaders(),
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 0,
+        system: [
+          { type: 'text', text: QHSSE_SYSTEEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `VACATURE:\n${vacatureTekstVoorCache}\n\n`, cache_control: { type: 'ephemeral' } },
+              { type: 'text', text: 'warmup' },
+            ],
+          },
+        ],
+      }),
+    },
+    CLAUDE_TIMEOUT_MS,
+  )
+  if (!response.ok) {
+    throw new Error(`Anthropic prewarm mislukt: ${response.status} ${await response.text()}`)
+  }
+}
+
 /** Scoort één geanonimiseerd kandidaatprofiel tegen de vacaturetekst. */
 export async function rankKandidaat(
   vacatureTekstVoorCache: string,
@@ -104,32 +156,39 @@ export async function rankKandidaat(
     .map(([k, v]) => `${k}: ${v}`)
     .join('\n')
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: claudeHeaders(),
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: CLAUDE_MAX_TOKENS,
-      system: [
-        { type: 'text', text: QHSSE_SYSTEEM_PROMPT, cache_control: { type: 'ephemeral' } },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: `VACATURE:\n${vacatureTekstVoorCache}\n\n`, cache_control: { type: 'ephemeral' } },
-            { type: 'text', text: `KANDIDAAT (${label}):\n${payloadTekst}` },
-          ],
-        },
-      ],
-    }),
-  })
+  const response = await fetchMetTimeout(
+    'https://api.anthropic.com/v1/messages',
+    {
+      method: 'POST',
+      headers: claudeHeaders(),
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: CLAUDE_MAX_TOKENS,
+        system: [
+          { type: 'text', text: QHSSE_SYSTEEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `VACATURE:\n${vacatureTekstVoorCache}\n\n`, cache_control: { type: 'ephemeral' } },
+              { type: 'text', text: `KANDIDAAT (${label}):\n${payloadTekst}` },
+            ],
+          },
+        ],
+      }),
+    },
+    CLAUDE_TIMEOUT_MS,
+  )
 
   if (!response.ok) {
     throw new Error(`Anthropic-aanroep mislukt: ${response.status} ${await response.text()}`)
   }
 
   const data = await response.json()
+  if (data?.stop_reason === 'max_tokens') {
+    console.warn(`[kandidaat-matcher] WAARSCHUWING: response afgekapt (stop_reason=max_tokens) voor ${label}`)
+  }
   const raw: string = data?.content?.[0]?.text?.trim() ?? ''
   const tekst = stripMarkdownCodeblock(raw)
   const start = tekst.indexOf('{')

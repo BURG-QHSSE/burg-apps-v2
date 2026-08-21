@@ -25,6 +25,20 @@ const SESSIE_LEVENSDUUR_SECONDEN = 1140
 // Ververs de cache al als er nog minder dan dit over is, i.p.v. te wachten
 // tot een 401 halverwege een batch.
 const REFRESH_MARGE_SECONDEN = 120
+// Zelfde orde van grootte als de timeout=30 die sync_candidates.py op elke
+// Bullhorn-aanroep zet — zonder dit kan één hangende aanroep de hele ~150s
+// Edge Function-batch opsouperen.
+const BULLHORN_TIMEOUT_MS = 30_000
+
+async function fetchMetTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 export interface BullhornSession {
   BhRestToken: string
@@ -59,7 +73,7 @@ async function bullhornLogin(): Promise<BullhornSession> {
     username: creds.username,
     password: creds.password,
   })
-  const authResponse = await fetch(`${AUTH_URL}?${authParams}`, { redirect: 'manual' })
+  const authResponse = await fetchMetTimeout(`${AUTH_URL}?${authParams}`, { redirect: 'manual' }, BULLHORN_TIMEOUT_MS)
 
   let code: string | null = null
   const location = authResponse.headers.get('Location')
@@ -85,7 +99,7 @@ async function bullhornLogin(): Promise<BullhornSession> {
     client_id: creds.clientId,
     client_secret: creds.clientSecret,
   })
-  const tokenResponse = await fetch(`${TOKEN_URL}?${tokenParams}`, { method: 'POST' })
+  const tokenResponse = await fetchMetTimeout(`${TOKEN_URL}?${tokenParams}`, { method: 'POST' }, BULLHORN_TIMEOUT_MS)
   if (!tokenResponse.ok) {
     throw new Error(`Bullhorn token-aanvraag mislukt: ${tokenResponse.status} ${await tokenResponse.text()}`)
   }
@@ -96,7 +110,7 @@ async function bullhornLogin(): Promise<BullhornSession> {
   }
 
   const loginParams = new URLSearchParams({ version: '2.0', access_token: accessToken })
-  const loginResponse = await fetch(`${LOGIN_URL}?${loginParams}`)
+  const loginResponse = await fetchMetTimeout(`${LOGIN_URL}?${loginParams}`, {}, BULLHORN_TIMEOUT_MS)
   if (!loginResponse.ok) {
     throw new Error(`Bullhorn rest-services/login mislukt: ${loginResponse.status} ${await loginResponse.text()}`)
   }
@@ -173,12 +187,12 @@ async function bullhornGet(
   params: Record<string, string>,
 ): Promise<{ data: unknown; session: BullhornSession }> {
   const url = `${session.restUrl}${path}?${new URLSearchParams({ ...params, BhRestToken: session.BhRestToken })}`
-  let response = await fetch(url)
+  let response = await fetchMetTimeout(url, {}, BULLHORN_TIMEOUT_MS)
 
   if (response.status === 401) {
     session = await forceerNieuweSessie(supabaseAdmin)
     const retryUrl = `${session.restUrl}${path}?${new URLSearchParams({ ...params, BhRestToken: session.BhRestToken })}`
-    response = await fetch(retryUrl)
+    response = await fetchMetTimeout(retryUrl, {}, BULLHORN_TIMEOUT_MS)
   }
 
   if (!response.ok) {

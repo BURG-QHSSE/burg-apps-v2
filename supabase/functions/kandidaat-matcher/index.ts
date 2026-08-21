@@ -25,7 +25,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getBullhornSession, searchTearsheets, getTearsheetCandidateIds, getCandidateProfiel } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
-import { rankKandidaat, bereidVacaturetekstVoorCache } from './claude.ts'
+import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
@@ -185,6 +185,15 @@ Deno.serve(async (req) => {
       // deno-lint-ignore no-explicit-any
       const batchRows = (batch ?? []) as any[]
 
+      // Schrijf de cache-entry alvast weg terwijl stap 1 (Bullhorn) loopt —
+      // zonder dit racen de eerste parallelle rankKandidaat()-aanroepen in
+      // stap 2 om dezelfde cache-entry en missen ze 'm allemaal. Net als in
+      // server.py is een mislukte pre-warm niet fataal: gewoon verdergaan
+      // zonder cache-voordeel.
+      const prewarmPromise = prewarmCache(vacatureTekstVoorCache).catch((err) => {
+        console.error('[kandidaat-matcher] Prewarm mislukt, verdergaan zonder cache:', err)
+      })
+
       // Stap 1: Bullhorn-profielen ophalen — sequentieel, want de sessie is
       // een mutable object dat bij een 401 vervangen wordt (zie bullhorn.ts).
       let session = await getBullhornSession(admin)
@@ -257,7 +266,10 @@ Deno.serve(async (req) => {
       }
 
       // Stap 2: Claude-scoring — parallel binnen de batch, met caching op
-      // systeemprompt + vacaturetekst (zie claude.ts).
+      // systeemprompt + vacaturetekst (zie claude.ts). Wacht eerst de
+      // pre-warm af zodat deze parallelle aanroepen een cache-treffer
+      // krijgen i.p.v. te racen om de cache-entry.
+      await prewarmPromise
       await mapMetLimiet(voorbereid, CLAUDE_CONCURRENCY, async (item) => {
         if (item.foutmelding) {
           await admin

@@ -166,6 +166,7 @@ export default function KandidaatMatcher() {
         <h1>Kandidaat Matcher</h1>
       </header>
       <main className="page-content">
+        <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
         <p className="page-intro">
           Zet in Bullhorn de kandidaten van je boolean search op een tearsheet, kies die tearsheet hieronder en
           plak de vacaturetekst. Claude scoort daarna elke kandidaat op het geanonimiseerde CV — namen, e-mail,
