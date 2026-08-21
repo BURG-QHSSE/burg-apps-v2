@@ -205,11 +205,19 @@ export async function searchTearsheets(
   session: BullhornSession,
   zoekterm: string,
 ): Promise<{ results: TearsheetSearchResult[]; session: BullhornSession }> {
-  const where = zoekterm ? `name LIKE '%${zoekterm.replace(/'/g, "''")}%'` : '(1=1)'
+  // Bullhorn's /query where-parser accepts geen tautologie als "(1=1)" (geeft
+  // "Bad Query: ... no viable alternative at input '='") — isDeleted=false is
+  // een echt veld en dus een geldige altijd-waar-voorwaarde voor "geen
+  // zoekterm", zelfde patroon als _paginate_query() in sync_candidates.py.
+  const where = zoekterm
+    ? `isDeleted=false AND name LIKE '%${zoekterm.replace(/'/g, "''")}%'`
+    : 'isDeleted=false'
   const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, 'query/Tearsheet', {
     fields: 'id,name,dateAdded,owner(id,firstName,lastName)',
     where,
-    sort: '-dateAdded',
+    // /query gebruikt orderBy, niet sort (dat laatste is een /search-only
+    // param) — zie _paginate_query() in sync_candidates.py.
+    orderBy: '-dateAdded',
     count: '20',
   })
   // deno-lint-ignore no-explicit-any
