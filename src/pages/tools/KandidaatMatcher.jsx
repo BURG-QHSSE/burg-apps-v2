@@ -135,7 +135,7 @@ export default function KandidaatMatcher() {
       const gestart = await startRun(geselecteerdeTearsheet.id, vacaturetekst.trim())
       setRun(gestart)
       if (gestart.aantalKandidaten === 0) {
-        setFout('Deze tearsheet bevat geen kandidaten.')
+        setFout('Deze distributielijst bevat geen kandidaten.')
         setBezig(false)
         return
       }
@@ -168,7 +168,7 @@ export default function KandidaatMatcher() {
       <main className="page-content">
         <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
         <p className="page-intro">
-          Zet in Bullhorn de kandidaten van je boolean search op een tearsheet, kies die tearsheet hieronder en
+          Zet in Bullhorn de kandidaten van je boolean search op een distributielijst, kies die distributielijst hieronder en
           plak de vacaturetekst. Claude scoort daarna elke kandidaat op het geanonimiseerde CV — namen, e-mail,
           telefoon, LinkedIn en postcode gaan nooit mee naar Claude.
         </p>
@@ -178,7 +178,7 @@ export default function KandidaatMatcher() {
         {!run && (
           <section className="matcher-setup">
             <div className="field matcher-tearsheet-field" ref={tearsheetVeldRef}>
-              <label htmlFor="matcher-zoek">Tearsheet</label>
+              <label htmlFor="matcher-zoek">Distributielijst</label>
               <input
                 id="matcher-zoek"
                 type="text"
@@ -195,7 +195,7 @@ export default function KandidaatMatcher() {
                 <div className="matcher-dropdown">
                   {zoekenBezig && <div className="matcher-dropdown-item matcher-dropdown-leeg">Zoeken…</div>}
                   {!zoekenBezig && tearsheets.length === 0 && (
-                    <div className="matcher-dropdown-item matcher-dropdown-leeg">Geen tearsheets gevonden.</div>
+                    <div className="matcher-dropdown-item matcher-dropdown-leeg">Geen distributielijsten gevonden.</div>
                   )}
                   {!zoekenBezig &&
                     tearsheets.map((t) => (
