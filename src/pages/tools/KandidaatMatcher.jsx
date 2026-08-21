@@ -56,10 +56,24 @@ export default function KandidaatMatcher() {
 
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
+  const tearsheetVeldRef = useRef(null)
 
   const laadEerdereRuns = useCallback(() => {
     fetchMijnRuns().then(setEerdereRuns).catch(() => {})
   }, [])
+
+  // Sluit de tearsheet-dropdown bij een klik buiten het zoekveld — zonder dit
+  // blijft hij openstaan totdat je een resultaat kiest.
+  useEffect(() => {
+    if (!dropdownOpen) return undefined
+    function handleClickBuiten(e) {
+      if (tearsheetVeldRef.current && !tearsheetVeldRef.current.contains(e.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickBuiten)
+    return () => document.removeEventListener('mousedown', handleClickBuiten)
+  }, [dropdownOpen])
 
   useEffect(() => {
     laadEerdereRuns()
@@ -162,7 +176,7 @@ export default function KandidaatMatcher() {
 
         {!run && (
           <section className="matcher-setup">
-            <div className="field matcher-tearsheet-field">
+            <div className="field matcher-tearsheet-field" ref={tearsheetVeldRef}>
               <label htmlFor="matcher-zoek">Tearsheet</label>
               <input
                 id="matcher-zoek"
