@@ -5,7 +5,12 @@ const TABLE = 'dev_projects'
 // Velden waarvan een wijziging ook _aangepast_door/_aangepast_at moet
 // bijwerken — "laatste wijziging wint" op deze twee gedeelde velden
 // (uren_per_week, tijd_bespaard_minuten), zie supabase/schema.sql.
-const GEDEELDE_VELDEN = ['uren_per_week', 'tijd_bespaard_minuten']
+// De kolomprefix wijkt bij tijd_bespaard_minuten af van de veldnaam
+// (kolommen heten tijd_bespaard_aangepast_*, zonder "_minuten").
+const GEDEELDE_VELDEN = {
+  uren_per_week: 'uren_per_week',
+  tijd_bespaard_minuten: 'tijd_bespaard',
+}
 
 export async function fetchDevProjects() {
   const { data, error } = await supabase
@@ -44,9 +49,10 @@ export async function createDevProject(titel, userId) {
 export async function updateDevProjectVeld(id, veld, waarde, userId) {
   const patch = { [veld]: waarde }
 
-  if (GEDEELDE_VELDEN.includes(veld)) {
-    patch[`${veld}_aangepast_door`] = userId
-    patch[`${veld}_aangepast_at`] = new Date().toISOString()
+  if (veld in GEDEELDE_VELDEN) {
+    const prefix = GEDEELDE_VELDEN[veld]
+    patch[`${prefix}_aangepast_door`] = userId
+    patch[`${prefix}_aangepast_at`] = new Date().toISOString()
   }
 
   const { error } = await supabase.from(TABLE).update(patch).eq('id', id)
