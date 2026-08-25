@@ -5,6 +5,33 @@
 
 const CLAUDE_MODEL = 'claude-sonnet-4-6'
 const CLAUDE_MAX_TOKENS = 400
+
+// Sonnet 4.6-tarieven per token (uit $/1M-tokens), voor de kostenlimiet per
+// run (zie MAX_KOSTEN_PER_RUN_USD in index.ts). Cache-write/-read zijn de
+// standaard Anthropic-verhoudingen (~1.25x resp. ~0.1x het basis-inputtarief).
+const PRIJS_PER_TOKEN_USD = {
+  input: 3.0 / 1_000_000,
+  output: 15.0 / 1_000_000,
+  cacheWrite: 3.75 / 1_000_000,
+  cacheRead: 0.3 / 1_000_000,
+}
+
+interface AnthropicUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
+}
+
+function berekenKostenUsd(usage: AnthropicUsage | undefined): number {
+  if (!usage) return 0
+  return (
+    (usage.input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.input +
+    (usage.output_tokens ?? 0) * PRIJS_PER_TOKEN_USD.output +
+    (usage.cache_creation_input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.cacheWrite +
+    (usage.cache_read_input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.cacheRead
+  )
+}
 // Zelfde read-timeout als CLAUDE_TIMEOUT in server.py (httpx.Timeout(read=90.0)) —
 // zonder dit kan één hangende aanroep de hele ~150s Edge Function-batch opsouperen.
 const CLAUDE_TIMEOUT_MS = 90_000
@@ -41,6 +68,10 @@ export const QHSSE_SYSTEEM_PROMPT =
   'certificeringen die aansluiten bij de vacature-eisen, jaren ervaring in relatie tot het gevraagde niveau, ' +
   'het huidige/gewenste specialisme in relatie tot de vacature, en relevante context uit de intake-data ' +
   'indien aanwezig.\n\n' +
+  'Belangrijk: als de intake-data een salarisverwachting of uurtarief bevat, neem dat NOOIT mee in je score of ' +
+  'onderbouwing. Salaris/uurtarief wordt apart door de consultant beoordeeld via een losse filter, niet door ' +
+  'jou. Een voorkeur voor dienstverband (bv. loondienst, interim, ZZP) mag je wel gewoon meewegen als de ' +
+  'intake-data dat noemt — alleen salaris/uurtarief zijn uitgesloten van je beoordeling, verder niets.\n\n' +
   'Geef uitsluitend een JSON-object terug in dit exacte formaat, zonder tekst daarbuiten:\n' +
   '{"score": <getal van 0 tot 100>, "onderbouwing": "<2-3 zinnen in het Nederlands: belangrijkste sterke en zwakke punten>"}\n\n' +
   'Richtlijn voor de score: 90-100 = uitstekende match op alle belangrijke punten. ' +
@@ -105,6 +136,7 @@ export function bereidVacaturetekstVoorCache(vacatureTekst: string): string {
 export interface RankResultaat {
   score: number
   onderbouwing: string
+  kostenUsd: number
 }
 
 /**
@@ -116,7 +148,7 @@ export interface RankResultaat {
  * cache-entry en missen ze 'm allemaal (elk betaalt dan cache_creation
  * i.p.v. cache_read) — zelfde reden als in server.py.
  */
-export async function prewarmCache(vacatureTekstVoorCache: string): Promise<void> {
+export async function prewarmCache(vacatureTekstVoorCache: string): Promise<{ kostenUsd: number }> {
   const response = await fetchMetTimeout(
     'https://api.anthropic.com/v1/messages',
     {
@@ -144,6 +176,8 @@ export async function prewarmCache(vacatureTekstVoorCache: string): Promise<void
   if (!response.ok) {
     throw new Error(`Anthropic prewarm mislukt: ${response.status} ${await response.text()}`)
   }
+  const data = await response.json()
+  return { kostenUsd: berekenKostenUsd(data?.usage) }
 }
 
 /** Scoort één geanonimiseerd kandidaatprofiel tegen de vacaturetekst. */
@@ -186,6 +220,7 @@ export async function rankKandidaat(
   }
 
   const data = await response.json()
+  const kostenUsd = berekenKostenUsd(data?.usage)
   if (data?.stop_reason === 'max_tokens') {
     console.warn(`[kandidaat-matcher] WAARSCHUWING: response afgekapt (stop_reason=max_tokens) voor ${label}`)
   }
@@ -197,12 +232,12 @@ export async function rankKandidaat(
     try {
       const parsed = JSON.parse(tekst.slice(start))
       const score = Math.max(0, Math.min(100, Math.trunc(Number(parsed.score) || 0)))
-      return { score, onderbouwing: String(parsed.onderbouwing ?? '') }
+      return { score, onderbouwing: String(parsed.onderbouwing ?? ''), kostenUsd }
     } catch {
       // valt door naar fallback hieronder
     }
   }
 
   console.error(`[kandidaat-matcher] Geen geldige JSON in Claude-response voor ${label}: ${raw.slice(0, 300)}`)
-  return { score: 0, onderbouwing: RANK_FALLBACK }
+  return { score: 0, onderbouwing: RANK_FALLBACK, kostenUsd }
 }

@@ -26,6 +26,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getBullhornSession, searchTearsheets, getTearsheetCandidateIds, getCandidateProfiel } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
 import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
+import { bepaalSalarisFilterData } from './salarisfilter.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
@@ -43,6 +44,11 @@ const CLAUDE_CONCURRENCY = 3
 // aantal tekens is het CV-veld vrijwel zeker corrupt (bijlage-/e-mailruis),
 // geen scoorbare inhoud.
 const MAX_CV_LENGTE = 25000
+// Guardrail tegen een te brede boolean search op de distributielijst die
+// een onbedoeld dure run oplevert — bv. `supabase secrets set
+// MATCHER_MAX_KOSTEN_USD=10`. Bij overschrijding stopt de run (status
+// 'kostenlimiet') en worden resterende kandidaten niet meer gescoord.
+const MAX_KOSTEN_PER_RUN_USD = Number(Deno.env.get('MATCHER_MAX_KOSTEN_USD')) || 5
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,6 +61,33 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+/**
+ * Stopt een run wegens de kostenlimiet: zet de run op status 'kostenlimiet'
+ * met een duidelijke foutmelding (mogelijke oorzaak: een te brede boolean
+ * search op de distributielijst), en zet alle nog niet verwerkte kandidaten
+ * ('wacht'/'bezig') in één keer op 'fout' i.p.v. ze alsnog te scoren.
+ */
+async function stopRunWegensKostenlimiet(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  runId: string,
+  kostenUsd: number,
+): Promise<void> {
+  const melding =
+    `Run gestopt: kostenlimiet ($${MAX_KOSTEN_PER_RUN_USD}) bereikt (geschat: $${kostenUsd.toFixed(2)}). ` +
+    'Mogelijk een te brede zoekopdracht op de distributielijst — controleer het aantal kandidaten.'
+  await admin
+    .from('matching_runs')
+    .update({ status: 'kostenlimiet', foutmelding: melding })
+    .eq('id', runId)
+    .eq('status', 'bezig')
+  await admin
+    .from('matching_resultaten')
+    .update({ status: 'fout', foutmelding: melding, updated_at: new Date().toISOString() })
+    .eq('run_id', runId)
+    .in('status', ['wacht', 'bezig'])
 }
 
 /** Simpele concurrency-limiter voor de Claude-aanroepen binnen een batch. */
@@ -166,11 +199,20 @@ Deno.serve(async (req) => {
 
       const { data: run, error: runError } = await admin
         .from('matching_runs')
-        .select('id, vacaturetekst, status')
+        .select('id, vacaturetekst, status, geschatte_kosten_usd')
         .eq('id', runId)
         .single()
       if (runError || !run) {
         return jsonResponse({ error: 'Run niet gevonden' }, 404)
+      }
+
+      // Kostenlimiet-check VÓÓR het claimen van een nieuwe batch — een
+      // vorige batch kan de limiet net bereikt hebben. Geen nieuwe
+      // Bullhorn/Claude-aanroepen meer, resterende 'wacht'-rijen worden in
+      // één keer op 'fout' gezet met een duidelijke reden.
+      if (run.geschatte_kosten_usd >= MAX_KOSTEN_PER_RUN_USD) {
+        await stopRunWegensKostenlimiet(admin, runId, run.geschatte_kosten_usd)
+        return jsonResponse({ verwerkt: 0, resterend: 0, klaar: true, kostenlimietBereikt: true })
       }
 
       const { data: batch, error: batchError } = await admin.rpc('matching_pak_batch', {
@@ -185,14 +227,23 @@ Deno.serve(async (req) => {
       // deno-lint-ignore no-explicit-any
       const batchRows = (batch ?? []) as any[]
 
+      // Lopende kosten van deze batch (prewarm + alle rankKandidaat-
+      // aanroepen) - aan het eind bij run.geschatte_kosten_usd opgeteld en
+      // tegen MAX_KOSTEN_PER_RUN_USD gecheckt.
+      let batchKostenUsd = 0
+
       // Schrijf de cache-entry alvast weg terwijl stap 1 (Bullhorn) loopt —
       // zonder dit racen de eerste parallelle rankKandidaat()-aanroepen in
       // stap 2 om dezelfde cache-entry en missen ze 'm allemaal. Net als in
       // server.py is een mislukte pre-warm niet fataal: gewoon verdergaan
       // zonder cache-voordeel.
-      const prewarmPromise = prewarmCache(vacatureTekstVoorCache).catch((err) => {
-        console.error('[kandidaat-matcher] Prewarm mislukt, verdergaan zonder cache:', err)
-      })
+      const prewarmPromise = prewarmCache(vacatureTekstVoorCache)
+        .then(({ kostenUsd }) => {
+          batchKostenUsd += kostenUsd
+        })
+        .catch((err) => {
+          console.error('[kandidaat-matcher] Prewarm mislukt, verdergaan zonder cache:', err)
+        })
 
       // Stap 1: Bullhorn-profielen ophalen — sequentieel, want de sessie is
       // een mutable object dat bij een 401 vervangen wordt (zie bullhorn.ts).
@@ -204,6 +255,12 @@ Deno.serve(async (req) => {
         payload: Record<string, string> | null
         foutmelding: string | null
         klaarZonderScore: string | null
+        // Puur voor de filterbalk (zie salarisfilter.ts) - gaan NOOIT naar
+        // Claude's payload hierboven. Onbekend zolang het profiel nog niet
+        // is opgehaald (bv. bij een technische fout).
+        bullhornStatus: string | null
+        salarisBand: string | null
+        uurtariefBand: string | null
       }[] = []
 
       for (let i = 0; i < batchRows.length; i++) {
@@ -215,6 +272,12 @@ Deno.serve(async (req) => {
           const profiel = result.profiel
           const naamVolledig = `${profiel.firstName} ${profiel.lastName}`.trim()
           const cvRuw = profiel.description ? stripHtml(profiel.description).trim() : ''
+          const { salarisBand, uurtariefBand } = bepaalSalarisFilterData(
+            profiel.salarisRange,
+            profiel.uurtariefRange,
+            profiel.description,
+          )
+          const bullhornStatus = profiel.status
 
           if (!cvRuw) {
             voorbereid.push({
@@ -224,6 +287,9 @@ Deno.serve(async (req) => {
               payload: null,
               foutmelding: null,
               klaarZonderScore: 'Geen CV-tekst beschikbaar in Bullhorn voor deze kandidaat.',
+              bullhornStatus,
+              salarisBand,
+              uurtariefBand,
             })
             continue
           }
@@ -240,6 +306,9 @@ Deno.serve(async (req) => {
               payload: null,
               foutmelding: null,
               klaarZonderScore: `Overgeslagen — CV-veld te lang (${cvRuw.length} tekens, limiet is ${MAX_CV_LENGTE}).`,
+              bullhornStatus,
+              salarisBand,
+              uurtariefBand,
             })
             continue
           }
@@ -252,6 +321,9 @@ Deno.serve(async (req) => {
             payload: { CV: geanonimiseerd },
             foutmelding: null,
             klaarZonderScore: null,
+            bullhornStatus,
+            salarisBand,
+            uurtariefBand,
           })
         } catch (err) {
           voorbereid.push({
@@ -261,6 +333,9 @@ Deno.serve(async (req) => {
             payload: null,
             foutmelding: err instanceof Error ? err.message : String(err),
             klaarZonderScore: null,
+            bullhornStatus: null,
+            salarisBand: null,
+            uurtariefBand: null,
           })
         }
       }
@@ -271,10 +346,15 @@ Deno.serve(async (req) => {
       // krijgen i.p.v. te racen om de cache-entry.
       await prewarmPromise
       await mapMetLimiet(voorbereid, CLAUDE_CONCURRENCY, async (item) => {
+        const filterVelden = {
+          bullhorn_status: item.bullhornStatus,
+          salaris_band: item.salarisBand,
+          uurtarief_band: item.uurtariefBand,
+        }
         if (item.foutmelding) {
           await admin
             .from('matching_resultaten')
-            .update({ status: 'fout', foutmelding: item.foutmelding, updated_at: new Date().toISOString() })
+            .update({ status: 'fout', foutmelding: item.foutmelding, ...filterVelden, updated_at: new Date().toISOString() })
             .eq('id', item.rowId)
           return
         }
@@ -285,6 +365,7 @@ Deno.serve(async (req) => {
               status: 'klaar',
               score: 0,
               onderbouwing: item.klaarZonderScore,
+              ...filterVelden,
               updated_at: new Date().toISOString(),
             })
             .eq('id', item.rowId)
@@ -294,10 +375,11 @@ Deno.serve(async (req) => {
           return
         }
         try {
-          const { score, onderbouwing } = await rankKandidaat(vacatureTekstVoorCache, item.label, item.payload)
+          const { score, onderbouwing, kostenUsd } = await rankKandidaat(vacatureTekstVoorCache, item.label, item.payload)
+          batchKostenUsd += kostenUsd
           await admin
             .from('matching_resultaten')
-            .update({ status: 'klaar', score, onderbouwing, updated_at: new Date().toISOString() })
+            .update({ status: 'klaar', score, onderbouwing, ...filterVelden, updated_at: new Date().toISOString() })
             .eq('id', item.rowId)
         } catch (err) {
           await admin
@@ -305,11 +387,27 @@ Deno.serve(async (req) => {
             .update({
               status: 'fout',
               foutmelding: err instanceof Error ? err.message : String(err),
+              ...filterVelden,
               updated_at: new Date().toISOString(),
             })
             .eq('id', item.rowId)
         }
       })
+
+      // matching_pak_batch() gebruikt SKIP LOCKED, dus dit is de enige plek
+      // die zowel de oude als de net-in-deze-batch bijgewerkte kosten kent —
+      // atomisch optellen i.p.v. lezen-optellen-schrijven (voorkomt een race
+      // met een gelijktijdige process-batch-aanroep van dezelfde run).
+      const { data: bijgewerkteRun } = await admin.rpc('matching_verhoog_kosten', {
+        p_run_id: runId,
+        p_delta_usd: batchKostenUsd,
+      })
+      const totaalKostenUsd = bijgewerkteRun?.[0]?.geschatte_kosten_usd ?? run.geschatte_kosten_usd + batchKostenUsd
+
+      if (totaalKostenUsd >= MAX_KOSTEN_PER_RUN_USD) {
+        await stopRunWegensKostenlimiet(admin, runId, totaalKostenUsd)
+        return jsonResponse({ verwerkt: batchRows.length, resterend: 0, klaar: true, kostenlimietBereikt: true })
+      }
 
       const { count: resterend } = await admin
         .from('matching_resultaten')

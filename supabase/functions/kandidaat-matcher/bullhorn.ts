@@ -260,16 +260,22 @@ export interface CandidateProfiel {
   firstName: string
   lastName: string
   description: string | null
+  // Puur voor de filterbalk (zie salarisfilter.ts) - gaan NOOIT naar Claude.
+  status: string | null
+  salarisRange: string | null
+  uurtariefRange: string | null
 }
 
 /**
- * Haalt het kandidaatprofiel op — voor v1 bewust alleen id/naam/description.
- * De overige ranking-velden uit de Python-versie (status, jaren ervaring,
- * opleidingsniveau, specialisme, skills) zijn NIET meegenomen: hun echte
- * Bullhorn-veldnamen zijn niet geverifieerd via meta/Candidate binnen deze
- * sessie (geen live Bullhorn-toegang beschikbaar) — zie de opdracht: bij
- * twijfel weglaten i.p.v. gokken op basis van UI-labels. `description`
- * (CV + intake samen, zie sync_candidates.py) is toch het belangrijkste veld.
+ * Haalt het kandidaatprofiel op. `description` (CV + intake samen, zie
+ * sync_candidates.py) is het enige veld dat naar Claude gaat.
+ * status/salarisRange/uurtariefRange (Bullhorn-velden `status`/
+ * `customText22`/`customText11` — geverifieerd via meta/Candidate tegen
+ * live Bullhorn-data, zie de Bullhorn-kandidaatschermafbeelding in de
+ * opdracht: "Status"/"Salaris range"/"Uurtarief range") zijn uitsluitend
+ * voor de filterbalk in de UI. De overige ranking-velden uit de Python-
+ * versie (jaren ervaring, opleidingsniveau, specialisme, skills) blijven
+ * bewust buiten scope van deze sessie.
  */
 export async function getCandidateProfiel(
   // deno-lint-ignore no-explicit-any
@@ -278,7 +284,7 @@ export async function getCandidateProfiel(
   candidateId: number,
 ): Promise<{ profiel: CandidateProfiel; session: BullhornSession }> {
   const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, `entity/Candidate/${candidateId}`, {
-    fields: 'id,firstName,lastName,description',
+    fields: 'id,firstName,lastName,description,status,customText22,customText11',
   })
   // deno-lint-ignore no-explicit-any
   const entity = (data as any)?.data
@@ -288,6 +294,9 @@ export async function getCandidateProfiel(
       firstName: entity.firstName ?? '',
       lastName: entity.lastName ?? '',
       description: entity.description ?? null,
+      status: entity.status ?? null,
+      salarisRange: entity.customText22 ?? null,
+      uurtariefRange: entity.customText11 ?? null,
     },
     session: newSession,
   }

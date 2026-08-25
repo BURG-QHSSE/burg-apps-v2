@@ -1572,12 +1572,13 @@ create table matching_runs (
   tearsheet_naam text not null,
   vacaturetekst text not null,
   aantal_kandidaten int not null default 0,
-  status text not null default 'bezig' check (status in ('bezig', 'klaar', 'fout')),
+  status text not null default 'bezig' check (status in ('bezig', 'klaar', 'fout', 'kostenlimiet')),
   foutmelding text,
+  geschatte_kosten_usd numeric not null default 0,
   created_at timestamptz not null default now()
 );
 
-comment on table matching_runs is 'Eén matching-run = één tearsheet + vacaturetekst-combinatie. aantal_kandidaten is het totaal bij start-run, voor de voortgangsindicatie in de UI.';
+comment on table matching_runs is 'Eén matching-run = één tearsheet + vacaturetekst-combinatie. aantal_kandidaten is het totaal bij start-run, voor de voortgangsindicatie in de UI. geschatte_kosten_usd is de lopende som van alle Claude-aanroepen (zie MAX_KOSTEN_PER_RUN_USD in kandidaat-matcher/index.ts) — status ''kostenlimiet'' betekent dat de run is gestopt omdat dat bedrag is bereikt, met resterende kandidaten op ''fout'' gezet i.p.v. verder te scoren.';
 
 alter table matching_runs enable row level security;
 
@@ -1594,12 +1595,15 @@ create table matching_resultaten (
   onderbouwing text,
   status text not null default 'wacht' check (status in ('wacht', 'bezig', 'klaar', 'fout')),
   foutmelding text,
+  bullhorn_status text,
+  salaris_band text,
+  uurtarief_band text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (run_id, bullhorn_id)
 );
 
-comment on table matching_resultaten is 'Eén rij per kandidaat op de tearsheet van een matching-run. Naam/overige PII staan hier bewust NIET in — alleen bullhorn_id, de score en de onderbouwing (die zelf ook nooit de kandidaatnaam bevat, want Claude zag alleen het geanonimiseerde profiel). De consultant klikt door naar Bullhorn zelf voor de naam.';
+comment on table matching_resultaten is 'Eén rij per kandidaat op de tearsheet van een matching-run. Naam/overige PII staan hier bewust NIET in — alleen bullhorn_id, de score en de onderbouwing (die zelf ook nooit de kandidaatnaam bevat, want Claude zag alleen het geanonimiseerde profiel). De consultant klikt door naar Bullhorn zelf voor de naam. bullhorn_status/salaris_band/uurtarief_band zijn puur voor de filterbalk in de UI — gaan NOOIT naar Claude (zie kandidaat-matcher/index.ts en salarisfilter.ts): de consultant beoordeelt salaris/status zelf, Claude scoort uitsluitend op de inhoudelijke match tussen description en vacaturetekst.';
 
 create index matching_resultaten_run_status_idx on matching_resultaten (run_id, status);
 
@@ -1659,3 +1663,26 @@ $$;
 
 revoke execute on function matching_pak_batch(uuid, int) from public, anon, authenticated;
 grant execute on function matching_pak_batch(uuid, int) to service_role;
+
+-- Telt geschatte_kosten_usd atomisch op (i.p.v. lees-optel-schrijf vanuit de
+-- Edge Function) — voorkomt dat twee gelijktijdige process-batch-aanroepen
+-- voor dezelfde run elkaars kostenupdate overschrijven. Geeft de bijgewerkte
+-- rij terug zodat de Edge Function meteen tegen MAX_KOSTEN_PER_RUN_USD kan
+-- checken zonder een aparte select.
+create or replace function matching_verhoog_kosten(p_run_id uuid, p_delta_usd numeric)
+returns setof matching_runs
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+    update matching_runs
+    set geschatte_kosten_usd = geschatte_kosten_usd + p_delta_usd
+    where id = p_run_id
+    returning *;
+end;
+$$;
+
+revoke execute on function matching_verhoog_kosten(uuid, numeric) from public, anon, authenticated;
+grant execute on function matching_verhoog_kosten(uuid, numeric) to service_role;

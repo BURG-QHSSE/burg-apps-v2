@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   searchTearsheets,
   startRun,
   processBatch,
+  fetchRun,
   fetchResultaten,
   fetchMijnRuns,
 } from '../../lib/kandidaatMatcherApi'
@@ -14,6 +15,14 @@ const STATUS_LABELS = {
   bezig: 'Bezig',
   klaar: 'Klaar',
   fout: 'Fout',
+  kostenlimiet: 'Gestopt: kostenlimiet bereikt',
+}
+
+const ALLE_FILTER = '__alle__'
+
+/** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. */
+function uniekeWaarden(resultaten, veld) {
+  return Array.from(new Set(resultaten.map((r) => r[veld]).filter((w) => w && w !== 'Onbekend'))).sort()
 }
 
 function scoreBadgeClass(score) {
@@ -49,10 +58,15 @@ export default function KandidaatMatcher() {
   const [bestandNaam, setBestandNaam] = useState('')
 
   const [run, setRun] = useState(null)
+  const [runDetail, setRunDetail] = useState(null)
   const [resultaten, setResultaten] = useState([])
   const [voortgang, setVoortgang] = useState(null)
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState('')
+
+  const [statusFilter, setStatusFilter] = useState(ALLE_FILTER)
+  const [salarisFilter, setSalarisFilter] = useState(ALLE_FILTER)
+  const [uurtariefFilter, setUurtariefFilter] = useState(ALLE_FILTER)
 
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
@@ -122,6 +136,11 @@ export default function KandidaatMatcher() {
       if (voortgangResultaat.klaar) break
     }
     setBezig(false)
+    try {
+      setRunDetail(await fetchRun(runId))
+    } catch {
+      // niet fataal — de run zelf is al klaar, alleen de kosten-/statusweergave mist dan
+    }
     laadEerdereRuns()
   }
 
@@ -131,6 +150,10 @@ export default function KandidaatMatcher() {
     setBezig(true)
     setResultaten([])
     setVoortgang(null)
+    setRunDetail(null)
+    setStatusFilter(ALLE_FILTER)
+    setSalarisFilter(ALLE_FILTER)
+    setUurtariefFilter(ALLE_FILTER)
     try {
       const gestart = await startRun(geselecteerdeTearsheet.id, vacaturetekst.trim())
       setRun(gestart)
@@ -150,11 +173,24 @@ export default function KandidaatMatcher() {
   function handleBekijkEerdereRun(eerdereRun) {
     gestopt.current = true
     setRun({ runId: eerdereRun.id, tearsheetNaam: eerdereRun.tearsheet_naam, aantalKandidaten: eerdereRun.aantal_kandidaten })
+    setRunDetail(eerdereRun)
     setVoortgang(null)
     setBezig(false)
     setFout('')
+    setStatusFilter(ALLE_FILTER)
+    setSalarisFilter(ALLE_FILTER)
+    setUurtariefFilter(ALLE_FILTER)
     fetchResultaten(eerdereRun.id).then(setResultaten).catch((err) => setFout(err.message))
   }
+
+  const resultatenGefilterd = useMemo(() => {
+    return resultaten.filter(
+      (r) =>
+        (statusFilter === ALLE_FILTER || r.bullhorn_status === statusFilter) &&
+        (salarisFilter === ALLE_FILTER || r.salaris_band === salarisFilter) &&
+        (uurtariefFilter === ALLE_FILTER || r.uurtarief_band === uurtariefFilter),
+    )
+  }, [resultaten, statusFilter, salarisFilter, uurtariefFilter])
 
   useEffect(() => () => {
     gestopt.current = true
@@ -273,11 +309,15 @@ export default function KandidaatMatcher() {
                 onClick={() => {
                   gestopt.current = true
                   setRun(null)
+                  setRunDetail(null)
                   setResultaten([])
                   setVoortgang(null)
                   setGeselecteerdeTearsheet(null)
                   setVacaturetekst('')
                   setBestandNaam('')
+                  setStatusFilter(ALLE_FILTER)
+                  setSalarisFilter(ALLE_FILTER)
+                  setUurtariefFilter(ALLE_FILTER)
                 }}
               >
                 Nieuwe run
@@ -294,14 +334,54 @@ export default function KandidaatMatcher() {
                 </div>
                 <span className="matcher-dropdown-sub">
                   {voortgang.verwerkt} / {voortgang.totaal} verwerkt
+                  {runDetail && ` — geschatte kosten: $${Number(runDetail.geschatte_kosten_usd ?? 0).toFixed(2)}`}
                 </span>
               </div>
             )}
 
+            {runDetail?.status === 'kostenlimiet' && (
+              <p className="form-error">{runDetail.foutmelding}</p>
+            )}
+
+            {resultaten.length > 0 && (
+              <div className="matcher-filters">
+                <div className="field">
+                  <label htmlFor="matcher-filter-status">Status</label>
+                  <select id="matcher-filter-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <option value={ALLE_FILTER}>Alle</option>
+                    {uniekeWaarden(resultaten, 'bullhorn_status').map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="matcher-filter-salaris">Salaris range</label>
+                  <select id="matcher-filter-salaris" value={salarisFilter} onChange={(e) => setSalarisFilter(e.target.value)}>
+                    <option value={ALLE_FILTER}>Alle</option>
+                    {uniekeWaarden(resultaten, 'salaris_band').map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="matcher-filter-uurtarief">Uurtarief range</label>
+                  <select id="matcher-filter-uurtarief" value={uurtariefFilter} onChange={(e) => setUurtariefFilter(e.target.value)}>
+                    <option value={ALLE_FILTER}>Alle</option>
+                    {uniekeWaarden(resultaten, 'uurtarief_band').map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
             {resultaten.length === 0 && !bezig && <p className="empty-state">Nog geen resultaten.</p>}
+            {resultaten.length > 0 && resultatenGefilterd.length === 0 && (
+              <p className="empty-state">Geen kandidaten voldoen aan de gekozen filters.</p>
+            )}
 
             <ul className="matcher-resultaten">
-              {resultaten.map((r) => (
+              {resultatenGefilterd.map((r) => (
                 <li key={r.id} className="matcher-resultaat-card">
                   <div className="matcher-resultaat-header">
                     <a href={BULLHORN_CANDIDATE_URL(r.bullhorn_id)} target="_blank" rel="noreferrer">
@@ -313,6 +393,11 @@ export default function KandidaatMatcher() {
                       <span className="badge">{STATUS_LABELS[r.status] ?? r.status}</span>
                     )}
                   </div>
+                  {(r.bullhorn_status || r.salaris_band || r.uurtarief_band) && (
+                    <p className="matcher-dropdown-sub">
+                      {[r.bullhorn_status, r.salaris_band, r.uurtarief_band].filter(Boolean).join(' — ')}
+                    </p>
+                  )}
                   {r.onderbouwing && <p className="matcher-onderbouwing">{r.onderbouwing}</p>}
                   {r.status === 'fout' && r.foutmelding && <p className="form-error-inline">{r.foutmelding}</p>}
                 </li>
