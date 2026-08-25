@@ -7,6 +7,7 @@ import {
   fetchResultaten,
   fetchMijnRuns,
 } from '../../lib/kandidaatMatcherApi'
+import { extraheerVacatureBestand } from '../../lib/vacatureBestandExtractie'
 
 const BULLHORN_CANDIDATE_URL = (id) => `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id=${id}`
 
@@ -108,9 +109,16 @@ export default function KandidaatMatcher() {
   async function handleBestandUpload(e) {
     const bestand = e.target.files?.[0]
     if (!bestand) return
-    setBestandNaam(bestand.name)
-    const tekst = await bestand.text()
-    setVacaturetekst(tekst)
+    setFout('')
+    try {
+      const tekst = await extraheerVacatureBestand(bestand)
+      setBestandNaam(bestand.name)
+      setVacaturetekst(tekst)
+    } catch (err) {
+      setFout(err.message)
+    } finally {
+      e.target.value = ''
+    }
   }
 
   async function pollTotKlaar(runId, totaal) {
@@ -263,7 +271,7 @@ export default function KandidaatMatcher() {
                 onChange={(e) => setVacaturetekst(e.target.value)}
               />
               <div className="matcher-upload-row">
-                <input id="matcher-bestand" type="file" accept=".txt" onChange={handleBestandUpload} />
+                <input id="matcher-bestand" type="file" accept=".txt,.pdf,.docx" onChange={handleBestandUpload} />
                 {bestandNaam && <span className="matcher-dropdown-sub">Geladen: {bestandNaam}</span>}
               </div>
             </div>
