@@ -174,7 +174,13 @@ export async function prewarmCache(vacatureTekstVoorCache: string): Promise<{ ko
     CLAUDE_TIMEOUT_MS,
   )
   if (!response.ok) {
-    throw new Error(`Anthropic prewarm mislukt: ${response.status} ${await response.text()}`)
+    // Volledige detail (incl. de ruwe upstream-responsebody, die het model
+    // kan noemen) alleen server-side loggen - niet in de Error die via
+    // index.ts in matching_resultaten.foutmelding terechtkomt en dus door de
+    // consultant gezien wordt. Zie de opdracht: welke AI hierachter zit mag
+    // nergens in de UI zichtbaar zijn.
+    console.error(`[kandidaat-matcher] Voorbereiding mislukt: ${response.status} ${await response.text()}`)
+    throw new Error(`Voorbereiding mislukt (status ${response.status})`)
   }
   const data = await response.json()
   return { kostenUsd: berekenKostenUsd(data?.usage) }
@@ -216,7 +222,10 @@ export async function rankKandidaat(
   )
 
   if (!response.ok) {
-    throw new Error(`Anthropic-aanroep mislukt: ${response.status} ${await response.text()}`)
+    // Zelfde reden als bij prewarmCache hierboven: ruwe body alleen loggen,
+    // niet in de foutmelding die de consultant te zien krijgt.
+    console.error(`[kandidaat-matcher] Scoringsaanroep mislukt voor ${label}: ${response.status} ${await response.text()}`)
+    throw new Error(`Scoringsaanroep mislukt (status ${response.status})`)
   }
 
   const data = await response.json()

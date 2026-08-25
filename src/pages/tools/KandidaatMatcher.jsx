@@ -205,8 +205,8 @@ export default function KandidaatMatcher() {
         <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
         <p className="page-intro">
           Zet in Bullhorn de kandidaten van je boolean search op een distributielijst, kies die distributielijst hieronder en
-          plak de vacaturetekst. Claude scoort daarna elke kandidaat op het geanonimiseerde CV — namen, e-mail,
-          telefoon, LinkedIn en postcode gaan nooit mee naar Claude.
+          plak de vacaturetekst. De matcher scoort daarna elke kandidaat op het geanonimiseerde CV — namen, e-mail,
+          telefoon, LinkedIn en postcode gaan nooit mee naar buiten.
         </p>
 
         {fout && <p className="form-error">{fout}</p>}
