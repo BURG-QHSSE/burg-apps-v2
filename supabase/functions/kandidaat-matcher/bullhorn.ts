@@ -202,9 +202,11 @@ async function bullhornGet(
 }
 
 /**
- * Haalt de titel van een vacature (JobOrder) op, puur voor weergave in de UI
- * (zelfde rol als tearsheetNaam voorheen). Geen harde afhankelijkheid — als
- * de vacature niet gevonden wordt, valt de caller terug op het kale ID.
+ * Haalt de titel + bedrijfsnaam van een vacature (JobOrder) op, puur voor
+ * weergave in de UI (zelfde rol als tearsheetNaam voorheen) — gecombineerd
+ * tot één weergavestring, bv. "QHSE Officer — Securitas". Geen harde
+ * afhankelijkheid — als de vacature niet gevonden wordt, valt de caller
+ * terug op het kale ID.
  */
 export async function getVacatureNaam(
   // deno-lint-ignore no-explicit-any
@@ -214,11 +216,14 @@ export async function getVacatureNaam(
 ): Promise<{ naam: string | null; session: BullhornSession }> {
   try {
     const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, `entity/JobOrder/${vacatureId}`, {
-      fields: 'id,title',
+      fields: 'id,title,clientCorporation(name)',
     })
     // deno-lint-ignore no-explicit-any
     const entity = (data as any)?.data
-    return { naam: entity?.title ?? null, session: newSession }
+    const titel = entity?.title ?? null
+    const bedrijf = entity?.clientCorporation?.name ?? null
+    if (!titel) return { naam: null, session: newSession }
+    return { naam: bedrijf ? `${titel} — ${bedrijf}` : titel, session: newSession }
   } catch {
     return { naam: null, session }
   }

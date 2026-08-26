@@ -3478,17 +3478,25 @@ a.tool-card:hover .tool-card-hint .arrow {
 .matcher-bullhorn-knop {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin-top: var(--space-2);
-  padding: 4px 10px;
+  padding: 4px 10px 4px 4px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
-  background: #ff6900;
+  color: var(--inkt);
+  background: var(--surface);
+  border: 1px solid var(--lijn);
   border-radius: var(--radius-sm);
   text-decoration: none;
 }
 
 .matcher-bullhorn-knop:hover {
-  background: #e35e00;
+  border-color: var(--inkt-60);
+}
+
+.matcher-bullhorn-logo {
+  height: 18px;
+  width: auto;
+  border-radius: 3px;
+  display: block;
 }

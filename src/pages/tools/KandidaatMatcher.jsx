@@ -8,6 +8,7 @@ import {
   fetchKandidaatNamen,
 } from '../../lib/kandidaatMatcherApi'
 import { extraheerVacatureBestand } from '../../lib/vacatureBestandExtractie'
+import bullhornLogo from '../../assets/bullhorn-logo.png'
 
 const BULLHORN_CANDIDATE_URL = (id) => `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id=${id}`
 
@@ -331,7 +332,6 @@ export default function KandidaatMatcher() {
                 </div>
                 <span className="matcher-dropdown-sub">
                   {voortgang.verwerkt} / {voortgang.totaal} verwerkt
-                  {runDetail && ` — geschatte kosten: $${Number(runDetail.geschatte_kosten_usd ?? 0).toFixed(2)}`}
                 </span>
               </div>
             )}
@@ -401,6 +401,7 @@ export default function KandidaatMatcher() {
                     rel="noreferrer"
                     className="matcher-bullhorn-knop"
                   >
+                    <img src={bullhornLogo} alt="" className="matcher-bullhorn-logo" />
                     Bekijken in Bullhorn
                   </a>
                 </li>
