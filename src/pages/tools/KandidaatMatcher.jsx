@@ -8,7 +8,7 @@ import {
   fetchKandidaatNamen,
 } from '../../lib/kandidaatMatcherApi'
 import { extraheerVacatureBestand } from '../../lib/vacatureBestandExtractie'
-import bullhornLogo from '../../assets/bullhorn-logo.png'
+import bullhornLogo from '../../assets/bullhorn-icon.png'
 
 const BULLHORN_CANDIDATE_URL = (id) => `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id=${id}`
 
