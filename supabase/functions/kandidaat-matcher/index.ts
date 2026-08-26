@@ -12,7 +12,7 @@
 // anders dan Tearsheet, wél realtime zichtbaar. Zie bullhorn.ts voor de
 // volledige uitleg en de note-cleanup na afloop.
 //
-// Twee acties (body.action):
+// Drie acties (body.action):
 //   - "start-run": kandidaten via de Matching-notitie ophalen, matching_runs
 //     + placeholder matching_resultaten-rijen (status 'wacht') aanmaken, en
 //     de gebruikte notities verwijderen.
@@ -20,6 +20,9 @@
 //     scoren, wegschrijven. Wordt door de browser herhaald tot er niets
 //     meer te doen is — nodig omdat een Edge Function-invocatie maar ~150s
 //     mag duren (zie supabase/schema.sql voor de volledige uitleg).
+//   - "kandidaat-namen": namen live ophalen voor een lijst bullhorn_id's,
+//     puur voor weergave zodra een run klaar is — NOOIT opgeslagen (zie
+//     matching_resultaten-schema-comment: bewust geen PII in de database).
 //
 // Zelfde beveiligingspatroon als admin-users/index.ts: eerst de JWT van de
 // aanroeper verifiëren en checken dat profiles.role = 'admin' is (via een
@@ -35,6 +38,7 @@ import {
   getMatchingKandidatenViaNotitie,
   verwijderMatchingNotities,
   getCandidateProfiel,
+  getCandidateNaam,
 } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
 import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
@@ -206,6 +210,27 @@ Deno.serve(async (req) => {
       }
 
       return jsonResponse({ runId: run.id, vacatureNaam, aantalKandidaten: candidateIds.length })
+    }
+
+    if (body.action === 'kandidaat-namen') {
+      // deno-lint-ignore no-explicit-any
+      const bullhornIds = (Array.isArray(body.bullhornIds) ? body.bullhornIds : []).map((id: any) => Number(id))
+      if (bullhornIds.length === 0) {
+        return jsonResponse({ namen: {} })
+      }
+
+      let session = await getBullhornSession(admin)
+      const namen: Record<number, string> = {}
+      for (const id of bullhornIds) {
+        try {
+          const result = await getCandidateNaam(admin, session, id)
+          session = result.session
+          namen[id] = result.naam
+        } catch (err) {
+          console.error(`[kandidaat-matcher] Naam ophalen voor kandidaat ${id} mislukt:`, err)
+        }
+      }
+      return jsonResponse({ namen })
     }
 
     if (body.action === 'process-batch') {

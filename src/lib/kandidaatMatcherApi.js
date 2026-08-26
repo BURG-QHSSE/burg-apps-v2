@@ -36,6 +36,16 @@ export async function processBatch(runId) {
   return invokeMatcher('process-batch', { runId })
 }
 
+/**
+ * Haalt namen live op voor weergave — wordt nooit opgeslagen (zie
+ * matching_resultaten-schema: bewust geen PII in de database). Retourneert
+ * {[bullhorn_id]: naam}.
+ */
+export async function fetchKandidaatNamen(bullhornIds) {
+  const data = await invokeMatcher('kandidaat-namen', { bullhornIds })
+  return data.namen
+}
+
 export async function fetchRun(runId) {
   const { data, error } = await supabase.from('matching_runs').select('*').eq('id', runId).single()
   if (error) throw new Error(error.message)

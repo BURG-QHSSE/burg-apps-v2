@@ -3470,3 +3470,25 @@ a.tool-card:hover .tool-card-hint .arrow {
   font-size: 13px;
   color: var(--inkt-60);
 }
+
+.matcher-kandidaat-naam {
+  font-weight: 600;
+}
+
+.matcher-bullhorn-knop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #ff6900;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.matcher-bullhorn-knop:hover {
+  background: #e35e00;
+}

@@ -5,6 +5,7 @@ import {
   fetchRun,
   fetchResultaten,
   fetchMijnRuns,
+  fetchKandidaatNamen,
 } from '../../lib/kandidaatMatcherApi'
 import { extraheerVacatureBestand } from '../../lib/vacatureBestandExtractie'
 
@@ -62,6 +63,7 @@ export default function KandidaatMatcher() {
   const [run, setRun] = useState(null)
   const [runDetail, setRunDetail] = useState(null)
   const [resultaten, setResultaten] = useState([])
+  const [namen, setNamen] = useState({})
   const [voortgang, setVoortgang] = useState(null)
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState('')
@@ -96,6 +98,20 @@ export default function KandidaatMatcher() {
     }
   }
 
+  /** Namen worden bewust pas live opgehaald zodra er echt resultaten getoond worden — nooit opgeslagen, zie kandidaatMatcherApi.js. */
+  async function laadNamen(resultatenLijst) {
+    const ids = resultatenLijst.map((r) => r.bullhorn_id)
+    if (ids.length === 0) return
+    try {
+      setNamen(await fetchKandidaatNamen(ids))
+    } catch {
+      // niet fataal — de kaarten vallen dan terug op "Kandidaat {id}"
+    }
+  }
+
+  // Kandidaten worden bewust pas getoond zodra de hele run klaar is (geen
+  // tussentijdse "wacht"-rijen) — daarom wordt setResultaten hier pas ná de
+  // loop aangeroepen, niet per tussentijdse tick.
   async function pollTotKlaar(runId, totaal) {
     gestopt.current = false
     while (!gestopt.current) {
@@ -110,12 +126,6 @@ export default function KandidaatMatcher() {
       const verwerktTotaal = totaal - voortgangResultaat.resterend
       setVoortgang({ verwerkt: verwerktTotaal, totaal, resterend: voortgangResultaat.resterend })
 
-      try {
-        setResultaten(await fetchResultaten(runId))
-      } catch {
-        // een mislukte tussentijdse refresh is niet fataal, de volgende poll-tick probeert het opnieuw
-      }
-
       if (voortgangResultaat.klaar) break
     }
     setBezig(false)
@@ -123,6 +133,13 @@ export default function KandidaatMatcher() {
       setRunDetail(await fetchRun(runId))
     } catch {
       // niet fataal — de run zelf is al klaar, alleen de kosten-/statusweergave mist dan
+    }
+    try {
+      const data = await fetchResultaten(runId)
+      setResultaten(data)
+      await laadNamen(data)
+    } catch (err) {
+      setFout(err.message)
     }
     laadEerdereRuns()
   }
@@ -133,6 +150,7 @@ export default function KandidaatMatcher() {
     setFout('')
     setBezig(true)
     setResultaten([])
+    setNamen({})
     setVoortgang(null)
     setRunDetail(null)
     setStatusFilter(ALLE_FILTER)
@@ -157,16 +175,35 @@ export default function KandidaatMatcher() {
   }
 
   function handleBekijkEerdereRun(eerdereRun) {
-    gestopt.current = true
     setRun({ runId: eerdereRun.id, vacatureNaam: eerdereRun.vacature_naam, aantalKandidaten: eerdereRun.aantal_kandidaten })
     setRunDetail(eerdereRun)
-    setVoortgang(null)
-    setBezig(false)
+    setResultaten([])
+    setNamen({})
     setFout('')
     setStatusFilter(ALLE_FILTER)
     setSalarisFilter(ALLE_FILTER)
     setUurtariefFilter(ALLE_FILTER)
-    fetchResultaten(eerdereRun.id).then(setResultaten).catch((err) => setFout(err.message))
+
+    if (eerdereRun.status === 'bezig') {
+      // De run stond nog "bezig" maar niemand roept process-batch meer aan
+      // (bv. het tabblad stond op de achtergrond) — gewoon hervatten i.p.v.
+      // een halve, stilstaande run te laten staan.
+      gestopt.current = false
+      setBezig(true)
+      setVoortgang({ verwerkt: 0, totaal: eerdereRun.aantal_kandidaten, resterend: eerdereRun.aantal_kandidaten })
+      pollTotKlaar(eerdereRun.id, eerdereRun.aantal_kandidaten)
+      return
+    }
+
+    gestopt.current = true
+    setVoortgang(null)
+    setBezig(false)
+    fetchResultaten(eerdereRun.id)
+      .then((data) => {
+        setResultaten(data)
+        laadNamen(data)
+      })
+      .catch((err) => setFout(err.message))
   }
 
   const resultatenGefilterd = useMemo(() => {
@@ -270,6 +307,7 @@ export default function KandidaatMatcher() {
                   setRun(null)
                   setRunDetail(null)
                   setResultaten([])
+                  setNamen({})
                   setVoortgang(null)
                   setVacatureId('')
                   setVacaturetekst('')
@@ -343,9 +381,7 @@ export default function KandidaatMatcher() {
               {resultatenGefilterd.map((r) => (
                 <li key={r.id} className="matcher-resultaat-card">
                   <div className="matcher-resultaat-header">
-                    <a href={BULLHORN_CANDIDATE_URL(r.bullhorn_id)} target="_blank" rel="noreferrer">
-                      Kandidaat {r.bullhorn_id}
-                    </a>
+                    <span className="matcher-kandidaat-naam">{namen[r.bullhorn_id] ?? `Kandidaat ${r.bullhorn_id}`}</span>
                     {r.status === 'klaar' ? (
                       <span className={scoreBadgeClass(r.score)}>{r.score}</span>
                     ) : (
@@ -359,6 +395,14 @@ export default function KandidaatMatcher() {
                   )}
                   {r.onderbouwing && <p className="matcher-onderbouwing">{r.onderbouwing}</p>}
                   {r.status === 'fout' && r.foutmelding && <p className="form-error-inline">{r.foutmelding}</p>}
+                  <a
+                    href={BULLHORN_CANDIDATE_URL(r.bullhorn_id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="matcher-bullhorn-knop"
+                  >
+                    Bekijken in Bullhorn
+                  </a>
                 </li>
               ))}
             </ul>

@@ -329,6 +329,30 @@ export async function verwijderMatchingNotities(
   }
 }
 
+/**
+ * Haalt puur de naam van een kandidaat op — losstaand van getCandidateProfiel,
+ * en bewust NOOIT ergens opgeslagen (zie matching_resultaten-schema-comment:
+ * geen PII in de database, de consultant klikt door naar Bullhorn voor de
+ * naam). Wordt alleen live aangeroepen vanuit de UI wanneer een klaar-run
+ * getoond wordt (zie index.ts actie "kandidaat-namen") — dus elke keer
+ * opnieuw opgehaald, nooit gecachet buiten de levensduur van die ene
+ * paginaweergave.
+ */
+export async function getCandidateNaam(
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any,
+  session: BullhornSession,
+  candidateId: number,
+): Promise<{ naam: string; session: BullhornSession }> {
+  const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, `entity/Candidate/${candidateId}`, {
+    fields: 'id,firstName,lastName',
+  })
+  // deno-lint-ignore no-explicit-any
+  const entity = (data as any)?.data
+  const naam = `${entity?.firstName ?? ''} ${entity?.lastName ?? ''}`.trim()
+  return { naam: naam || `Kandidaat ${candidateId}`, session: newSession }
+}
+
 export interface CandidateProfiel {
   id: number
   firstName: string
