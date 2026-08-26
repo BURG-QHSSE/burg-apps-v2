@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  searchTearsheets,
   startRun,
   processBatch,
   fetchRun,
@@ -35,11 +34,17 @@ function scoreBadgeClass(score) {
 }
 
 /**
- * Kandidaat Matcher — consultant kiest een Bullhorn-tearsheet (al gevuld
- * via een boolean search in Bullhorn zelf) en plakt een vacaturetekst;
- * Claude scoort elke kandidaat op het geanonimiseerde CV/intake-veld (zie
- * supabase/functions/kandidaat-matcher voor de anonimisering — namen,
- * mail, telefoon, LinkedIn en postcode gaan nooit naar Claude).
+ * Kandidaat Matcher — consultant zet in Bullhorn zelf een bulk-Notitie
+ * (actie "Matching", tekst = het vacature-ID) op de kandidaten van een
+ * boolean search, typt datzelfde vacature-ID hieronder in en plakt een
+ * vacaturetekst; Claude scoort elke kandidaat op het geanonimiseerde
+ * CV/intake-veld (zie supabase/functions/kandidaat-matcher voor de
+ * anonimisering — namen, mail, telefoon, LinkedIn en postcode gaan nooit
+ * naar Claude).
+ *
+ * Notitie i.p.v. distributielijst: een nieuwe distributielijst is tot ~1
+ * week onzichtbaar voor de koppeling met Bullhorn (bevestigd met Bullhorn
+ * support) — een notitie is wél meteen zichtbaar.
  *
  * Tijdelijk admin-only (zie toolRegistry.js) — nog openstaande AVG-/
  * Bullhorn-rechten-vragen bij Sam voordat dit breder uitrolt.
@@ -49,11 +54,7 @@ function scoreBadgeClass(score) {
  * totdat de run klaar is — vandaar de poll-loop in de useEffect hieronder.
  */
 export default function KandidaatMatcher() {
-  const [zoekterm, setZoekterm] = useState('')
-  const [tearsheets, setTearsheets] = useState([])
-  const [zoekenBezig, setZoekenBezig] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [geselecteerdeTearsheet, setGeselecteerdeTearsheet] = useState(null)
+  const [vacatureId, setVacatureId] = useState('')
 
   const [vacaturetekst, setVacaturetekst] = useState('')
   const [bestandNaam, setBestandNaam] = useState('')
@@ -71,40 +72,14 @@ export default function KandidaatMatcher() {
 
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
-  const tearsheetVeldRef = useRef(null)
 
   const laadEerdereRuns = useCallback(() => {
     fetchMijnRuns().then(setEerdereRuns).catch(() => {})
   }, [])
 
-  // Sluit de tearsheet-dropdown bij een klik buiten het zoekveld — zonder dit
-  // blijft hij openstaan totdat je een resultaat kiest.
-  useEffect(() => {
-    if (!dropdownOpen) return undefined
-    function handleClickBuiten(e) {
-      if (tearsheetVeldRef.current && !tearsheetVeldRef.current.contains(e.target)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickBuiten)
-    return () => document.removeEventListener('mousedown', handleClickBuiten)
-  }, [dropdownOpen])
-
   useEffect(() => {
     laadEerdereRuns()
   }, [laadEerdereRuns])
-
-  // Debounced tearsheet-zoekopdracht — lege term geeft de 20 meest recente.
-  useEffect(() => {
-    setZoekenBezig(true)
-    const timer = setTimeout(() => {
-      searchTearsheets(zoekterm)
-        .then(setTearsheets)
-        .catch((err) => setFout(err.message))
-        .finally(() => setZoekenBezig(false))
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [zoekterm])
 
   async function handleBestandUpload(e) {
     const bestand = e.target.files?.[0]
@@ -153,7 +128,8 @@ export default function KandidaatMatcher() {
   }
 
   async function handleStart() {
-    if (!geselecteerdeTearsheet || !vacaturetekst.trim()) return
+    const vacatureIdGetrimd = vacatureId.trim()
+    if (!vacatureIdGetrimd || !vacaturetekst.trim()) return
     setFout('')
     setBezig(true)
     setResultaten([])
@@ -163,10 +139,12 @@ export default function KandidaatMatcher() {
     setSalarisFilter(ALLE_FILTER)
     setUurtariefFilter(ALLE_FILTER)
     try {
-      const gestart = await startRun(geselecteerdeTearsheet.id, vacaturetekst.trim())
+      const gestart = await startRun(vacatureIdGetrimd, vacaturetekst.trim())
       setRun(gestart)
       if (gestart.aantalKandidaten === 0) {
-        setFout('Deze distributielijst bevat geen kandidaten.')
+        setFout(
+          'Geen kandidaten gevonden - controleer of de bulk-Notitie (actie "Matching", tekst = dit vacature-ID) goed is gezet in Bullhorn.',
+        )
         setBezig(false)
         return
       }
@@ -180,7 +158,7 @@ export default function KandidaatMatcher() {
 
   function handleBekijkEerdereRun(eerdereRun) {
     gestopt.current = true
-    setRun({ runId: eerdereRun.id, tearsheetNaam: eerdereRun.tearsheet_naam, aantalKandidaten: eerdereRun.aantal_kandidaten })
+    setRun({ runId: eerdereRun.id, vacatureNaam: eerdereRun.vacature_naam, aantalKandidaten: eerdereRun.aantal_kandidaten })
     setRunDetail(eerdereRun)
     setVoortgang(null)
     setBezig(false)
@@ -212,52 +190,25 @@ export default function KandidaatMatcher() {
       <main className="page-content">
         <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
         <p className="page-intro">
-          Zet in Bullhorn de kandidaten van je boolean search op een distributielijst, kies die distributielijst hieronder en
-          plak de vacaturetekst. De matcher scoort daarna elke kandidaat op het geanonimiseerde CV — namen, e-mail,
-          telefoon, LinkedIn en postcode gaan nooit mee naar buiten.
+          Zet in Bullhorn een bulk-Notitie (actie "Matching", tekst = het vacature-ID) op de kandidaten van je boolean
+          search, typ hieronder datzelfde vacature-ID en plak de vacaturetekst. De matcher scoort daarna elke kandidaat op
+          het geanonimiseerde CV — namen, e-mail, telefoon, LinkedIn en postcode gaan nooit mee naar buiten.
         </p>
 
         {fout && <p className="form-error">{fout}</p>}
 
         {!run && (
           <section className="matcher-setup">
-            <div className="field matcher-tearsheet-field" ref={tearsheetVeldRef}>
-              <label htmlFor="matcher-zoek">Distributielijst</label>
+            <div className="field">
+              <label htmlFor="matcher-vacature-id">Vacature-ID</label>
               <input
-                id="matcher-zoek"
+                id="matcher-vacature-id"
                 type="text"
-                placeholder="Zoek op naam (leeg = 20 meest recente)…"
-                value={geselecteerdeTearsheet ? geselecteerdeTearsheet.naam : zoekterm}
-                onChange={(e) => {
-                  setGeselecteerdeTearsheet(null)
-                  setZoekterm(e.target.value)
-                  setDropdownOpen(true)
-                }}
-                onFocus={() => setDropdownOpen(true)}
+                inputMode="numeric"
+                placeholder="Zelfde ID als in de bulk-Notitie in Bullhorn…"
+                value={vacatureId}
+                onChange={(e) => setVacatureId(e.target.value)}
               />
-              {dropdownOpen && !geselecteerdeTearsheet && (
-                <div className="matcher-dropdown">
-                  {zoekenBezig && <div className="matcher-dropdown-item matcher-dropdown-leeg">Zoeken…</div>}
-                  {!zoekenBezig && tearsheets.length === 0 && (
-                    <div className="matcher-dropdown-item matcher-dropdown-leeg">Geen distributielijsten gevonden.</div>
-                  )}
-                  {!zoekenBezig &&
-                    tearsheets.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className="matcher-dropdown-item"
-                        onClick={() => {
-                          setGeselecteerdeTearsheet(t)
-                          setDropdownOpen(false)
-                        }}
-                      >
-                        <strong>{t.naam}</strong>
-                        {t.ownerNaam && <span className="matcher-dropdown-sub"> — {t.ownerNaam}</span>}
-                      </button>
-                    ))}
-                </div>
-              )}
             </div>
 
             <div className="field">
@@ -279,7 +230,7 @@ export default function KandidaatMatcher() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!geselecteerdeTearsheet || !vacaturetekst.trim() || bezig}
+              disabled={!vacatureId.trim() || !vacaturetekst.trim() || bezig}
               onClick={handleStart}
             >
               {bezig ? 'Bezig…' : 'Start matching'}
@@ -292,7 +243,7 @@ export default function KandidaatMatcher() {
                   {eerdereRuns.map((r) => (
                     <li key={r.id}>
                       <button type="button" className="matcher-dropdown-item" onClick={() => handleBekijkEerdereRun(r)}>
-                        <strong>{r.tearsheet_naam}</strong>
+                        <strong>{r.vacature_naam}</strong>
                         <span className="matcher-dropdown-sub">
                           {' '}
                           — {r.aantal_kandidaten} kandidaten — {STATUS_LABELS[r.status] ?? r.status} —{' '}
@@ -310,7 +261,7 @@ export default function KandidaatMatcher() {
         {run && (
           <section className="matcher-run">
             <div className="matcher-run-header">
-              <h2>{run.tearsheetNaam}</h2>
+              <h2>{run.vacatureNaam}</h2>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -320,7 +271,7 @@ export default function KandidaatMatcher() {
                   setRunDetail(null)
                   setResultaten([])
                   setVoortgang(null)
-                  setGeselecteerdeTearsheet(null)
+                  setVacatureId('')
                   setVacaturetekst('')
                   setBestandNaam('')
                   setStatusFilter(ALLE_FILTER)

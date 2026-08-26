@@ -201,58 +201,132 @@ async function bullhornGet(
   return { data: await response.json(), session }
 }
 
-export interface TearsheetSearchResult {
-  id: number
-  name: string
-  dateAdded: number
-  owner?: { id: number; firstName: string; lastName: string }
+/**
+ * Haalt de titel van een vacature (JobOrder) op, puur voor weergave in de UI
+ * (zelfde rol als tearsheetNaam voorheen). Geen harde afhankelijkheid — als
+ * de vacature niet gevonden wordt, valt de caller terug op het kale ID.
+ */
+export async function getVacatureNaam(
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any,
+  session: BullhornSession,
+  vacatureId: number,
+): Promise<{ naam: string | null; session: BullhornSession }> {
+  try {
+    const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, `entity/JobOrder/${vacatureId}`, {
+      fields: 'id,title',
+    })
+    // deno-lint-ignore no-explicit-any
+    const entity = (data as any)?.data
+    return { naam: entity?.title ?? null, session: newSession }
+  } catch {
+    return { naam: null, session }
+  }
 }
 
 /**
- * Zoekt tearsheets — bewust /query, niet /search (Lucene-index kan
- * achterlopen; juist "recentste eerst" is het scenario waar dat misgaat,
- * zie de opdracht).
+ * Workaround voor de Tearsheet-vertraging (nieuwe tearsheets zijn tot ~1
+ * week onzichtbaar voor dit service-account, zie de Bullhorn-support-
+ * correspondentie): de consultant zet i.p.v. een tearsheet een bulk-Notitie
+ * (actie "Matching") op de geselecteerde kandidaten, met het kale vacature-ID
+ * als tekst. Note is — anders dan Tearsheet — wél realtime zichtbaar via de
+ * REST API.
+ *
+ * Haalt breed de recentste Notes op (net als get_intake_for_candidate in
+ * sync_candidates.py wordt bewust NIET server-side op action gefilterd —
+ * dat filter bleek op dit Bullhorn-instance onbetrouwbaar/leeg ondanks
+ * aanwezige data), en filtert client-side op action="Matching" + een
+ * comments-veld dat exact overeenkomt met het opgegeven vacature-ID (geen
+ * fuzzy tekstmatch — de consultant zet alleen het kale ID in de notitie).
+ *
+ * Een pagina-limiet van 5x200=1000 is een veiligheidsgrens: deze notities
+ * worden direct na gebruik verwijderd (zie verwijderMatchingNotities), dus
+ * de levende populatie hoort altijd klein te zijn — deze grens vangt alleen
+ * een eerder mislukte cleanup op, niet de normale situatie.
  */
-export async function searchTearsheets(
+export async function getMatchingKandidatenViaNotitie(
   // deno-lint-ignore no-explicit-any
   supabaseAdmin: any,
   session: BullhornSession,
-  zoekterm: string,
-): Promise<{ results: TearsheetSearchResult[]; session: BullhornSession }> {
-  // Bullhorn's /query where-parser accepts geen tautologie als "(1=1)" (geeft
-  // "Bad Query: ... no viable alternative at input '='") — isDeleted=false is
-  // een echt veld en dus een geldige altijd-waar-voorwaarde voor "geen
-  // zoekterm", zelfde patroon als _paginate_query() in sync_candidates.py.
-  const where = zoekterm
-    ? `isDeleted=false AND name LIKE '%${zoekterm.replace(/'/g, "''")}%'`
-    : 'isDeleted=false'
-  const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, 'query/Tearsheet', {
-    fields: 'id,name,dateAdded,owner(id,firstName,lastName)',
-    where,
-    // /query gebruikt orderBy, niet sort (dat laatste is een /search-only
-    // param) — zie _paginate_query() in sync_candidates.py.
-    orderBy: '-dateAdded',
-    count: '20',
-  })
-  // deno-lint-ignore no-explicit-any
-  const results = ((data as any)?.data ?? []) as TearsheetSearchResult[]
-  return { results, session: newSession }
+  vacatureId: number,
+): Promise<{ candidateIds: number[]; noteIds: number[]; session: BullhornSession }> {
+  const vacatureIdStr = String(vacatureId)
+  const candidateIds = new Set<number>()
+  const noteIds: number[] = []
+  let huidigeSessie = session
+  let start = 0
+  const paginaGrootte = 200
+  const maxPaginas = 5
+
+  for (let pagina = 0; pagina < maxPaginas; pagina++) {
+    const { data, session: newSession } = await bullhornGet(supabaseAdmin, huidigeSessie, 'search/Note', {
+      query: 'isDeleted:false',
+      fields: 'id,action,comments,candidates(id)',
+      sort: '-dateAdded',
+      start: String(start),
+      count: String(paginaGrootte),
+    })
+    huidigeSessie = newSession
+    // deno-lint-ignore no-explicit-any
+    const rows = ((data as any)?.data ?? []) as any[]
+    if (rows.length === 0) break
+
+    for (const note of rows) {
+      const actie = String(note.action ?? '').trim().toLowerCase()
+      const comments = String(note.comments ?? '').trim()
+      if (actie !== 'matching' || comments !== vacatureIdStr) continue
+      noteIds.push(note.id)
+      const kandidatenVeld = note.candidates
+      const kandidatenLijst = Array.isArray(kandidatenVeld) ? kandidatenVeld : (kandidatenVeld?.data ?? [])
+      for (const kandidaat of kandidatenLijst) {
+        const cid = typeof kandidaat === 'object' ? kandidaat?.id : kandidaat
+        if (cid != null) candidateIds.add(cid)
+      }
+    }
+
+    start += rows.length
+    if (rows.length < paginaGrootte) break
+  }
+
+  return { candidateIds: Array.from(candidateIds), noteIds, session: huidigeSessie }
 }
 
-/** Haalt de kandidaat-ID's van een tearsheet op. */
-export async function getTearsheetCandidateIds(
+/**
+ * Verwijdert (soft-delete, net als in Bullhorn zelf) precies de Matching-
+ * notities die voor deze run zijn gebruikt — nooit een bredere sweep. Wordt
+ * pas aangeroepen NADAT de matching_resultaten-rijen succesvol zijn
+ * aangemaakt, zodat een mislukte run de marker niet kwijtraakt vóór een
+ * eventuele retry. Eén mislukte losse delete is niet fataal voor de run
+ * zelf (de notitie is dan gewoon een onschuldig, leeg achtergebleven
+ * restant — bevat geen PII, alleen het kale vacature-ID).
+ */
+export async function verwijderMatchingNotities(
   // deno-lint-ignore no-explicit-any
   supabaseAdmin: any,
   session: BullhornSession,
-  tearsheetId: number,
-): Promise<{ candidateIds: number[]; tearsheetNaam: string; session: BullhornSession }> {
-  const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, `entity/Tearsheet/${tearsheetId}`, {
-    fields: 'id,name,candidates(id)',
-  })
-  // deno-lint-ignore no-explicit-any
-  const entity = (data as any)?.data
-  const candidateIds: number[] = (entity?.candidates?.data ?? []).map((c: { id: number }) => c.id)
-  return { candidateIds, tearsheetNaam: entity?.name ?? `Tearsheet ${tearsheetId}`, session: newSession }
+  noteIds: number[],
+): Promise<void> {
+  let huidigeSessie = session
+  for (const noteId of noteIds) {
+    try {
+      const url = `${huidigeSessie.restUrl}entity/Note/${noteId}?${new URLSearchParams({
+        BhRestToken: huidigeSessie.BhRestToken,
+      })}`
+      let response = await fetchMetTimeout(url, { method: 'DELETE' }, BULLHORN_TIMEOUT_MS)
+      if (response.status === 401) {
+        huidigeSessie = await forceerNieuweSessie(supabaseAdmin)
+        const retryUrl = `${huidigeSessie.restUrl}entity/Note/${noteId}?${new URLSearchParams({
+          BhRestToken: huidigeSessie.BhRestToken,
+        })}`
+        response = await fetchMetTimeout(retryUrl, { method: 'DELETE' }, BULLHORN_TIMEOUT_MS)
+      }
+      if (!response.ok) {
+        console.error(`[kandidaat-matcher] Verwijderen van Matching-notitie ${noteId} mislukt: ${response.status}`)
+      }
+    } catch (err) {
+      console.error(`[kandidaat-matcher] Verwijderen van Matching-notitie ${noteId} gaf een fout:`, err)
+    }
+  }
 }
 
 export interface CandidateProfiel {

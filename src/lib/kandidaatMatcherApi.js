@@ -26,15 +26,9 @@ async function invokeMatcher(action, payload = {}) {
   return data
 }
 
-/** Zoekt tearsheets op naam — lege zoekterm geeft de 20 meest recente. */
-export async function searchTearsheets(zoekterm) {
-  const data = await invokeMatcher('search-tearsheets', { zoekterm })
-  return data.results
-}
-
-/** Start een nieuwe matching-run voor een tearsheet + vacaturetekst. */
-export async function startRun(tearsheetId, vacaturetekst) {
-  return invokeMatcher('start-run', { tearsheetId, vacaturetekst })
+/** Start een nieuwe matching-run voor een vacature-ID + vacaturetekst. */
+export async function startRun(vacatureId, vacaturetekst) {
+  return invokeMatcher('start-run', { vacatureId, vacaturetekst })
 }
 
 /** Verwerkt één batch kandidaten van een run — door de UI herhaald tot klaar. */

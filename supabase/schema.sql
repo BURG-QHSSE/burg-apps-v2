@@ -1544,12 +1544,20 @@ grant execute on function maak_gpb_definitief(uuid) to authenticated;
 -- KANDIDAAT MATCHER (admin-only tool) — matching_runs + matching_resultaten
 -- + bullhorn_session_cache.
 --
--- Doel: een consultant zet in Bullhorn zelf een boolean-search-resultaat op
--- een tearsheet; deze tool haalt de kandidaten van die tearsheet op via de
--- Bullhorn REST API, anonimiseert per kandidaat het CV/intake-veld
--- (geen namen/mail/telefoon/LinkedIn/postcode naar Claude — zie de
--- kandidaat-matcher Edge Function voor de anonimiseringslogica) en laat
--- Claude scoren tegen de vacaturetekst.
+-- Doel: een consultant zet in Bullhorn zelf een bulk-Notitie (actie
+-- "Matching", tekst = het kale vacature-ID) op de kandidaten van een
+-- boolean search; deze tool haalt die kandidaten op via die notitie
+-- (zie getMatchingKandidatenViaNotitie in kandidaat-matcher/bullhorn.ts),
+-- anonimiseert per kandidaat het CV/intake-veld (geen namen/mail/telefoon/
+-- LinkedIn/postcode naar Claude — zie de kandidaat-matcher Edge Function
+-- voor de anonimiseringslogica) en laat Claude scoren tegen de
+-- vacaturetekst.
+--
+-- Notitie i.p.v. Tearsheet/distributielijst: een nieuwe Tearsheet is tot
+-- ~1 week onzichtbaar voor het gedeelde REST-service-account (bevestigd
+-- met Bullhorn support), Note is wél realtime zichtbaar. matching_runs
+-- heette hiervoor tearsheet_id/tearsheet_naam - op 2026-08-26 hernoemd naar
+-- vacature_id/vacature_naam toen op de Notitie-aanpak werd overgestapt.
 --
 -- Tijdelijk uitsluitend voor admin (zie toolRegistry.js) — er lopen nog
 -- open AVG-/Bullhorn-rechten-vragen bij Sam voordat dit breder uitrolt.
@@ -1568,8 +1576,8 @@ create table matching_runs (
   id uuid default gen_random_uuid() primary key,
   created_by uuid references profiles(id) on delete set null,
   created_by_naam text,
-  tearsheet_id bigint not null,
-  tearsheet_naam text not null,
+  vacature_id bigint not null,
+  vacature_naam text not null,
   vacaturetekst text not null,
   aantal_kandidaten int not null default 0,
   status text not null default 'bezig' check (status in ('bezig', 'klaar', 'fout', 'kostenlimiet')),
@@ -1578,7 +1586,7 @@ create table matching_runs (
   created_at timestamptz not null default now()
 );
 
-comment on table matching_runs is 'Eén matching-run = één tearsheet + vacaturetekst-combinatie. aantal_kandidaten is het totaal bij start-run, voor de voortgangsindicatie in de UI. geschatte_kosten_usd is de lopende som van alle Claude-aanroepen (zie MAX_KOSTEN_PER_RUN_USD in kandidaat-matcher/index.ts) — status ''kostenlimiet'' betekent dat de run is gestopt omdat dat bedrag is bereikt, met resterende kandidaten op ''fout'' gezet i.p.v. verder te scoren.';
+comment on table matching_runs is 'Eén matching-run = één vacature + vacaturetekst-combinatie. aantal_kandidaten is het totaal bij start-run, voor de voortgangsindicatie in de UI. geschatte_kosten_usd is de lopende som van alle Claude-aanroepen (zie MAX_KOSTEN_PER_RUN_USD in kandidaat-matcher/index.ts) — status ''kostenlimiet'' betekent dat de run is gestopt omdat dat bedrag is bereikt, met resterende kandidaten op ''fout'' gezet i.p.v. verder te scoren.';
 
 alter table matching_runs enable row level security;
 

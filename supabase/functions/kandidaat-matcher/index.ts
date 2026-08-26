@@ -1,15 +1,21 @@
 // Edge Function: kandidaat-matcher
 //
-// Consultant zet in Bullhorn zelf boolean-search-resultaten op een
-// tearsheet; deze functie haalt die kandidaten op, anonimiseert per
+// Consultant zet in Bullhorn zelf een bulk-Notitie (actie "Matching", met
+// het kale vacature-ID als tekst) op de kandidaten van een boolean search;
+// deze functie haalt die kandidaten op via die notitie, anonimiseert per
 // kandidaat het CV/intake-veld (zie anonimiseren.ts — persoonsgegevens gaan
 // NOOIT naar Claude) en laat Claude scoren tegen de vacaturetekst.
 //
-// Drie acties (body.action):
-//   - "search-tearsheets": tearsheets zoeken op naam (leeg = 20 meest
-//     recente), voor de zoekbalk in de UI.
-//   - "start-run": kandidaten van een tearsheet ophalen, matching_runs +
-//     placeholder matching_resultaten-rijen (status 'wacht') aanmaken.
+// Waarom via een Notitie i.p.v. een Tearsheet/distributielijst: een nieuwe
+// Tearsheet is tot ~1 week onzichtbaar voor het gedeelde REST-service-
+// account (bevestigd met Bullhorn support, zie project-geheugen) — Note is,
+// anders dan Tearsheet, wél realtime zichtbaar. Zie bullhorn.ts voor de
+// volledige uitleg en de note-cleanup na afloop.
+//
+// Twee acties (body.action):
+//   - "start-run": kandidaten via de Matching-notitie ophalen, matching_runs
+//     + placeholder matching_resultaten-rijen (status 'wacht') aanmaken, en
+//     de gebruikte notities verwijderen.
 //   - "process-batch": een klein aantal 'wacht'-rijen van een run pakken,
 //     scoren, wegschrijven. Wordt door de browser herhaald tot er niets
 //     meer te doen is — nodig omdat een Edge Function-invocatie maar ~150s
@@ -23,7 +29,13 @@
 // vragen bij Sam voordat dit breder uitrolt.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { getBullhornSession, searchTearsheets, getTearsheetCandidateIds, getCandidateProfiel } from './bullhorn.ts'
+import {
+  getBullhornSession,
+  getVacatureNaam,
+  getMatchingKandidatenViaNotitie,
+  verwijderMatchingNotities,
+  getCandidateProfiel,
+} from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
 import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
 import { bepaalSalarisFilterData } from './salarisfilter.ts'
@@ -137,40 +149,39 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!)
     const body = await req.json()
 
-    if (body.action === 'search-tearsheets') {
-      const session = await getBullhornSession(admin)
-      const { results } = await searchTearsheets(admin, session, String(body.zoekterm ?? '').trim())
-      return jsonResponse({
-        results: results.map((r) => ({
-          id: r.id,
-          naam: r.name,
-          dateAdded: r.dateAdded,
-          ownerNaam: r.owner ? `${r.owner.firstName} ${r.owner.lastName}`.trim() : null,
-        })),
-      })
-    }
-
     if (body.action === 'start-run') {
-      const tearsheetId = Number(body.tearsheetId)
+      const vacatureId = Number(body.vacatureId)
       const vacaturetekst = String(body.vacaturetekst ?? '').trim()
-      if (!tearsheetId || !vacaturetekst) {
-        return jsonResponse({ error: 'tearsheetId en vacaturetekst zijn verplicht' }, 400)
+      if (!vacatureId || !vacaturetekst) {
+        return jsonResponse({ error: 'vacatureId en vacaturetekst zijn verplicht' }, 400)
       }
 
-      const session = await getBullhornSession(admin)
-      const { candidateIds, tearsheetNaam } = await getTearsheetCandidateIds(admin, session, tearsheetId)
+      let session = await getBullhornSession(admin)
+      const vacatureNaamResult = await getVacatureNaam(admin, session, vacatureId)
+      session = vacatureNaamResult.session
+      const vacatureNaam = vacatureNaamResult.naam ?? `Vacature ${vacatureId}`
+
+      const { candidateIds, noteIds, session: sessionNaMatching } = await getMatchingKandidatenViaNotitie(
+        admin,
+        session,
+        vacatureId,
+      )
+      session = sessionNaMatching
 
       const { data: run, error: runError } = await admin
         .from('matching_runs')
         .insert({
           created_by: userData.user.id,
           created_by_naam: callerProfile.naam ?? null,
-          tearsheet_id: tearsheetId,
-          tearsheet_naam: tearsheetNaam,
+          vacature_id: vacatureId,
+          vacature_naam: vacatureNaam,
           vacaturetekst,
           aantal_kandidaten: candidateIds.length,
           status: candidateIds.length > 0 ? 'bezig' : 'fout',
-          foutmelding: candidateIds.length > 0 ? null : 'Distributielijst bevat geen kandidaten',
+          foutmelding:
+            candidateIds.length > 0
+              ? null
+              : 'Geen kandidaten gevonden - controleer of de bulk-Notitie (actie "Matching", tekst = dit vacature-ID) goed is gezet in Bullhorn.',
         })
         .select('id')
         .single()
@@ -188,7 +199,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      return jsonResponse({ runId: run.id, tearsheetNaam, aantalKandidaten: candidateIds.length })
+      // Pas NA succesvolle matching_resultaten-rijen opruimen - zie
+      // verwijderMatchingNotities in bullhorn.ts voor de reden.
+      if (noteIds.length > 0) {
+        await verwijderMatchingNotities(admin, session, noteIds)
+      }
+
+      return jsonResponse({ runId: run.id, vacatureNaam, aantalKandidaten: candidateIds.length })
     }
 
     if (body.action === 'process-batch') {
