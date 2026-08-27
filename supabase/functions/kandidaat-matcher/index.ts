@@ -62,6 +62,13 @@ const CLAUDE_CONCURRENCY = BATCH_SIZE
 // ingebouwde 401-retry (zie bullhorn.ts) - er hoeft dus geen sequentieel
 // bijgewerkte sessie meer doorgegeven te worden tussen aanroepen.
 const BULLHORN_CONCURRENCY = BATCH_SIZE
+// Concurrency voor de losse "kandidaat-namen"-actie - bewust NIET aan
+// BATCH_SIZE gekoppeld, want die maat is afgestemd op de Claude-
+// scoringsbatches (moet daar binnen de tijd blijven), terwijl dit een
+// eenmalige, lichte naam-only-fetch is die maar één keer per bekeken run
+// gebeurt (en daarna client-side gecachet, zie sessionStorage in
+// KandidaatMatcher.jsx) - mag dus fors hoger staan zonder extra risico.
+const NAMEN_CONCURRENCY = 20
 // Zelfde grens als MAX_CV_LENGTE in server.py (kandidaat-ranker) — boven dit
 // aantal tekens is het CV-veld vrijwel zeker corrupt (bijlage-/e-mailruis),
 // geen scoorbare inhoud.
@@ -239,10 +246,12 @@ Deno.serve(async (req) => {
 
       // Parallel i.p.v. sequentieel - bij een grote run (honderden
       // kandidaten) duurde dit anders minutenlang en liep het risico tegen
-      // de ~150s Edge Function-limiet aan te lopen.
+      // de ~150s Edge Function-limiet aan te lopen. NAMEN_CONCURRENCY (niet
+      // BULLHORN_CONCURRENCY) - zie de constante hierboven voor waarom dit
+      // hoger mag staan dan de scoringsbatches.
       const bullhornSessieVoorNamen = await getBullhornSession(admin)
       const namen: Record<number, string> = {}
-      await mapMetLimiet(bullhornIds, BULLHORN_CONCURRENCY, async (id: number) => {
+      await mapMetLimiet(bullhornIds, NAMEN_CONCURRENCY, async (id: number) => {
         try {
           const result = await getCandidateNaam(admin, bullhornSessieVoorNamen, id)
           namen[id] = result.naam
