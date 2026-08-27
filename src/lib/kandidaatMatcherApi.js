@@ -3,8 +3,9 @@ import { supabase } from './supabaseClient'
 /**
  * Dunne wrappers rond de kandidaat-matcher Edge Function (Bullhorn/Claude,
  * vereist service-role/secrets — zie supabase/functions/kandidaat-matcher)
- * en rechtstreekse Supabase-reads voor het live uitlezen van de voortgang
- * (RLS beperkt matching_runs/matching_resultaten al tot admin, zie
+ * en rechtstreekse Supabase-reads voor het live uitlezen van de voortgang.
+ * RLS op matching_runs/matching_resultaten staat open voor iedereen
+ * (iedere ingelogde rol ziet alle runs, niet alleen de eigen — zie
  * supabase/schema.sql), zelfde stijl als gpbApi.js.
  */
 async function invokeMatcher(action, payload = {}) {
@@ -64,13 +65,24 @@ export async function fetchResultaten(runId) {
   return data
 }
 
-/** Eerdere runs van de ingelogde admin, meest recente eerst — voor een "vorige runs"-lijstje. */
+/** Eerdere runs (van iedereen, RLS is niet per-gebruiker gefilterd), meest recente eerst — voor het "vorige runs"-lijstje. */
 export async function fetchMijnRuns() {
   const { data, error } = await supabase
     .from('matching_runs')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(20)
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/** Alle runs van iedereen, zonder limiet — voor het admin-only gebruiksoverzicht (MatcherGebruik.jsx). */
+export async function fetchAlleRunsVoorGebruiksoverzicht() {
+  const { data, error } = await supabase
+    .from('matching_runs')
+    .select('id, created_by_naam, vacature_naam, aantal_kandidaten, status, geschatte_kosten_usd, created_at')
+    .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
   return data

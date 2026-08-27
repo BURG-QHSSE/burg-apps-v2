@@ -152,10 +152,11 @@ Deno.serve(async (req) => {
       .eq('id', userData.user.id)
       .single()
 
-    // Zelfde rol-drempel als toolRegistry.js's minimumRole: 'manager' voor
-    // deze tool (manager/hr zitten op hetzelfde niveau in ROLE_HIERARCHY,
-    // dus krijgen hier bewust allebei toegang, net als in de UI).
-    if (profileError || !['admin', 'manager', 'hr'].includes(callerProfile?.role)) {
+    // Zelfde rol-drempel als toolRegistry.js's minimumRole: 'user' voor deze
+    // tool (sinds 2026-08-27 voor iedereen open, niet meer alleen
+    // admin/manager/hr) - hier alsnog expliciet checken dat er een geldig,
+    // bekend profiel is, i.p.v. de check helemaal weg te laten.
+    if (profileError || !['admin', 'manager', 'hr', 'user'].includes(callerProfile?.role)) {
       return jsonResponse({ error: 'Onvoldoende rechten om deze actie uit te voeren' }, 403)
     }
 

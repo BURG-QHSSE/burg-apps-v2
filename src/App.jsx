@@ -26,6 +26,7 @@ import GpbBeoordelingstool from './pages/tools/GpbBeoordelingstool'
 import BelOverzicht from './pages/tools/BelOverzicht'
 import Ontwikkeling from './pages/tools/Ontwikkeling'
 import KandidaatMatcher from './pages/tools/KandidaatMatcher'
+import MatcherGebruik from './pages/tools/MatcherGebruik'
 import TroubleshootWidget from './components/TroubleshootWidget'
 import './App.css'
 import './pages.css'
@@ -44,6 +45,7 @@ const TOOL_COMPONENTS = {
   'bel-overzicht': BelOverzicht,
   'dev-projecten': Ontwikkeling,
   'kandidaat-matcher': KandidaatMatcher,
+  'matcher-gebruik': MatcherGebruik,
 }
 
 /**
