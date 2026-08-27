@@ -40,6 +40,7 @@ import {
   verwijderMatchingNotities,
   getCandidateProfiel,
   getCandidateNaam,
+  getLaatsteIntakeDatum,
 } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
 import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
@@ -357,13 +358,19 @@ Deno.serve(async (req) => {
         bullhornStatus: string | null
         salarisBand: string | null
         uurtariefBand: string | null
+        // Puur voor weergave aan de consultant (zie getLaatsteIntakeDatum) -
+        // gaat ook nooit naar Claude.
+        laatsteIntakeDatum: string | null
       }
 
       // deno-lint-ignore no-explicit-any
       const voorbereid = await mapMetLimiet(batchRows, BULLHORN_CONCURRENCY, async (row: any, i): Promise<VoorbereidItem> => {
         const label = maakKandidaatLabel(row.bullhorn_id, i)
         try {
-          const { profiel } = await getCandidateProfiel(admin, bullhornSessie, row.bullhorn_id)
+          const [{ profiel }, { datum: laatsteIntakeDatum }] = await Promise.all([
+            getCandidateProfiel(admin, bullhornSessie, row.bullhorn_id),
+            getLaatsteIntakeDatum(admin, bullhornSessie, row.bullhorn_id),
+          ])
           const naamVolledig = `${profiel.firstName} ${profiel.lastName}`.trim()
           const cvRuw = profiel.description ? stripHtml(profiel.description).trim() : ''
           const { salarisBand, uurtariefBand } = bepaalSalarisFilterData(
@@ -384,6 +391,7 @@ Deno.serve(async (req) => {
               bullhornStatus,
               salarisBand,
               uurtariefBand,
+              laatsteIntakeDatum,
             }
           }
 
@@ -402,6 +410,7 @@ Deno.serve(async (req) => {
               bullhornStatus,
               salarisBand,
               uurtariefBand,
+              laatsteIntakeDatum,
             }
           }
 
@@ -416,6 +425,7 @@ Deno.serve(async (req) => {
             bullhornStatus,
             salarisBand,
             uurtariefBand,
+            laatsteIntakeDatum,
           }
         } catch (err) {
           return {
@@ -428,6 +438,7 @@ Deno.serve(async (req) => {
             bullhornStatus: null,
             salarisBand: null,
             uurtariefBand: null,
+            laatsteIntakeDatum: null,
           }
         }
       })
@@ -442,6 +453,7 @@ Deno.serve(async (req) => {
           bullhorn_status: item.bullhornStatus,
           salaris_band: item.salarisBand,
           uurtarief_band: item.uurtariefBand,
+          laatste_intake_datum: item.laatsteIntakeDatum,
         }
         if (item.foutmelding) {
           await admin

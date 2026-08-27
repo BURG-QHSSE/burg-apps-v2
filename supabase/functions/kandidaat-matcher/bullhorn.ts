@@ -383,6 +383,47 @@ export async function getCandidateNaam(
   return { naam: naam || `Kandidaat ${candidateId}`, session: newSession }
 }
 
+// Zelfde grens als MIN_INTAKE_CHARS in sync_candidates.py - een notitie
+// telt alleen als "de" intake die in het description-veld verwerkt is als
+// hij ruim boven het lege sjabloon zit.
+const MIN_INTAKE_CHARS = 617
+
+/**
+ * Haalt de datum op van de meest recente bruikbare Intake-notitie van een
+ * kandidaat - dezelfde notitie die sync_candidates.py in het "INTAKE DATA"-
+ * deel van het description-veld verwerkt (zie get_intake_for_candidate()
+ * daar). Puur voor weergave aan de consultant, zodat die kan inschatten hoe
+ * vers de intake-info is - gaat nooit naar Claude.
+ *
+ * Zelfde query-vorm als de Python-versie: server-side filteren op
+ * action="Intake" bleek op dit Bullhorn-instance onbetrouwbaar/leeg ondanks
+ * aanwezige data, dus wordt hier (net als daar) breed opgehaald op
+ * candidateUserID en client-side gefilterd op action + lengte.
+ */
+export async function getLaatsteIntakeDatum(
+  // deno-lint-ignore no-explicit-any
+  supabaseAdmin: any,
+  session: BullhornSession,
+  candidateId: number,
+): Promise<{ datum: string | null; session: BullhornSession }> {
+  const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, 'search/Note', {
+    query: `isDeleted:false AND candidateUserID:${candidateId}`,
+    fields: 'id,dateAdded,action,comments',
+    sort: '-dateAdded',
+    count: '100',
+  })
+  // deno-lint-ignore no-explicit-any
+  const rows = ((data as any)?.data ?? []) as any[]
+  for (const note of rows) {
+    const actie = String(note.action ?? '').trim().toLowerCase()
+    const comments = String(note.comments ?? '').trim()
+    if (actie === 'intake' && comments.length > MIN_INTAKE_CHARS) {
+      return { datum: note.dateAdded ? new Date(note.dateAdded).toISOString() : null, session: newSession }
+    }
+  }
+  return { datum: null, session: newSession }
+}
+
 export interface CandidateProfiel {
   id: number
   firstName: string

@@ -1610,6 +1610,10 @@ create table matching_resultaten (
   bullhorn_status text,
   salaris_band text,
   uurtarief_band text,
+  -- dateAdded van de meest recente bruikbare Intake-notitie (zelfde notitie
+  -- als sync_candidates.py in het "description"-veld verwerkt) - puur zodat
+  -- de consultant kan zien hoe vers de intake-info is; gaat nooit naar Claude.
+  laatste_intake_datum timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (run_id, bullhorn_id)

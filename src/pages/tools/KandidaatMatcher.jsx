@@ -665,6 +665,11 @@ export default function KandidaatMatcher() {
                       {[r.bullhorn_status, r.salaris_band, r.uurtarief_band].filter(Boolean).join(' — ')}
                     </p>
                   )}
+                  {r.laatste_intake_datum && (
+                    <p className="matcher-intake-datum">
+                      Laatste intake: {new Date(r.laatste_intake_datum).toLocaleDateString('nl-NL')}
+                    </p>
+                  )}
                   {r.onderbouwing && (
                     <p className="matcher-onderbouwing">
                       {personaliseerOnderbouwing(r.onderbouwing, namen[r.bullhorn_id])}
