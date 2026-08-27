@@ -177,6 +177,26 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'vacatureId en vacaturetekst zijn verplicht' }, 400)
       }
 
+      // Maximaal 1 (echt geslaagde) run per vacature-ID - een eerdere
+      // mislukte poging ('fout'/'kostenlimiet') telt niet mee en mag
+      // gewoon opnieuw geprobeerd worden. Check vóór alle Bullhorn/Claude-
+      // aanroepen, zodat een geblokkeerde poging geen onnodige kosten maakt.
+      const { data: bestaandeRun } = await admin
+        .from('matching_runs')
+        .select('id, created_by_naam')
+        .eq('vacature_id', vacatureId)
+        .in('status', ['bezig', 'klaar'])
+        .limit(1)
+        .maybeSingle()
+      if (bestaandeRun) {
+        return jsonResponse(
+          {
+            error: `Er is al een matching-run gedaan op dit vacature-ID (door ${bestaandeRun.created_by_naam ?? 'iemand anders'}). Bekijk die run bij "Eerdere runs" in plaats van opnieuw te starten.`,
+          },
+          409,
+        )
+      }
+
       let session = await getBullhornSession(admin)
       const vacatureNaamResult = await getVacatureNaam(admin, session, vacatureId)
       session = vacatureNaamResult.session
