@@ -99,10 +99,73 @@ export default function KandidaatMatcher() {
   const [fout, setFout] = useState('')
 
   // Multi-select: een lege array betekent "geen filter" (alles zichtbaar),
-  // net als voorheen ALLE_FILTER deed.
+  // net als voorheen ALLE_FILTER deed. Ook per run bewaard in sessionStorage
+  // - anders stonden je filters weer op "Alle" na een tabblad-herlaad.
   const [statusFilter, setStatusFilter] = useState([])
   const [salarisFilter, setSalarisFilter] = useState([])
   const [uurtariefFilter, setUurtariefFilter] = useState([])
+
+  const filterCacheSleutel = (runId) => `kandidaat-matcher-filters-${runId}`
+
+  function leesFilters(runId) {
+    try {
+      const ruw = sessionStorage.getItem(filterCacheSleutel(runId))
+      return ruw ? JSON.parse(ruw) : { status: [], salaris: [], uurtarief: [] }
+    } catch {
+      return { status: [], salaris: [], uurtarief: [] }
+    }
+  }
+
+  useEffect(() => {
+    if (!run?.runId) return
+    try {
+      sessionStorage.setItem(
+        filterCacheSleutel(run.runId),
+        JSON.stringify({ status: statusFilter, salaris: salarisFilter, uurtarief: uurtariefFilter }),
+      )
+    } catch {
+      // sessionStorage kan onbeschikbaar zijn - dan blijven filters gewoon niet bewaard
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.runId, statusFilter, salarisFilter, uurtariefFilter])
+
+  // Scrollpositie per run bewaren - zonder dit sprong je terug naar boven
+  // zodra het tabblad (bv. na het bekijken van een kandidaat in Bullhorn)
+  // herladen werd. Opslaan zodra het tabblad verborgen raakt/de pagina
+  // verlaten wordt (niet doorlopend tijdens het scrollen, dat is onnodig).
+  const scrollCacheSleutel = (runId) => `kandidaat-matcher-scroll-${runId}`
+
+  useEffect(() => {
+    if (!run?.runId) return undefined
+    function bewaarScroll() {
+      try {
+        sessionStorage.setItem(scrollCacheSleutel(run.runId), String(window.scrollY))
+      } catch {
+        // sessionStorage kan onbeschikbaar zijn - dan blijft de scrollpositie gewoon niet bewaard
+      }
+    }
+    document.addEventListener('visibilitychange', bewaarScroll)
+    window.addEventListener('pagehide', bewaarScroll)
+    return () => {
+      document.removeEventListener('visibilitychange', bewaarScroll)
+      window.removeEventListener('pagehide', bewaarScroll)
+    }
+  }, [run?.runId])
+
+  // Herstellen zodra de resultatenlijst er staat - pas dan is de pagina
+  // lang genoeg om ergens naartoe te kunnen scrollen. Bewust alleen bij het
+  // vullen van `resultaten` zelf (niet bij filter-wijzigingen), zodat dit
+  // niet blijft terugveren terwijl iemand daarna handmatig scrolt.
+  useEffect(() => {
+    if (!run?.runId || resultaten.length === 0) return
+    try {
+      const bewaard = sessionStorage.getItem(scrollCacheSleutel(run.runId))
+      if (bewaard) window.scrollTo(0, Number(bewaard))
+    } catch {
+      // niet fataal - dan begin je gewoon bovenaan
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.runId, resultaten.length])
 
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
@@ -296,9 +359,10 @@ export default function KandidaatMatcher() {
     setResultaten([])
     setNamen({})
     setFout('')
-    setStatusFilter([])
-    setSalarisFilter([])
-    setUurtariefFilter([])
+    const bewaardeFilters = leesFilters(eerdereRun.id)
+    setStatusFilter(bewaardeFilters.status)
+    setSalarisFilter(bewaardeFilters.salaris)
+    setUurtariefFilter(bewaardeFilters.uurtarief)
 
     if (eerdereRun.status === 'bezig') {
       // De run stond nog "bezig" maar niemand roept process-batch meer aan
@@ -330,6 +394,21 @@ export default function KandidaatMatcher() {
         (uurtariefFilter.length === 0 || uurtariefFilter.includes(r.uurtarief_band)),
     )
   }, [resultaten, statusFilter, salarisFilter, uurtariefFilter])
+
+  // Rangnummer o.b.v. de volledige (ongefilterde) ranglijst - resultaten
+  // komt al score-aflopend uit fetchResultaten(), dus gewoon de volgorde
+  // aanhouden. Blijft zo de "echte" positie tonen, ook als een filter actief
+  // is (i.p.v. het rangnummer te laten verspringen binnen de gefilterde subset).
+  const rangPerId = useMemo(() => {
+    const map = new Map()
+    let rang = 0
+    for (const r of resultaten) {
+      if (r.score === null || r.score === undefined) continue
+      rang += 1
+      map.set(r.bullhorn_id, rang)
+    }
+    return map
+  }, [resultaten])
 
   /** Toggelt één waarde in of uit een multi-select filter-array. */
   function toggleFilterWaarde(setFilter, waarde) {
@@ -553,7 +632,10 @@ export default function KandidaatMatcher() {
               {resultatenGefilterd.map((r) => (
                 <li key={r.id} className="matcher-resultaat-card">
                   <div className="matcher-resultaat-header">
-                    <span className="matcher-kandidaat-naam">{namen[r.bullhorn_id] ?? `Kandidaat ${r.bullhorn_id}`}</span>
+                    <span className="matcher-kandidaat-naam">
+                      {rangPerId.has(r.bullhorn_id) && <span className="matcher-rang">#{rangPerId.get(r.bullhorn_id)}</span>}
+                      {namen[r.bullhorn_id] ?? `Kandidaat ${r.bullhorn_id}`}
+                    </span>
                     {r.status === 'klaar' ? (
                       <span className={scoreBadgeClass(r.score)}>{r.score}</span>
                     ) : (

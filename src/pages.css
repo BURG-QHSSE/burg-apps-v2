@@ -3501,6 +3501,14 @@ a.tool-card:hover .tool-card-hint .arrow {
   font-weight: 600;
 }
 
+.matcher-rang {
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: var(--inkt-60);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
 .matcher-bullhorn-knop {
   display: inline-flex;
   align-items: center;
