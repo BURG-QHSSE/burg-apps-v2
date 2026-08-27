@@ -63,10 +63,32 @@ export default function KandidaatMatcher() {
   // startformulier.
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [vacatureId, setVacatureId] = useState('')
+  // Concept-invoer (vacature-ID/-tekst/bestandsnaam, vóór er een run is
+  // gestart) wordt ook in sessionStorage bewaard - anders raakte je getypte
+  // ID/geplakte tekst kwijt zodra de browser dit tabblad op de achtergrond
+  // herlaadt (bv. terwijl je in een ander tabblad de jobpull ophaalt).
+  const CONCEPT_SLEUTEL = 'kandidaat-matcher-concept'
 
-  const [vacaturetekst, setVacaturetekst] = useState('')
-  const [bestandNaam, setBestandNaam] = useState('')
+  function leesConcept() {
+    try {
+      const ruw = sessionStorage.getItem(CONCEPT_SLEUTEL)
+      return ruw ? JSON.parse(ruw) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  const [vacatureId, setVacatureId] = useState(() => leesConcept().vacatureId ?? '')
+  const [vacaturetekst, setVacaturetekst] = useState(() => leesConcept().vacaturetekst ?? '')
+  const [bestandNaam, setBestandNaam] = useState(() => leesConcept().bestandNaam ?? '')
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CONCEPT_SLEUTEL, JSON.stringify({ vacatureId, vacaturetekst, bestandNaam }))
+    } catch {
+      // sessionStorage kan onbeschikbaar zijn (privénavigatie e.d.) - dan blijft de concept-invoer gewoon niet bewaard
+    }
+  }, [vacatureId, vacaturetekst, bestandNaam])
 
   const [run, setRun] = useState(null)
   const [runDetail, setRunDetail] = useState(null)
