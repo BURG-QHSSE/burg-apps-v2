@@ -297,13 +297,39 @@ export async function getMatchingKandidatenViaNotitie(
 }
 
 /**
+ * Simpele concurrency-limiter, zelfde patroon als mapMetLimiet in index.ts
+ * (hier los gehouden i.p.v. gedeeld, want index.ts importeert al vanuit dit
+ * bestand - een gedeelde import zou een circulaire afhankelijkheid geven).
+ */
+async function voorElkMetLimiet<T>(items: T[], limiet: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let volgende = 0
+  async function werker() {
+    while (volgende < items.length) {
+      const i = volgende++
+      await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limiet, items.length) }, werker))
+}
+
+// Hoeveel delete-aanroepen tegelijk lopen. Sequentieel bleek bij een grote
+// run (482 notities) ~325s te duren - ruim boven de ~150s-limiet van een
+// Edge Function-aanroep (zie project-geheugen, 2026-08-27: een echte run
+// bleef daardoor stilletjes met alle notities onverwijderd achter, zonder
+// foutmelding, want de aanroep werd door het platform afgebroken vóórdat de
+// loop ooit een fout kón loggen).
+const VERWIJDER_CONCURRENCY = 10
+
+/**
  * Verwijdert (soft-delete, net als in Bullhorn zelf) precies de Matching-
  * notities die voor deze run zijn gebruikt — nooit een bredere sweep. Wordt
  * pas aangeroepen NADAT de matching_resultaten-rijen succesvol zijn
  * aangemaakt, zodat een mislukte run de marker niet kwijtraakt vóór een
  * eventuele retry. Eén mislukte losse delete is niet fataal voor de run
  * zelf (de notitie is dan gewoon een onschuldig, leeg achtergebleven
- * restant — bevat geen PII, alleen het kale vacature-ID).
+ * restant — bevat geen PII, alleen het kale vacature-ID). Parallel i.p.v.
+ * sequentieel, en in index.ts bewust via EdgeRuntime.waitUntil() aangeroepen
+ * zodat dit nooit meer de response naar de browser kan blokkeren.
  */
 export async function verwijderMatchingNotities(
   // deno-lint-ignore no-explicit-any
@@ -311,17 +337,16 @@ export async function verwijderMatchingNotities(
   session: BullhornSession,
   noteIds: number[],
 ): Promise<void> {
-  let huidigeSessie = session
-  for (const noteId of noteIds) {
+  await voorElkMetLimiet(noteIds, VERWIJDER_CONCURRENCY, async (noteId) => {
     try {
-      const url = `${huidigeSessie.restUrl}entity/Note/${noteId}?${new URLSearchParams({
-        BhRestToken: huidigeSessie.BhRestToken,
+      const url = `${session.restUrl}entity/Note/${noteId}?${new URLSearchParams({
+        BhRestToken: session.BhRestToken,
       })}`
       let response = await fetchMetTimeout(url, { method: 'DELETE' }, BULLHORN_TIMEOUT_MS)
       if (response.status === 401) {
-        huidigeSessie = await forceerNieuweSessie(supabaseAdmin)
-        const retryUrl = `${huidigeSessie.restUrl}entity/Note/${noteId}?${new URLSearchParams({
-          BhRestToken: huidigeSessie.BhRestToken,
+        const nieuweSessie = await forceerNieuweSessie(supabaseAdmin)
+        const retryUrl = `${nieuweSessie.restUrl}entity/Note/${noteId}?${new URLSearchParams({
+          BhRestToken: nieuweSessie.BhRestToken,
         })}`
         response = await fetchMetTimeout(retryUrl, { method: 'DELETE' }, BULLHORN_TIMEOUT_MS)
       }
@@ -331,7 +356,7 @@ export async function verwijderMatchingNotities(
     } catch (err) {
       console.error(`[kandidaat-matcher] Verwijderen van Matching-notitie ${noteId} gaf een fout:`, err)
     }
-  }
+  })
 }
 
 /**

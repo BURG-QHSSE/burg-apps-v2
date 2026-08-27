@@ -1,3 +1,5 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
 // Edge Function: kandidaat-matcher
 //
 // Consultant zet in Bullhorn zelf een bulk-Notitie (actie "Matching", met
@@ -211,9 +213,17 @@ Deno.serve(async (req) => {
       }
 
       // Pas NA succesvolle matching_resultaten-rijen opruimen - zie
-      // verwijderMatchingNotities in bullhorn.ts voor de reden.
+      // verwijderMatchingNotities in bullhorn.ts voor de reden. Via
+      // EdgeRuntime.waitUntil() i.p.v. await: bij een grote run (honderden
+      // notities) bleek dit sequentieel ruim boven de ~150s-limiet van een
+      // Edge Function-aanroep te duren, waardoor de aanroep werd afgebroken
+      // vóórdat er ook maar één notitie verwijderd was (en zonder geloggde
+      // fout, want de aanroep werd hard afgebroken, niet netjes gestopt).
+      // waitUntil laat dit los van de response op de achtergrond doorlopen -
+      // de browser krijgt meteen antwoord, de opruiming (nu ook parallel,
+      // zie VERWIJDER_CONCURRENCY) gebeurt onafhankelijk daarvan.
       if (noteIds.length > 0) {
-        await verwijderMatchingNotities(admin, session, noteIds)
+        EdgeRuntime.waitUntil(verwijderMatchingNotities(admin, session, noteIds))
       }
 
       return jsonResponse({ runId: run.id, vacatureNaam, aantalKandidaten: candidateIds.length })
