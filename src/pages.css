@@ -3442,6 +3442,29 @@ a.tool-card:hover .tool-card-hint .arrow {
   min-width: 180px;
 }
 
+.matcher-filter-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--inkt-60);
+  margin-bottom: var(--space-1);
+}
+
+.matcher-filter-opties {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.matcher-filter-optie {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: normal;
+  cursor: pointer;
+}
+
 .matcher-resultaten {
   list-style: none;
   margin: 0;

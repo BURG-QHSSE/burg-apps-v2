@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   startRun,
   processBatch,
@@ -19,8 +20,6 @@ const STATUS_LABELS = {
   fout: 'Fout',
   kostenlimiet: 'Gestopt: kostenlimiet bereikt',
 }
-
-const ALLE_FILTER = '__alle__'
 
 /** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. */
 function uniekeWaarden(resultaten, veld) {
@@ -56,6 +55,13 @@ function scoreBadgeClass(score) {
  * totdat de run klaar is — vandaar de poll-loop in de useEffect hieronder.
  */
 export default function KandidaatMatcher() {
+  // De actieve run staat ook in de URL (?run=...) zodat een teruggekeerde/
+  // herladen tabblad (bv. na het openen van een kandidaat in Bullhorn - een
+  // achtergrondtabblad kan door de browser herladen worden) dezelfde run
+  // automatisch weer oppakt in plaats van terug te vallen op het lege
+  // startformulier.
+  const [searchParams, setSearchParams] = useSearchParams()
+
   const [vacatureId, setVacatureId] = useState('')
 
   const [vacaturetekst, setVacaturetekst] = useState('')
@@ -69,9 +75,11 @@ export default function KandidaatMatcher() {
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState('')
 
-  const [statusFilter, setStatusFilter] = useState(ALLE_FILTER)
-  const [salarisFilter, setSalarisFilter] = useState(ALLE_FILTER)
-  const [uurtariefFilter, setUurtariefFilter] = useState(ALLE_FILTER)
+  // Multi-select: een lege array betekent "geen filter" (alles zichtbaar),
+  // net als voorheen ALLE_FILTER deed.
+  const [statusFilter, setStatusFilter] = useState([])
+  const [salarisFilter, setSalarisFilter] = useState([])
+  const [uurtariefFilter, setUurtariefFilter] = useState([])
 
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
@@ -83,6 +91,21 @@ export default function KandidaatMatcher() {
   useEffect(() => {
     laadEerdereRuns()
   }, [laadEerdereRuns])
+
+  // Bij het laden van de pagina (of een herlaad van een op de achtergrond
+  // geplaatst tabblad) de run uit de URL herstellen, i.p.v. terug te vallen
+  // op het lege startformulier.
+  useEffect(() => {
+    const runIdUitUrl = searchParams.get('run')
+    if (!runIdUitUrl || run) return
+    fetchRun(runIdUitUrl)
+      .then((eerdereRun) => handleBekijkEerdereRun(eerdereRun))
+      .catch(() => {
+        // ongeldige/verwijderde run-id in de URL - gewoon terugvallen op het startformulier
+        setSearchParams({}, { replace: true })
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleBestandUpload(e) {
     const bestand = e.target.files?.[0]
@@ -154,12 +177,13 @@ export default function KandidaatMatcher() {
     setNamen({})
     setVoortgang(null)
     setRunDetail(null)
-    setStatusFilter(ALLE_FILTER)
-    setSalarisFilter(ALLE_FILTER)
-    setUurtariefFilter(ALLE_FILTER)
+    setStatusFilter([])
+    setSalarisFilter([])
+    setUurtariefFilter([])
     try {
       const gestart = await startRun(vacatureIdGetrimd, vacaturetekst.trim())
       setRun(gestart)
+      setSearchParams({ run: gestart.runId }, { replace: true })
       if (gestart.aantalKandidaten === 0) {
         setFout(
           'Geen kandidaten gevonden - controleer of de bulk-Notitie (actie "Matching", tekst = dit vacature-ID) goed is gezet in Bullhorn.',
@@ -176,14 +200,15 @@ export default function KandidaatMatcher() {
   }
 
   function handleBekijkEerdereRun(eerdereRun) {
+    setSearchParams({ run: eerdereRun.id }, { replace: true })
     setRun({ runId: eerdereRun.id, vacatureNaam: eerdereRun.vacature_naam, aantalKandidaten: eerdereRun.aantal_kandidaten })
     setRunDetail(eerdereRun)
     setResultaten([])
     setNamen({})
     setFout('')
-    setStatusFilter(ALLE_FILTER)
-    setSalarisFilter(ALLE_FILTER)
-    setUurtariefFilter(ALLE_FILTER)
+    setStatusFilter([])
+    setSalarisFilter([])
+    setUurtariefFilter([])
 
     if (eerdereRun.status === 'bezig') {
       // De run stond nog "bezig" maar niemand roept process-batch meer aan
@@ -210,11 +235,16 @@ export default function KandidaatMatcher() {
   const resultatenGefilterd = useMemo(() => {
     return resultaten.filter(
       (r) =>
-        (statusFilter === ALLE_FILTER || r.bullhorn_status === statusFilter) &&
-        (salarisFilter === ALLE_FILTER || r.salaris_band === salarisFilter) &&
-        (uurtariefFilter === ALLE_FILTER || r.uurtarief_band === uurtariefFilter),
+        (statusFilter.length === 0 || statusFilter.includes(r.bullhorn_status)) &&
+        (salarisFilter.length === 0 || salarisFilter.includes(r.salaris_band)) &&
+        (uurtariefFilter.length === 0 || uurtariefFilter.includes(r.uurtarief_band)),
     )
   }, [resultaten, statusFilter, salarisFilter, uurtariefFilter])
+
+  /** Toggelt één waarde in of uit een multi-select filter-array. */
+  function toggleFilterWaarde(setFilter, waarde) {
+    setFilter((huidig) => (huidig.includes(waarde) ? huidig.filter((w) => w !== waarde) : [...huidig, waarde]))
+  }
 
   useEffect(() => () => {
     gestopt.current = true
@@ -305,6 +335,7 @@ export default function KandidaatMatcher() {
                 className="btn btn-secondary"
                 onClick={() => {
                   gestopt.current = true
+                  setSearchParams({}, { replace: true })
                   setRun(null)
                   setRunDetail(null)
                   setResultaten([])
@@ -313,9 +344,9 @@ export default function KandidaatMatcher() {
                   setVacatureId('')
                   setVacaturetekst('')
                   setBestandNaam('')
-                  setStatusFilter(ALLE_FILTER)
-                  setSalarisFilter(ALLE_FILTER)
-                  setUurtariefFilter(ALLE_FILTER)
+                  setStatusFilter([])
+                  setSalarisFilter([])
+                  setUurtariefFilter([])
                 }}
               >
                 Nieuwe run
@@ -343,31 +374,49 @@ export default function KandidaatMatcher() {
             {resultaten.length > 0 && (
               <div className="matcher-filters">
                 <div className="field">
-                  <label htmlFor="matcher-filter-status">Status</label>
-                  <select id="matcher-filter-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                    <option value={ALLE_FILTER}>Alle</option>
+                  <span className="matcher-filter-label">Status</span>
+                  <div className="matcher-filter-opties">
                     {uniekeWaarden(resultaten, 'bullhorn_status').map((w) => (
-                      <option key={w} value={w}>{w}</option>
+                      <label key={w} className="matcher-filter-optie">
+                        <input
+                          type="checkbox"
+                          checked={statusFilter.includes(w)}
+                          onChange={() => toggleFilterWaarde(setStatusFilter, w)}
+                        />
+                        {w}
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <div className="field">
-                  <label htmlFor="matcher-filter-salaris">Salaris range</label>
-                  <select id="matcher-filter-salaris" value={salarisFilter} onChange={(e) => setSalarisFilter(e.target.value)}>
-                    <option value={ALLE_FILTER}>Alle</option>
+                  <span className="matcher-filter-label">Salaris range</span>
+                  <div className="matcher-filter-opties">
                     {uniekeWaarden(resultaten, 'salaris_band').map((w) => (
-                      <option key={w} value={w}>{w}</option>
+                      <label key={w} className="matcher-filter-optie">
+                        <input
+                          type="checkbox"
+                          checked={salarisFilter.includes(w)}
+                          onChange={() => toggleFilterWaarde(setSalarisFilter, w)}
+                        />
+                        {w}
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <div className="field">
-                  <label htmlFor="matcher-filter-uurtarief">Uurtarief range</label>
-                  <select id="matcher-filter-uurtarief" value={uurtariefFilter} onChange={(e) => setUurtariefFilter(e.target.value)}>
-                    <option value={ALLE_FILTER}>Alle</option>
+                  <span className="matcher-filter-label">Uurtarief range</span>
+                  <div className="matcher-filter-opties">
                     {uniekeWaarden(resultaten, 'uurtarief_band').map((w) => (
-                      <option key={w} value={w}>{w}</option>
+                      <label key={w} className="matcher-filter-optie">
+                        <input
+                          type="checkbox"
+                          checked={uurtariefFilter.includes(w)}
+                          onChange={() => toggleFilterWaarde(setUurtariefFilter, w)}
+                        />
+                        {w}
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
               </div>
             )}
