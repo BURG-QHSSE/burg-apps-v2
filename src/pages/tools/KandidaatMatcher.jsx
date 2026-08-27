@@ -151,25 +151,41 @@ export default function KandidaatMatcher() {
     }
   }
 
+  // Hoeveel process-batch-aanroepen tegelijk lopen - matching_pak_batch()
+  // gebruikt FOR UPDATE SKIP LOCKED (zie schema.sql), dus meerdere
+  // gelijktijdige aanroepen claimen veilig verschillende rijen. Was eerder
+  // altijd maar 1 keten tegelijk, wat bij een grote run onnodig traag was.
+  const GELIJKTIJDIGE_BATCHES = 3
+
   // Kandidaten worden bewust pas getoond zodra de hele run klaar is (geen
   // tussentijdse "wacht"-rijen) — daarom wordt setResultaten hier pas ná de
   // loop aangeroepen, niet per tussentijdse tick.
   async function pollTotKlaar(runId, totaal) {
     gestopt.current = false
-    while (!gestopt.current) {
-      let voortgangResultaat
-      try {
-        voortgangResultaat = await processBatch(runId)
-      } catch (err) {
-        setFout(err.message)
-        break
+    let klaarGemeld = false
+
+    async function werker() {
+      while (!gestopt.current && !klaarGemeld) {
+        let voortgangResultaat
+        try {
+          voortgangResultaat = await processBatch(runId)
+        } catch (err) {
+          setFout(err.message)
+          break
+        }
+
+        const verwerktTotaal = totaal - voortgangResultaat.resterend
+        setVoortgang({ verwerkt: verwerktTotaal, totaal, resterend: voortgangResultaat.resterend })
+
+        if (voortgangResultaat.klaar) {
+          klaarGemeld = true
+          break
+        }
       }
-
-      const verwerktTotaal = totaal - voortgangResultaat.resterend
-      setVoortgang({ verwerkt: verwerktTotaal, totaal, resterend: voortgangResultaat.resterend })
-
-      if (voortgangResultaat.klaar) break
     }
+
+    await Promise.all(Array.from({ length: GELIJKTIJDIGE_BATCHES }, werker))
+
     setBezig(false)
     try {
       setRunDetail(await fetchRun(runId))

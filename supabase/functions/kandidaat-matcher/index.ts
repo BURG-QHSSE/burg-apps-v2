@@ -51,10 +51,15 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 // tegen de 150s-tijdslimiet aanloopt (zie schema.sql-comment bij
 // matching_runs) — bv. `supabase secrets set MATCHER_BATCH_SIZE=3`.
 const BATCH_SIZE = Number(Deno.env.get('MATCHER_BATCH_SIZE')) || 6
-// Hoeveel Claude-aanroepen binnen één batch tegelijk lopen (Bullhorn-calls
-// blijven sequentieel, want die delen een mutable sessie-object dat bij een
-// 401 vervangen wordt — zie bullhorn.ts).
-const CLAUDE_CONCURRENCY = 3
+// Hoeveel Claude-aanroepen binnen één batch tegelijk lopen. Gelijk aan
+// BATCH_SIZE gezet zodat een hele batch in één golf scoort i.p.v. meerdere
+// opeenvolgende golven (was eerder 3, dus 2 golven bij BATCH_SIZE=6).
+const CLAUDE_CONCURRENCY = BATCH_SIZE
+// Hoeveel Bullhorn-profiel-aanroepen binnen één batch tegelijk lopen. Mag
+// parallel: elke aanroep herstelt zelf een verlopen sessie via bullhornGet's
+// ingebouwde 401-retry (zie bullhorn.ts) - er hoeft dus geen sequentieel
+// bijgewerkte sessie meer doorgegeven te worden tussen aanroepen.
+const BULLHORN_CONCURRENCY = BATCH_SIZE
 // Zelfde grens als MAX_CV_LENGTE in server.py (kandidaat-ranker) — boven dit
 // aantal tekens is het CV-veld vrijwel zeker corrupt (bijlage-/e-mailruis),
 // geen scoorbare inhoud.
@@ -289,10 +294,15 @@ Deno.serve(async (req) => {
           console.error('[kandidaat-matcher] Prewarm mislukt, verdergaan zonder cache:', err)
         })
 
-      // Stap 1: Bullhorn-profielen ophalen — sequentieel, want de sessie is
-      // een mutable object dat bij een 401 vervangen wordt (zie bullhorn.ts).
-      let session = await getBullhornSession(admin)
-      const voorbereid: {
+      // Stap 1: Bullhorn-profielen ophalen — parallel (BULLHORN_CONCURRENCY).
+      // Eén keer een geldige sessie ophalen (cache-backed, zie bullhorn.ts) en
+      // die aan alle parallelle aanroepen meegeven; een individuele aanroep
+      // die alsnog een 401 tegenkomt (bv. sessie verlopen middenin de batch)
+      // herstelt zichzelf via bullhornGet's ingebouwde retry, onafhankelijk
+      // van de andere aanroepen.
+      const bullhornSessie = await getBullhornSession(admin)
+
+      type VoorbereidItem = {
         rowId: string
         bullhornId: number
         label: string
@@ -305,15 +315,13 @@ Deno.serve(async (req) => {
         bullhornStatus: string | null
         salarisBand: string | null
         uurtariefBand: string | null
-      }[] = []
+      }
 
-      for (let i = 0; i < batchRows.length; i++) {
-        const row = batchRows[i]
+      // deno-lint-ignore no-explicit-any
+      const voorbereid = await mapMetLimiet(batchRows, BULLHORN_CONCURRENCY, async (row: any, i): Promise<VoorbereidItem> => {
         const label = maakKandidaatLabel(row.bullhorn_id, i)
         try {
-          const result = await getCandidateProfiel(admin, session, row.bullhorn_id)
-          session = result.session
-          const profiel = result.profiel
+          const { profiel } = await getCandidateProfiel(admin, bullhornSessie, row.bullhorn_id)
           const naamVolledig = `${profiel.firstName} ${profiel.lastName}`.trim()
           const cvRuw = profiel.description ? stripHtml(profiel.description).trim() : ''
           const { salarisBand, uurtariefBand } = bepaalSalarisFilterData(
@@ -324,7 +332,7 @@ Deno.serve(async (req) => {
           const bullhornStatus = profiel.status
 
           if (!cvRuw) {
-            voorbereid.push({
+            return {
               rowId: row.id,
               bullhornId: row.bullhorn_id,
               label,
@@ -334,8 +342,7 @@ Deno.serve(async (req) => {
               bullhornStatus,
               salarisBand,
               uurtariefBand,
-            })
-            continue
+            }
           }
 
           // Zelfde grens als MAX_CV_LENGTE in server.py: boven dit aantal
@@ -343,7 +350,7 @@ Deno.serve(async (req) => {
           // e-mailruis die in description terecht is gekomen via de sync) —
           // overslaan i.p.v. dat als "CV" naar Claude te sturen.
           if (cvRuw.length > MAX_CV_LENGTE) {
-            voorbereid.push({
+            return {
               rowId: row.id,
               bullhornId: row.bullhorn_id,
               label,
@@ -353,12 +360,11 @@ Deno.serve(async (req) => {
               bullhornStatus,
               salarisBand,
               uurtariefBand,
-            })
-            continue
+            }
           }
 
           const geanonimiseerd = anonimiseerVrijeTekst(cvRuw, label, naamVolledig)
-          voorbereid.push({
+          return {
             rowId: row.id,
             bullhornId: row.bullhorn_id,
             label,
@@ -368,9 +374,9 @@ Deno.serve(async (req) => {
             bullhornStatus,
             salarisBand,
             uurtariefBand,
-          })
+          }
         } catch (err) {
-          voorbereid.push({
+          return {
             rowId: row.id,
             bullhornId: row.bullhorn_id,
             label,
@@ -380,9 +386,9 @@ Deno.serve(async (req) => {
             bullhornStatus: null,
             salarisBand: null,
             uurtariefBand: null,
-          })
+          }
         }
-      }
+      })
 
       // Stap 2: Claude-scoring — parallel binnen de batch, met caching op
       // systeemprompt + vacaturetekst (zie claude.ts). Wacht eerst de
