@@ -3459,6 +3459,13 @@ a.tool-card:hover .tool-card-hint .arrow {
   cursor: pointer;
 }
 
+.matcher-filter-knop-actief {
+  color: var(--blauwgrijs);
+  background: var(--blauwgrijs-10);
+  border-color: var(--blauwgrijs);
+  font-weight: 600;
+}
+
 .matcher-filter-optie {
   display: flex;
   align-items: center;

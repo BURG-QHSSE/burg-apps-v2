@@ -570,7 +570,7 @@ export default function KandidaatMatcher() {
                 <div className="field matcher-filter-veld" ref={statusVeldRef}>
                   <button
                     type="button"
-                    className="matcher-filter-knop"
+                    className={`matcher-filter-knop${statusFilter.length > 0 ? ' matcher-filter-knop-actief' : ''}`}
                     onClick={() => setOpenFilter(openFilter === 'status' ? null : 'status')}
                   >
                     {filterSamenvatting(statusFilter, 'Status')}
@@ -594,7 +594,7 @@ export default function KandidaatMatcher() {
                 <div className="field matcher-filter-veld" ref={salarisVeldRef}>
                   <button
                     type="button"
-                    className="matcher-filter-knop"
+                    className={`matcher-filter-knop${salarisFilter.length > 0 ? ' matcher-filter-knop-actief' : ''}`}
                     onClick={() => setOpenFilter(openFilter === 'salaris' ? null : 'salaris')}
                   >
                     {filterSamenvatting(salarisFilter, 'Salaris range')}
@@ -618,7 +618,7 @@ export default function KandidaatMatcher() {
                 <div className="field matcher-filter-veld" ref={uurtariefVeldRef}>
                   <button
                     type="button"
-                    className="matcher-filter-knop"
+                    className={`matcher-filter-knop${uurtariefFilter.length > 0 ? ' matcher-filter-knop-actief' : ''}`}
                     onClick={() => setOpenFilter(openFilter === 'uurtarief' ? null : 'uurtarief')}
                   >
                     {filterSamenvatting(uurtariefFilter, 'Uurtarief range')}
