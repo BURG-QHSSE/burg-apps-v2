@@ -40,7 +40,7 @@ import {
   verwijderMatchingNotities,
   getCandidateProfiel,
   getCandidateNaam,
-  getLaatsteIntakeDatum,
+  haalIntakeDatumUit,
 } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
 import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
@@ -358,7 +358,7 @@ Deno.serve(async (req) => {
         bullhornStatus: string | null
         salarisBand: string | null
         uurtariefBand: string | null
-        // Puur voor weergave aan de consultant (zie getLaatsteIntakeDatum) -
+        // Puur voor weergave aan de consultant (zie haalIntakeDatumUit) -
         // gaat ook nooit naar Claude.
         laatsteIntakeDatum: string | null
       }
@@ -367,10 +367,12 @@ Deno.serve(async (req) => {
       const voorbereid = await mapMetLimiet(batchRows, BULLHORN_CONCURRENCY, async (row: any, i): Promise<VoorbereidItem> => {
         const label = maakKandidaatLabel(row.bullhorn_id, i)
         try {
-          const [{ profiel }, { datum: laatsteIntakeDatum }] = await Promise.all([
-            getCandidateProfiel(admin, bullhornSessie, row.bullhorn_id),
-            getLaatsteIntakeDatum(admin, bullhornSessie, row.bullhorn_id),
-          ])
+          const { profiel } = await getCandidateProfiel(admin, bullhornSessie, row.bullhorn_id)
+          // De datum staat sinds kort direct in de INTAKE DATA-header,
+          // vastgelegd door sync_candidates.py op het moment dat die de
+          // intake-tekst zelf wegschrijft - geen aparte Bullhorn-call of
+          // verificatie meer nodig (zie haalIntakeDatumUit in bullhorn.ts).
+          const laatsteIntakeDatum = haalIntakeDatumUit(profiel.description ?? '')
           const naamVolledig = `${profiel.firstName} ${profiel.lastName}`.trim()
           const cvRuw = profiel.description ? stripHtml(profiel.description).trim() : ''
           const { salarisBand, uurtariefBand } = bepaalSalarisFilterData(

@@ -383,45 +383,22 @@ export async function getCandidateNaam(
   return { naam: naam || `Kandidaat ${candidateId}`, session: newSession }
 }
 
-// Zelfde grens als MIN_INTAKE_CHARS in sync_candidates.py - een notitie
-// telt alleen als "de" intake die in het description-veld verwerkt is als
-// hij ruim boven het lege sjabloon zit.
-const MIN_INTAKE_CHARS = 617
+// Zelfde structuur als update_candidate_description() in sync_candidates.py
+// schrijft: "=== INTAKE DATA (epoch-ms) ===<br>{intake}<br><br>=== CV DATA
+// ===<br>{cv}" - de datum in de header is de dateAdded van de Note die de
+// intake-tekst opleverde, vastgelegd bij het schrijven zelf (zie dat script)
+// i.p.v. hier achteraf te reconstrueren via een live Bullhorn-query. Dat is
+// simpeler en robuuster: geen extra API-call per kandidaat nodig, en geen
+// risico dat een live query een nieuwere notitie vindt dan wat er
+// daadwerkelijk in description staat (de sync draait maar 1x/dag). De datum
+// is optioneel - description-waarden van vóór deze wijziging hebben nog geen
+// datum in de header, dan komt haalIntakeDatumUit() gewoon null terug.
+const INTAKE_SECTIE_PATROON = /=== INTAKE DATA(?: \((\d+)\))? ===<br>/i
 
-/**
- * Haalt de datum op van de meest recente bruikbare Intake-notitie van een
- * kandidaat - dezelfde notitie die sync_candidates.py in het "INTAKE DATA"-
- * deel van het description-veld verwerkt (zie get_intake_for_candidate()
- * daar). Puur voor weergave aan de consultant, zodat die kan inschatten hoe
- * vers de intake-info is - gaat nooit naar Claude.
- *
- * Zelfde query-vorm als de Python-versie: server-side filteren op
- * action="Intake" bleek op dit Bullhorn-instance onbetrouwbaar/leeg ondanks
- * aanwezige data, dus wordt hier (net als daar) breed opgehaald op
- * candidateUserID en client-side gefilterd op action + lengte.
- */
-export async function getLaatsteIntakeDatum(
-  // deno-lint-ignore no-explicit-any
-  supabaseAdmin: any,
-  session: BullhornSession,
-  candidateId: number,
-): Promise<{ datum: string | null; session: BullhornSession }> {
-  const { data, session: newSession } = await bullhornGet(supabaseAdmin, session, 'search/Note', {
-    query: `isDeleted:false AND candidateUserID:${candidateId}`,
-    fields: 'id,dateAdded,action,comments',
-    sort: '-dateAdded',
-    count: '100',
-  })
-  // deno-lint-ignore no-explicit-any
-  const rows = ((data as any)?.data ?? []) as any[]
-  for (const note of rows) {
-    const actie = String(note.action ?? '').trim().toLowerCase()
-    const comments = String(note.comments ?? '').trim()
-    if (actie === 'intake' && comments.length > MIN_INTAKE_CHARS) {
-      return { datum: note.dateAdded ? new Date(note.dateAdded).toISOString() : null, session: newSession }
-    }
-  }
-  return { datum: null, session: newSession }
+export function haalIntakeDatumUit(description: string): string | null {
+  const match = INTAKE_SECTIE_PATROON.exec(description)
+  const epochMs = match?.[1]
+  return epochMs ? new Date(Number(epochMs)).toISOString() : null
 }
 
 export interface CandidateProfiel {
