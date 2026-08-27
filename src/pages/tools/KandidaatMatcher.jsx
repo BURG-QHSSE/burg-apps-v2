@@ -140,14 +140,46 @@ export default function KandidaatMatcher() {
     }
   }
 
-  /** Namen worden bewust pas live opgehaald zodra er echt resultaten getoond worden — nooit opgeslagen, zie kandidaatMatcherApi.js. */
-  async function laadNamen(resultatenLijst) {
+  const namenCacheSleutel = (runId) => `kandidaat-matcher-namen-${runId}`
+
+  /**
+   * Namen worden nooit in de database opgeslagen (zie kandidaatMatcherApi.js
+   * / matching_resultaten-schema - bewust geen PII), maar wél gecachet in
+   * sessionStorage van de browser, per run - anders moest bij elke
+   * tabblad-herlaad (bv. de browser herlaadt een tabblad op de achtergrond)
+   * alles opnieuw live bij Bullhorn opgehaald worden. sessionStorage is
+   * puur lokaal bij de kijker en verdwijnt zodra het tabblad echt gesloten
+   * wordt - geen centrale opslag.
+   */
+  async function laadNamen(runId, resultatenLijst) {
     const ids = resultatenLijst.map((r) => r.bullhorn_id)
     if (ids.length === 0) return
+
+    let gecachet = {}
     try {
-      setNamen(await fetchKandidaatNamen(ids))
+      const ruw = sessionStorage.getItem(namenCacheSleutel(runId))
+      if (ruw) gecachet = JSON.parse(ruw)
     } catch {
-      // niet fataal — de kaarten vallen dan terug op "Kandidaat {id}"
+      // sessionStorage kan onbeschikbaar zijn (privénavigatie e.d.) - gewoon zonder cache verder
+    }
+
+    const ontbrekendeIds = ids.filter((id) => !(id in gecachet))
+    if (ontbrekendeIds.length === 0) {
+      setNamen(gecachet)
+      return
+    }
+
+    try {
+      const nieuw = await fetchKandidaatNamen(ontbrekendeIds)
+      const samengevoegd = { ...gecachet, ...nieuw }
+      setNamen(samengevoegd)
+      try {
+        sessionStorage.setItem(namenCacheSleutel(runId), JSON.stringify(samengevoegd))
+      } catch {
+        // opslag kan falen (quota/privénavigatie) - niet fataal, dan wordt gewoon opnieuw opgehaald een volgende keer
+      }
+    } catch {
+      setNamen(gecachet) // toon in elk geval wat we al hadden
     }
   }
 
@@ -195,7 +227,7 @@ export default function KandidaatMatcher() {
     try {
       const data = await fetchResultaten(runId)
       setResultaten(data)
-      await laadNamen(data)
+      await laadNamen(runId, data)
     } catch (err) {
       setFout(err.message)
     }
@@ -261,7 +293,7 @@ export default function KandidaatMatcher() {
     fetchResultaten(eerdereRun.id)
       .then((data) => {
         setResultaten(data)
-        laadNamen(data)
+        laadNamen(eerdereRun.id, data)
       })
       .catch((err) => setFout(err.message))
   }
