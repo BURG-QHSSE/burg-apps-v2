@@ -47,8 +47,7 @@ function scoreBadgeClass(score) {
  * week onzichtbaar voor de koppeling met Bullhorn (bevestigd met Bullhorn
  * support) — een notitie is wél meteen zichtbaar.
  *
- * Tijdelijk admin-only (zie toolRegistry.js) — nog openstaande AVG-/
- * Bullhorn-rechten-vragen bij Sam voordat dit breder uitrolt.
+ * Open voor admin/manager/hr (zie toolRegistry.js minimumRole: 'manager').
  *
  * process-batch mag maar ~150s per aanroep duren (Supabase's wall-clock-
  * limiet, zie schema.sql), dus deze pagina roept 'm herhaaldelijk aan

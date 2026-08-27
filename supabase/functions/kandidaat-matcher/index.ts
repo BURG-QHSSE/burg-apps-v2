@@ -25,11 +25,10 @@
 //     matching_resultaten-schema-comment: bewust geen PII in de database).
 //
 // Zelfde beveiligingspatroon als admin-users/index.ts: eerst de JWT van de
-// aanroeper verifiëren en checken dat profiles.role = 'admin' is (via een
-// client die alleen de anon-key + die JWT gebruikt, dus onder normale RLS),
-// pas dan verdergaan met de service-role-client. Deze tool is tijdelijk
-// admin-only (zie toolRegistry.js) — nog openstaande AVG-/Bullhorn-rechten-
-// vragen bij Sam voordat dit breder uitrolt.
+// aanroeper verifiëren en checken dat profiles.role admin/manager/hr is (via
+// een client die alleen de anon-key + die JWT gebruikt, dus onder normale
+// RLS), pas dan verdergaan met de service-role-client. Zelfde rol-drempel
+// als toolRegistry.js's minimumRole: 'manager' voor deze tool.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -146,8 +145,11 @@ Deno.serve(async (req) => {
       .eq('id', userData.user.id)
       .single()
 
-    if (profileError || callerProfile?.role !== 'admin') {
-      return jsonResponse({ error: 'Alleen admins mogen deze actie uitvoeren' }, 403)
+    // Zelfde rol-drempel als toolRegistry.js's minimumRole: 'manager' voor
+    // deze tool (manager/hr zitten op hetzelfde niveau in ROLE_HIERARCHY,
+    // dus krijgen hier bewust allebei toegang, net als in de UI).
+    if (profileError || !['admin', 'manager', 'hr'].includes(callerProfile?.role)) {
+      return jsonResponse({ error: 'Onvoldoende rechten om deze actie uit te voeren' }, 403)
     }
 
     const admin = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!)

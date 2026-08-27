@@ -1541,7 +1541,7 @@ revoke execute on function cleanup_notificaties_gpb_delete() from public, anon, 
 grant execute on function maak_gpb_definitief(uuid) to authenticated;
 
 -- ============================================
--- KANDIDAAT MATCHER (admin-only tool) — matching_runs + matching_resultaten
+-- KANDIDAAT MATCHER (admin/manager/hr) — matching_runs + matching_resultaten
 -- + bullhorn_session_cache.
 --
 -- Doel: een consultant zet in Bullhorn zelf een bulk-Notitie (actie
@@ -1559,10 +1559,12 @@ grant execute on function maak_gpb_definitief(uuid) to authenticated;
 -- heette hiervoor tearsheet_id/tearsheet_naam - op 2026-08-26 hernoemd naar
 -- vacature_id/vacature_naam toen op de Notitie-aanpak werd overgestapt.
 --
--- Tijdelijk uitsluitend voor admin (zie toolRegistry.js) — er lopen nog
--- open AVG-/Bullhorn-rechten-vragen bij Sam voordat dit breder uitrolt.
--- Daarom hier bewust dezelfde simpele "admin mag alles"-RLS als
--- dev_projects, geen fijnmaziger rolonderscheid.
+-- Sinds 2026-08-27 open voor admin/manager/hr (zie toolRegistry.js
+-- minimumRole: 'manager' - manager en hr zitten op hetzelfde niveau in
+-- ROLE_HIERARCHY, dus krijgen hier bewust allebei toegang). Voorheen
+-- admin-only in afwachting van een AVG-/Bullhorn-rechten-gesprek met Sam
+-- over bredere uitrol - dat gesprek is (nog) niet gevoerd, deze uitbreiding
+-- was een expliciete keuze van de gebruiker om daar niet langer op te wachten.
 --
 -- Een Edge Function-aanroep mag maar ~150s duren (Supabase's wall-clock-
 -- limiet per invocatie, geldt op zowel Free als Pro voor een normale
@@ -1590,10 +1592,10 @@ comment on table matching_runs is 'Eén matching-run = één vacature + vacature
 
 alter table matching_runs enable row level security;
 
-create policy "admin volledige toegang matching_runs"
+create policy "admin manager hr toegang matching_runs"
   on matching_runs for all
-  using (my_role() = 'admin')
-  with check (my_role() = 'admin');
+  using (my_role() in ('admin','manager','hr'))
+  with check (my_role() in ('admin','manager','hr'));
 
 create table matching_resultaten (
   id uuid default gen_random_uuid() primary key,
@@ -1617,10 +1619,10 @@ create index matching_resultaten_run_status_idx on matching_resultaten (run_id, 
 
 alter table matching_resultaten enable row level security;
 
-create policy "admin volledige toegang matching_resultaten"
+create policy "admin manager hr toegang matching_resultaten"
   on matching_resultaten for all
-  using (my_role() = 'admin')
-  with check (my_role() = 'admin');
+  using (my_role() in ('admin','manager','hr'))
+  with check (my_role() in ('admin','manager','hr'));
 
 -- Bullhorn-sessies leven ~20 minuten; een run bestaat uit meerdere losse
 -- process-batch-aanroepen (elk een eigen Edge Function-invocatie zonder

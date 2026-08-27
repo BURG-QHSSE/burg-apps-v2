@@ -113,12 +113,12 @@ Er is een **tweede, ouder Supabase-project** (`ziwqshuabwcthqjspuso`, zie `VITE_
 
 ## 8. Bullhorn & Anthropic — Kandidaat Matcher-tool
 
-**Wat:** de Kandidaat Matcher-tool (admin-only, `src/pages/tools/KandidaatMatcher.jsx`) haalt de kandidaten van een door de consultant gekozen Bullhorn-tearsheet op, anonimiseert per kandidaat het CV/intake-veld (`kandidaat-matcher` Edge Function, `anonimiseren.ts` — namen, e-mail, telefoon, LinkedIn en postcode gaan nooit naar Claude) en laat Claude scoren tegen de vacaturetekst.
+**Wat:** de Kandidaat Matcher-tool (`src/pages/tools/KandidaatMatcher.jsx`) haalt de kandidaten van een bulk-Notitie (actie "Matching", tekst = het vacature-ID) op die de consultant zelf in Bullhorn zet, anonimiseert per kandidaat het CV/intake-veld (`kandidaat-matcher` Edge Function, `anonimiseren.ts` — namen, e-mail, telefoon, LinkedIn en postcode gaan nooit naar Claude) en laat Claude scoren tegen de vacaturetekst. (Gebruikte tot 2026-08-26 een Bullhorn-tearsheet i.p.v. een Notitie - omgezet omdat een nieuwe tearsheet tot ~1 week onzichtbaar bleek voor het REST-service-account.)
 
 - Bullhorn-credentials: hetzelfde service-account (`Burgn8n.api`) dat ook elders bij BURG in gebruik is, als Supabase-secrets gezet op 2026-08-21.
 - Anthropic-key: bewust dezelfde key als de losstaande `kandidaat-ranker`-Python-tool (`maxvl1009/kandidaat-ranker`) al gebruikte — geen aparte Anthropic Console-account aangemaakt voor deze tool.
 - **Nog te doen:** de "klik door naar Bullhorn"-link per kandidaat gebruikt het patroon `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id={id}` — controleren of dit voor alle gebruikers werkt (Bullhorn-tenants kunnen per cluster verschillen).
-- **Nog te doen:** tijdelijk uitsluitend `minimumRole: 'admin'` (zie `src/lib/toolRegistry.js`) — er lopen nog open AVG-/Bullhorn-rechten-vragen bij Sam voordat dit breder naar alle consultants uitrolt.
+- Sinds 2026-08-27 open voor `minimumRole: 'manager'` (zie `src/lib/toolRegistry.js` — manager/hr zitten op hetzelfde niveau, dus allebei toegang; nog niet voor gewone `user`-rol). Het AVG-/Bullhorn-rechten-gesprek met Sam over nog bredere uitrol is niet gevoerd - deze uitbreiding was een expliciete keuze van de gebruiker om daar niet langer op te wachten.
 - **Nog te doen:** de postcode-anonimisering (nieuw t.o.v. de oude Python-tool) is NIET gevalideerd tegen echte Bullhorn-CV's (geen live toegang tijdens het bouwen) — de eerste live runs extra goed controleren op gemiste of onterecht weggehaalde postcodes.
 
 ## Als iemand anders dit project weer wil oppakken (met of zonder Claude Code)
