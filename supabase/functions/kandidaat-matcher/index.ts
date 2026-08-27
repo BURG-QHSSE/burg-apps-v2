@@ -226,17 +226,19 @@ Deno.serve(async (req) => {
         return jsonResponse({ namen: {} })
       }
 
-      let session = await getBullhornSession(admin)
+      // Parallel i.p.v. sequentieel - bij een grote run (honderden
+      // kandidaten) duurde dit anders minutenlang en liep het risico tegen
+      // de ~150s Edge Function-limiet aan te lopen.
+      const bullhornSessieVoorNamen = await getBullhornSession(admin)
       const namen: Record<number, string> = {}
-      for (const id of bullhornIds) {
+      await mapMetLimiet(bullhornIds, BULLHORN_CONCURRENCY, async (id: number) => {
         try {
-          const result = await getCandidateNaam(admin, session, id)
-          session = result.session
+          const result = await getCandidateNaam(admin, bullhornSessieVoorNamen, id)
           namen[id] = result.naam
         } catch (err) {
           console.error(`[kandidaat-matcher] Naam ophalen voor kandidaat ${id} mislukt:`, err)
         }
-      }
+      })
       return jsonResponse({ namen })
     }
 
