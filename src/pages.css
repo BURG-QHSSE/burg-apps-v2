@@ -3442,18 +3442,21 @@ a.tool-card:hover .tool-card-hint .arrow {
   min-width: 180px;
 }
 
-.matcher-filter-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--inkt-60);
-  margin-bottom: var(--space-1);
+.matcher-filter-veld {
+  position: relative;
 }
 
-.matcher-filter-opties {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.matcher-filter-knop {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--inkt);
+  background: var(--steen);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
 .matcher-filter-optie {

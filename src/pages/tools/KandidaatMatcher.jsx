@@ -84,6 +84,25 @@ export default function KandidaatMatcher() {
   const [eerdereRuns, setEerdereRuns] = useState([])
   const gestopt = useRef(false)
 
+  // Welke van de drie filter-dropdowns openstaat (null = geen).
+  const [openFilter, setOpenFilter] = useState(null)
+  const statusVeldRef = useRef(null)
+  const salarisVeldRef = useRef(null)
+  const uurtariefVeldRef = useRef(null)
+
+  // Sluit de openstaande filter-dropdown bij een klik erbuiten.
+  useEffect(() => {
+    if (!openFilter) return undefined
+    function handleClickBuiten(e) {
+      const ref = { status: statusVeldRef, salaris: salarisVeldRef, uurtarief: uurtariefVeldRef }[openFilter]
+      if (ref?.current && !ref.current.contains(e.target)) {
+        setOpenFilter(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickBuiten)
+    return () => document.removeEventListener('mousedown', handleClickBuiten)
+  }, [openFilter])
+
   const laadEerdereRuns = useCallback(() => {
     fetchMijnRuns().then(setEerdereRuns).catch(() => {})
   }, [])
@@ -246,6 +265,13 @@ export default function KandidaatMatcher() {
     setFilter((huidig) => (huidig.includes(waarde) ? huidig.filter((w) => w !== waarde) : [...huidig, waarde]))
   }
 
+  /** Samenvatting voor de dropdown-knop, bv. "Status: Alle" / "Status: Actief" / "Status: 3 geselecteerd". */
+  function filterSamenvatting(gekozen, label) {
+    if (gekozen.length === 0) return `${label}: Alle`
+    if (gekozen.length === 1) return `${label}: ${gekozen[0]}`
+    return `${label}: ${gekozen.length} geselecteerd`
+  }
+
   useEffect(() => () => {
     gestopt.current = true
   }, [])
@@ -373,50 +399,76 @@ export default function KandidaatMatcher() {
 
             {resultaten.length > 0 && (
               <div className="matcher-filters">
-                <div className="field">
-                  <span className="matcher-filter-label">Status</span>
-                  <div className="matcher-filter-opties">
-                    {uniekeWaarden(resultaten, 'bullhorn_status').map((w) => (
-                      <label key={w} className="matcher-filter-optie">
-                        <input
-                          type="checkbox"
-                          checked={statusFilter.includes(w)}
-                          onChange={() => toggleFilterWaarde(setStatusFilter, w)}
-                        />
-                        {w}
-                      </label>
-                    ))}
-                  </div>
+                <div className="field matcher-filter-veld" ref={statusVeldRef}>
+                  <button
+                    type="button"
+                    className="matcher-filter-knop"
+                    onClick={() => setOpenFilter(openFilter === 'status' ? null : 'status')}
+                  >
+                    {filterSamenvatting(statusFilter, 'Status')}
+                  </button>
+                  {openFilter === 'status' && (
+                    <div className="matcher-dropdown">
+                      {uniekeWaarden(resultaten, 'bullhorn_status').map((w) => (
+                        <label key={w} className="matcher-dropdown-item matcher-filter-optie">
+                          <input
+                            type="checkbox"
+                            checked={statusFilter.includes(w)}
+                            onChange={() => toggleFilterWaarde(setStatusFilter, w)}
+                          />
+                          {w}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="field">
-                  <span className="matcher-filter-label">Salaris range</span>
-                  <div className="matcher-filter-opties">
-                    {uniekeWaarden(resultaten, 'salaris_band').map((w) => (
-                      <label key={w} className="matcher-filter-optie">
-                        <input
-                          type="checkbox"
-                          checked={salarisFilter.includes(w)}
-                          onChange={() => toggleFilterWaarde(setSalarisFilter, w)}
-                        />
-                        {w}
-                      </label>
-                    ))}
-                  </div>
+
+                <div className="field matcher-filter-veld" ref={salarisVeldRef}>
+                  <button
+                    type="button"
+                    className="matcher-filter-knop"
+                    onClick={() => setOpenFilter(openFilter === 'salaris' ? null : 'salaris')}
+                  >
+                    {filterSamenvatting(salarisFilter, 'Salaris range')}
+                  </button>
+                  {openFilter === 'salaris' && (
+                    <div className="matcher-dropdown">
+                      {uniekeWaarden(resultaten, 'salaris_band').map((w) => (
+                        <label key={w} className="matcher-dropdown-item matcher-filter-optie">
+                          <input
+                            type="checkbox"
+                            checked={salarisFilter.includes(w)}
+                            onChange={() => toggleFilterWaarde(setSalarisFilter, w)}
+                          />
+                          {w}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="field">
-                  <span className="matcher-filter-label">Uurtarief range</span>
-                  <div className="matcher-filter-opties">
-                    {uniekeWaarden(resultaten, 'uurtarief_band').map((w) => (
-                      <label key={w} className="matcher-filter-optie">
-                        <input
-                          type="checkbox"
-                          checked={uurtariefFilter.includes(w)}
-                          onChange={() => toggleFilterWaarde(setUurtariefFilter, w)}
-                        />
-                        {w}
-                      </label>
-                    ))}
-                  </div>
+
+                <div className="field matcher-filter-veld" ref={uurtariefVeldRef}>
+                  <button
+                    type="button"
+                    className="matcher-filter-knop"
+                    onClick={() => setOpenFilter(openFilter === 'uurtarief' ? null : 'uurtarief')}
+                  >
+                    {filterSamenvatting(uurtariefFilter, 'Uurtarief range')}
+                  </button>
+                  {openFilter === 'uurtarief' && (
+                    <div className="matcher-dropdown">
+                      {uniekeWaarden(resultaten, 'uurtarief_band').map((w) => (
+                        <label key={w} className="matcher-dropdown-item matcher-filter-optie">
+                          <input
+                            type="checkbox"
+                            checked={uurtariefFilter.includes(w)}
+                            onChange={() => toggleFilterWaarde(setUurtariefFilter, w)}
+                          />
+                          {w}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
