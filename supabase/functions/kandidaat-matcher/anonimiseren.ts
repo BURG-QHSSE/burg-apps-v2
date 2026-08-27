@@ -183,6 +183,19 @@ function normaliseerPdfArtefacten(tekst: string): string {
   return tekst.replace(/Â /g, ' ').replace(/Â(?=\d)/g, ' ')
 }
 
+// vervangKandidaatNaam vervangt alleen exacte varianten van het formele
+// Bullhorn firstName/lastName. Een CV dat de kandidaat aanspreekt met een
+// afwijkende roepnaam (bv. "Chris" voor "Christiaan") wordt daardoor gemist -
+// gevonden na een echte lek in productie (zie CLAUDE.md-geschiedenis). Het
+// CV-sjabloon vult die roepnaam vaak expliciet in als "Roepnaam : X", dus die
+// halen we er hier apart uit en anonimiseren we mee.
+const ROEPNAAM_PATROON = /\broepnaam\s*:?\s*([\p{L}][\p{L}'-]*)/iu
+
+function vindRoepnaam(tekst: string): string | null {
+  const match = ROEPNAAM_PATROON.exec(tekst)
+  return match ? match[1] : null
+}
+
 const HTML_ENTITIES: Record<string, string> = {
   '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ',
 }
@@ -208,7 +221,9 @@ export function anonimiseerVrijeTekst(tekst: string, kandidaatLabel: string, kan
   if (!tekst || !tekst.trim()) return tekst
 
   let resultaat = normaliseerPdfArtefacten(tekst)
-  resultaat = vervangKandidaatNaam(resultaat, kandidaatNaam, kandidaatLabel)
+  const roepnaam = vindRoepnaam(resultaat)
+  const naamMetRoepnaam = roepnaam ? `${kandidaatNaam} ${roepnaam}`.trim() : kandidaatNaam
+  resultaat = vervangKandidaatNaam(resultaat, naamMetRoepnaam, kandidaatLabel)
   resultaat = vervangInitialen(resultaat, kandidaatNaam, kandidaatLabel)
   resultaat = resultaat.replace(EMAIL_PATROON, '[EMAIL]')
   resultaat = resultaat.replace(TELEFOON_PATROON, '[TELEFOONNUMMER]')

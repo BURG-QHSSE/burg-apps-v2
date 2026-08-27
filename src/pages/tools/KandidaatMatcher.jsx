@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   startRun,
   processBatch,
@@ -24,6 +24,17 @@ const STATUS_LABELS = {
 /** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. */
 function uniekeWaarden(resultaten, veld) {
   return Array.from(new Set(resultaten.map((r) => r[veld]).filter((w) => w && w !== 'Onbekend'))).sort()
+}
+
+/**
+ * Vervangt "de kandidaat" en het anonimiseringslabel (KANDIDAAT_XXXXXX) door
+ * de echte naam, puur voor weergave in de browser - de naam gaat nooit naar
+ * Claude (zie claude.ts/anonimiseren.ts), dit raakt alleen hoe de al
+ * gegenereerde onderbouwing aan de consultant getoond wordt.
+ */
+function personaliseerOnderbouwing(tekst, naam) {
+  if (!tekst || !naam) return tekst
+  return tekst.replace(/KANDIDAAT_\d{6}/gi, naam).replace(/\bde kandidaat\b/gi, naam)
 }
 
 function scoreBadgeClass(score) {
@@ -429,7 +440,14 @@ export default function KandidaatMatcher() {
   return (
     <div className="page">
       <header className="topbar">
-        <h1>Kandidaat Matcher</h1>
+        <div>
+          <h1>Kandidaat Matcher</h1>
+        </div>
+        <div className="topbar-actions">
+          <Link to="/" className="btn btn-secondary">
+            Terug naar dashboard
+          </Link>
+        </div>
       </header>
       <main className="page-content">
         <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
@@ -647,7 +665,11 @@ export default function KandidaatMatcher() {
                       {[r.bullhorn_status, r.salaris_band, r.uurtarief_band].filter(Boolean).join(' — ')}
                     </p>
                   )}
-                  {r.onderbouwing && <p className="matcher-onderbouwing">{r.onderbouwing}</p>}
+                  {r.onderbouwing && (
+                    <p className="matcher-onderbouwing">
+                      {personaliseerOnderbouwing(r.onderbouwing, namen[r.bullhorn_id])}
+                    </p>
+                  )}
                   {r.status === 'fout' && r.foutmelding && <p className="form-error-inline">{r.foutmelding}</p>}
                   <a
                     href={BULLHORN_CANDIDATE_URL(r.bullhorn_id)}
