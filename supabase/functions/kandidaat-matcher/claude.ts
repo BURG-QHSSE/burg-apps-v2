@@ -60,6 +60,9 @@ export const QHSSE_SYSTEEM_PROMPT =
   'functietitel, eisen en kenmerken). Interpreteer beide vormen op dezelfde manier: haal er de functie-eisen, ' +
   'het gewenste niveau, benodigde certificeringen en relevante achtergrond uit, ongeacht hoe de tekst is ' +
   'opgesteld of gestructureerd.\n\n' +
+  'Het kandidaatprofiel is geanonimiseerd: de naam van de kandidaat is overal vervangen door een label in het ' +
+  'formaat "KANDIDAAT_XXXXXX". Gebruik dat label NOOIT in je onderbouwing — schrijf altijd "de kandidaat" (of ' +
+  '"hij"/"zij"/"deze persoon" als dat prettiger leest), ook als het label als onderwerp van een zin zou passen.\n\n' +
   'Het CV-veld van de kandidaat kan een sectie "INTAKE DATA" bevatten naast de CV-inhoud zelf. Als die sectie ' +
   'aanwezig is en inhoud heeft, neem die nadrukkelijk mee in je beoordeling, intake-notities kunnen relevante ' +
   'context geven (zoals beschikbaarheid, voorkeuren, of aandachtspunten van de consultant) die niet in een ' +
