@@ -278,7 +278,11 @@ export async function getMatchingKandidatenViaNotitie(
 
     for (const note of rows) {
       const actie = String(note.action ?? '').trim().toLowerCase()
-      const comments = String(note.comments ?? '').trim()
+      // Bullhorn plakt zelf een trailing <br> achter de opgeslagen comments-
+      // tekst (zelfde HTML-mangling als bij de intake-datummatch) - zonder
+      // deze normalisatie faalt de exacte match altijd en levert de note-
+      // lookup 0 kandidaten op, ondanks correct aangemaakte notities.
+      const comments = String(note.comments ?? '').replace(/<br\s*\/?>/gi, '').trim()
       if (actie !== 'matching' || comments !== vacatureIdStr) continue
       noteIds.push(note.id)
       const kandidatenVeld = note.candidates
