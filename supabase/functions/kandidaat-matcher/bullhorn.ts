@@ -241,8 +241,10 @@ export async function getVacatureNaam(
  * sync_candidates.py wordt bewust NIET server-side op action gefilterd —
  * dat filter bleek op dit Bullhorn-instance onbetrouwbaar/leeg ondanks
  * aanwezige data), en filtert client-side op action="Matching" + een
- * comments-veld dat exact overeenkomt met het opgegeven vacature-ID (geen
- * fuzzy tekstmatch — de consultant zet alleen het kale ID in de notitie).
+ * comments-veld waarin het opgegeven vacature-ID als vrijstaand getal
+ * voorkomt (na het strippen van Bullhorn's eigen HTML-opmaak in dat veld) -
+ * geen exacte match, want Bullhorn plakt zelf opmaak (bv. een trailing <br>)
+ * in de opgeslagen tekst, dus daar wél op matchen is te fragiel.
  *
  * Een pagina-limiet van 5x200=1000 is een veiligheidsgrens: deze notities
  * worden direct na gebruik verwijderd (zie verwijderMatchingNotities), dus
@@ -278,12 +280,19 @@ export async function getMatchingKandidatenViaNotitie(
 
     for (const note of rows) {
       const actie = String(note.action ?? '').trim().toLowerCase()
-      // Bullhorn plakt zelf een trailing <br> achter de opgeslagen comments-
-      // tekst (zelfde HTML-mangling als bij de intake-datummatch) - zonder
-      // deze normalisatie faalt de exacte match altijd en levert de note-
-      // lookup 0 kandidaten op, ondanks correct aangemaakte notities.
-      const comments = String(note.comments ?? '').replace(/<br\s*\/?>/gi, '').trim()
-      if (actie !== 'matching' || comments !== vacatureIdStr) continue
+      if (actie !== 'matching') continue
+      // Bullhorn plakt zelf HTML-opmaak in de opgeslagen comments-tekst (bv.
+      // een trailing <br> - zelfde mangling als bij de intake-datummatch),
+      // dus een exacte string-match is te fragiel en faalde hierdoor eerder
+      // op een volledig correct aangemaakte notitie. In plaats daarvan: alle
+      // tags/entities eruit strippen en het vacature-ID als vrijstaand getal
+      // zoeken (woordgrenzen voorkomen dat "165" toevallig matcht binnen
+      // "22165" of omgekeerd).
+      const platteComments = String(note.comments ?? '')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+      const idGevonden = new RegExp(`\\b${vacatureIdStr}\\b`).test(platteComments)
+      if (!idGevonden) continue
       noteIds.push(note.id)
       const kandidatenVeld = note.candidates
       const kandidatenLijst = Array.isArray(kandidatenVeld) ? kandidatenVeld : (kandidatenVeld?.data ?? [])
