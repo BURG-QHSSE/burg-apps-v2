@@ -450,7 +450,6 @@ export default function KandidaatMatcher() {
         </div>
       </header>
       <main className="page-content">
-        <p className="form-error"><strong>In concept, nog niet testen.</strong></p>
         <p className="page-intro">
           Zet in Bullhorn een bulk-Notitie (actie "Matching", tekst = het vacature-ID) op de kandidaten van je boolean
           search, typ hieronder datzelfde vacature-ID en plak de vacaturetekst. De matcher scoort daarna elke kandidaat op
