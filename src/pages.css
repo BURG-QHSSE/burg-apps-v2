@@ -2101,6 +2101,14 @@ a.tool-card:hover .tool-card-hint .arrow {
   margin-top: var(--space-4);
 }
 
+.mo-presence-overig {
+  margin-top: var(--space-3);
+}
+
+.mo-presence-overig .mo-presence-grid {
+  margin-top: var(--space-3);
+}
+
 /* ---------- Tab switcher ---------- */
 
 .mo-tab-bar {
