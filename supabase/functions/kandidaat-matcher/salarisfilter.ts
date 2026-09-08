@@ -41,6 +41,16 @@ function parseBedrag(ruw: string): number | null {
   return Number.isFinite(bedrag) ? bedrag : null
 }
 
+// Een bedrag zonder expliciete "per maand"/"per jaar"-eenheid dat te hoog is om
+// een maandsalaris te zijn (niemand vult "60.000" in als bruto per máánd) is
+// vrijwel altijd een jaarsalaris dat zonder eenheid is ingevuld - reken dat
+// dan alsnog om, in plaats van het als absurd hoog maandbedrag te bandbreedtes.
+const MAX_PLAUSIBEL_MAANDBEDRAG = 15000
+
+function naarMaandbedragAlsPlausibel(bedrag: number): number {
+  return bedrag > MAX_PLAUSIBEL_MAANDBEDRAG ? bedrag / (12 * 1.08) : bedrag
+}
+
 /** Zet een ruwe waarde (uit een structureel Bullhorn-veld, bv. customText22) om naar een vaste bandbreedte. */
 export function berekenSalarisbandbreedte(waarde: string | null | undefined): string {
   if (!waarde || !waarde.trim()) return 'Onbekend'
@@ -82,13 +92,13 @@ export function berekenSalarisbandbreedte(waarde: string | null | undefined): st
   if (m) {
     const lo = parseBedrag(m[1])
     const hi = parseBedrag(m[2])
-    if (lo !== null && hi !== null) return bedragNaarBand((lo + hi) / 2)
+    if (lo !== null && hi !== null) return bedragNaarBand(naarMaandbedragAlsPlausibel((lo + hi) / 2))
   }
 
   m = waarde.match(/[€]?\s*(\d[\d.,]+)/)
   if (m) {
     const bedrag = parseBedrag(m[1])
-    if (bedrag !== null && bedrag > 0) return bedragNaarBand(bedrag)
+    if (bedrag !== null && bedrag > 0) return bedragNaarBand(naarMaandbedragAlsPlausibel(bedrag))
   }
 
   return 'Onbekend'
@@ -120,9 +130,9 @@ function extractUurtariefUitTekst(tekst: string): string | null {
   return m ? `€${m[1]}/uur` : null
 }
 
-/** Pakt alleen het stuk na de "=== INTAKE DATA ===" (of "=== INTAKE ===")-marker uit description. */
+/** Pakt alleen het stuk na de "=== INTAKE DATA (epoch-ms) ===" (of oudere "=== INTAKE ===")-marker uit description. */
 function intakeSectie(description: string): string | null {
-  const m = description.match(/={2,}\s*INTAKE(?:\s+DATA)?\s*={2,}([\s\S]*)$/i)
+  const m = description.match(/={2,}\s*INTAKE(?:\s+DATA)?(?:\s*\(\d+\))?\s*={2,}([\s\S]*)$/i)
   return m ? m[1] : null
 }
 
