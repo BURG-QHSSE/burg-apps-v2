@@ -1702,3 +1702,225 @@ $$;
 
 revoke execute on function matching_verhoog_kosten(uuid, numeric) from public, anon, authenticated;
 grant execute on function matching_verhoog_kosten(uuid, numeric) to service_role;
+
+-- ============================================
+-- Call Insights: automatisch gedetecteerde Bullhorn-veldwijzigingen uit
+-- 3CX-gesprekssamenvattingen
+--
+-- Databron `recordings`/`recording_participant` wordt (net als
+-- `cdroutput`/`cdrbilling` bij Bel Overzicht) buiten dit bestand om gevuld —
+-- 3CX's eigen "Data Connectors"-feature schrijft die elke 15 minuten
+-- rechtstreeks naar deze database (summary/transcription per gesprek, via
+-- Grok-transcriptie ingesteld in 3CX zelf). Die tabellen horen niet bij het
+-- applicatieschema en worden hier bewust niet gedocumenteerd.
+-- ============================================
+
+-- Eén rij per verwerkte recording (ongeacht of dat een kandidaat-match of
+-- suggesties opleverde) — voorkomt dat de cron dezelfde recording telkens
+-- opnieuw oppakt en opnieuw Claude-kosten maakt. skipped_reason
+-- 'meerdere_kandidaten' + kandidaat_kandidaten: het externe nummer matchte
+-- meer dan één kandidaat in de telefoon-index — i.p.v. gokken laat de UI de
+-- consultant zelf kiezen (zie resolveCandidateMatch-actie), waarna Claude
+-- alsnog draait voor de gekozen kandidaat.
+create table call_insights_processed (
+  recording_url text primary key,
+  processed_at timestamptz not null default now(),
+  bullhorn_candidate_id bigint,
+  user_id uuid references profiles(id),
+  skipped_reason text,
+  kandidaat_kandidaten bigint[],
+  call_started_at timestamptz
+);
+
+comment on table call_insights_processed is 'Bijhoudt welke recordings (uit de 3CX-staging-tabel recordings) al door de call-insights Edge Function verwerkt zijn, ook als dat geen kandidaat-match of suggesties opleverde (skipped_reason). kandidaat_kandidaten is alleen gevuld bij skipped_reason=''meerdere_kandidaten'' (ambigue telefoonnummer-match, wacht op keuze van de consultant). Select is toegestaan voor de eigen rijen (auth.uid() = user_id) zodat de UI openstaande keuzes kan tonen; alle schrijfacties lopen via de Edge Function (service-role).';
+
+alter table call_insights_processed enable row level security;
+
+create policy "consultant leest eigen verwerkte recordings"
+  on call_insights_processed for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- MVP: Call Insights is voorlopig admin-only (zie toolRegistry.js) en een
+-- admin bekijkt daarbij de gekozen actieve consultant, niet noodzakelijk
+-- zichzelf — vandaar deze aparte admin-policy naast de eigen-rijen-policy
+-- hierboven (policies worden OR-gecombineerd).
+create policy "admin leest alle verwerkte recordings"
+  on call_insights_processed for select
+  to authenticated
+  using (my_role() = 'admin');
+
+-- Eén rij per voorgestelde veldwijziging (een gesprek kan tot 5 rijen
+-- opleveren, één per gedetecteerd veld). field_name is de letterlijke
+-- Bullhorn-veldnaam (customText22/customText11/address/employmentPreference/
+-- status) — zie call-insights Edge Function voor de vaste veldenlijst en
+-- picklist-opties.
+create table call_field_suggestions (
+  id uuid default gen_random_uuid() primary key,
+  recording_url text not null references call_insights_processed(recording_url) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  bullhorn_candidate_id bigint not null,
+  call_started_at timestamptz not null,
+  field_name text not null check (field_name in ('customText22', 'customText11', 'address', 'employmentPreference', 'status')),
+  current_value text,
+  suggested_value text not null,
+  quote text,
+  status text not null default 'pending' check (status in ('pending', 'geaccepteerd', 'afgewezen')),
+  final_value text,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+comment on table call_field_suggestions is 'Eén rij per door Claude gedetecteerde, nog te beoordelen Bullhorn-veldwijziging uit een 3CX-gesprek. user_id is de consultant die het gesprek voerde (via cx_extension_mapping), niet de kandidaat. Statuswijzigingen (accepteren/afwijzen) lopen uitsluitend via de call-insights Edge Function — die schrijft ook meteen naar Bullhorn bij accepteren — vandaar geen insert/update-policy voor authenticated, alleen select.';
+
+create index call_field_suggestions_user_status_idx on call_field_suggestions (user_id, status);
+
+alter table call_field_suggestions enable row level security;
+
+create policy "consultant leest eigen suggesties"
+  on call_field_suggestions for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- Zelfde reden als bij call_insights_processed hierboven: MVP is admin-only,
+-- admin bekijkt de gekozen actieve consultant, niet per se zichzelf.
+create policy "admin leest alle suggesties"
+  on call_field_suggestions for select
+  to authenticated
+  using (my_role() = 'admin');
+
+-- Uitsluitingslijst i.p.v. een toelatingslijst: extensies die GEEN
+-- recruitment-consultant zijn (sales, andere afdeling — bv. Sam van der
+-- Burg/Nick Jense op het burgbedrijven.nl-domein, en de sales-collega's
+-- Pim Hartman/Milan Hogervorst/Tim Perlee/Nils den Herder). Bewust zo
+-- gekozen (i.p.v. andersom alleen bekende consultant-extensies toelaten):
+-- een nieuwe consultant-collega moet automatisch meegenomen worden zonder
+-- dat iemand een toelatingslijst hoeft bij te werken — alleen uitzonderingen
+-- (sales/andere afdeling) hoeven hier expliciet toegevoegd te worden.
+create table call_insights_uitgesloten_extensies (
+  extension text primary key,
+  reden text,
+  created_at timestamptz not null default now()
+);
+
+comment on table call_insights_uitgesloten_extensies is 'Extensies die nooit meetellen voor Call Insights-matching (sales/andere afdeling, geen recruitment-consultant). Uitsluitingslijst, bewust niet een toelatingslijst — zie kolomcomment call_insights_nieuwe_recordings.';
+
+insert into call_insights_uitgesloten_extensies (extension, reden) values
+  ('103', 'burgbedrijven.nl-domein, geen QHSSE-consultant'),
+  ('104', 'burgbedrijven.nl-domein, geen QHSSE-consultant'),
+  ('302', 'sales'),
+  ('303', 'sales'),
+  ('304', 'sales'),
+  ('401', 'sales');
+
+alter table call_insights_uitgesloten_extensies enable row level security;
+
+-- Alleen admin mag de uitsluitingslijst beheren (zelfde patroon als
+-- "admin volledige toegang dev_projects") — via het AdminPanel.
+create policy "admin volledige toegang call_insights_uitgesloten_extensies"
+  on call_insights_uitgesloten_extensies for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+-- MVP-schaalbeperking: Call Insights verwerkt (en toont) voorlopig bewust
+-- maar één consultant tegelijk — niet meteen alle 10, ondanks dat de kosten
+-- daarvoor verwaarloosbaar zijn (zie sessie-overleg: backlog-kostenplaatje
+-- per consultant, allemaal < $0,50 eenmalig). Eén-rij-tabel, net als
+-- bullhorn_session_cache. NULL = niemand actief, dan verwerkt/toont Call
+-- Insights bewust niets (veilige default, geen impliciete "alle consultants"-
+-- fallback). Admin kiest/wijzigt dit via het AdminPanel.
+create table call_insights_mvp_actieve_consultant (
+  id smallint primary key default 1 check (id = 1),
+  user_id uuid references profiles(id),
+  updated_at timestamptz not null default now()
+);
+
+comment on table call_insights_mvp_actieve_consultant is 'Eén-rij MVP-instelling: welke consultant (user_id) Call Insights momenteel verwerkt/toont. NULL = niemand, dus geen verwerking. Tijdelijk, tot Call Insights breder wordt uitgerold naar alle consultants.';
+
+insert into call_insights_mvp_actieve_consultant (id, user_id) values (1, null);
+
+alter table call_insights_mvp_actieve_consultant enable row level security;
+
+create policy "admin volledige toegang call_insights_mvp_actieve_consultant"
+  on call_insights_mvp_actieve_consultant for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+-- Vindt nieuwe, nog niet verwerkte recordings + bepaalt welke deelnemer de
+-- interne consultant is (via cx_extension_mapping) en welke het externe
+-- nummer is. Uitsluitend aangeroepen door de call-insights Edge Function via
+-- de service-role-client (net als matching_pak_batch), vandaar de revoke
+-- hieronder i.p.v. een grant aan authenticated. `distinct on` omdat een
+-- recording in theorie meerdere externe deelnemers kan hebben
+-- (conferentiegesprek) — we nemen dan bewust maar één rij per recording.
+create or replace function call_insights_nieuwe_recordings(p_limiet int)
+returns table (
+  recording_url text,
+  start_time timestamptz,
+  summary text,
+  user_id uuid,
+  extern_nummer text
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select sub.recording_url, sub.start_time, sub.summary, sub.user_id, sub.extern_nummer
+  from (
+    select distinct on (r.recording_url)
+      r.recording_url,
+      r.start_time,
+      r.summary,
+      m.user_id,
+      extern.caller_number as extern_nummer
+    from recordings r
+    join recording_participant intern
+      on intern.fk_recording_url = r.recording_url
+    join cx_extension_mapping m
+      on m.extension = intern.dn
+    join recording_participant extern
+      on extern.fk_recording_url = r.recording_url
+      and extern.cdr_participant_id is distinct from intern.cdr_participant_id
+    where r.summary is not null
+      and length(r.summary) > 20
+      and intern.dn not in (select extension from call_insights_uitgesloten_extensies)
+      and m.user_id = (select user_id from call_insights_mvp_actieve_consultant where id = 1)
+      and not exists (
+        select 1 from call_insights_processed p where p.recording_url = r.recording_url
+      )
+    order by r.recording_url, r.start_time
+  ) sub
+  -- Chronologisch (oudste eerst) i.p.v. de r.recording_url-volgorde die de
+  -- distinct on hierboven vereist - anders raakt de batch-verwerking
+  -- toevallig geclusterd per extensie/consultant (recording_url begint met
+  -- de extensie), i.p.v. een representatieve mix over alle consultants.
+  order by sub.start_time
+  limit p_limiet;
+$$;
+
+revoke execute on function call_insights_nieuwe_recordings(int) from public, anon, authenticated;
+grant execute on function call_insights_nieuwe_recordings(int) to service_role;
+
+-- Eigen genormaliseerde telefoonnummer-index van Bullhorn-kandidaten, om de
+-- telefoon->kandidaat-matching in call-insights te doen. NIET via een live
+-- Bullhorn search/Candidate-aanroep per gesprek: bleek tijdens bouwen dat
+-- phone/phone2/phone3 in deze Bullhorn-instance exact-match (geen wildcards)
+-- geïndexeerd zijn, en de opgeslagen waarden zelf rommelig zijn (bv. spaties
+-- tussen elk cijfer) - een live substring/wildcard-zoekopdracht werkt daardoor
+-- niet betrouwbaar. In plaats daarvan wordt deze tabel periodiek (dagelijkse
+-- cron) volledig ververst vanuit een paginated bulk-fetch van alle
+-- kandidaten (id,phone,phone2,phone3,workPhone), zelf genormaliseerd
+-- (laatste 9 cijfers) — zie call-insights/phoneIndex.ts.
+create table bullhorn_candidate_phone_index (
+  normalized_phone text not null,
+  bullhorn_candidate_id bigint not null,
+  updated_at timestamptz not null default now(),
+  primary key (normalized_phone, bullhorn_candidate_id)
+);
+
+comment on table bullhorn_candidate_phone_index is 'Genormaliseerde (laatste 9 cijfers) telefoonnummer->kandidaat-index, periodiek volledig herbouwd door call-insights (actie refreshPhoneIndex). Eén normalized_phone kan naar meerdere kandidaten wijzen (gedeeld nummer) - call-insights behandelt dat als ambigu en slaat de match over. Alleen de Edge Function (service-role) mag hier bij.';
+
+create index bullhorn_candidate_phone_index_phone_idx on bullhorn_candidate_phone_index (normalized_phone);
+
+alter table bullhorn_candidate_phone_index enable row level security;

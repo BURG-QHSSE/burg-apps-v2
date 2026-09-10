@@ -11,6 +11,11 @@ export const TOOLS = [
   { id: 'mijn-omgeving', naam: 'Kansen Swiper', minimumRole: 'user', path: '/tools/mijn-omgeving', category: 'daily' },
   { id: 'proeftijd-tracker', naam: 'Proeftijd Tracker', minimumRole: 'user', path: '/tools/proeftijd-tracker', category: 'daily' },
   { id: 'bel-overzicht', naam: 'Bel Overzicht', minimumRole: 'user', path: '/tools/bel-overzicht', category: 'daily' },
+  // MVP: tijdelijk admin-only, zie schema.sql-comment bij
+  // call_insights_mvp_actieve_consultant — verwerking + weergave zijn
+  // bewust beperkt tot één door een admin gekozen consultant, i.p.v.
+  // meteen alle 10 consultants' gesprekken te verwerken.
+  { id: 'call-insights', naam: 'Call Insights', minimumRole: 'admin', path: '/tools/call-insights', category: 'daily' },
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
   { id: 'dev-projecten', naam: 'Ontwikkeling', minimumRole: 'admin', path: '/tools/dev-projecten', category: 'beheer' },

@@ -24,6 +24,7 @@ import MijnOmgeving from './pages/tools/MijnOmgeving'
 import ProeftijdTracker from './pages/tools/ProeftijdTracker'
 import GpbBeoordelingstool from './pages/tools/GpbBeoordelingstool'
 import BelOverzicht from './pages/tools/BelOverzicht'
+import CallInsights from './pages/tools/CallInsights'
 import Ontwikkeling from './pages/tools/Ontwikkeling'
 import KandidaatMatcher from './pages/tools/KandidaatMatcher'
 import MatcherGebruik from './pages/tools/MatcherGebruik'
@@ -43,6 +44,7 @@ const TOOL_COMPONENTS = {
   'proeftijd-tracker': ProeftijdTracker,
   'gpb-beoordelingstool': GpbBeoordelingstool,
   'bel-overzicht': BelOverzicht,
+  'call-insights': CallInsights,
   'dev-projecten': Ontwikkeling,
   'kandidaat-matcher': KandidaatMatcher,
   'matcher-gebruik': MatcherGebruik,

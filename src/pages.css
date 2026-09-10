@@ -3555,3 +3555,87 @@ a.tool-card:hover .tool-card-hint .arrow {
   border-radius: 3px;
   display: block;
 }
+
+/* ---------- Call Insights ---------- */
+
+.insights-call-card {
+  padding: var(--space-3);
+  border: 1px solid var(--lijn);
+  border-radius: var(--radius-sm);
+  background: var(--steen);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.insights-call-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.insights-kandidaat-naam {
+  font-weight: 600;
+}
+
+.insights-call-datum {
+  font-size: 12px;
+  color: var(--inkt-60);
+}
+
+.insights-veld-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.insights-veld-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.insights-veld-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.insights-veld-waardes {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.insights-waarde-oud {
+  color: var(--inkt-60);
+  text-decoration: line-through;
+}
+
+.insights-quote {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--inkt-60);
+}
+
+.insights-call-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.insights-ambigu-sectie {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--lijn);
+}
