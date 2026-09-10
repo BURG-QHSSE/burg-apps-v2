@@ -117,7 +117,10 @@ function bouwSysteemPrompt(): string {
     'ver vanuit Y") is GEEN aankondiging van een verhuizing, alleen context — sla dat over.\n' +
     '- "customText22"/"customText11" (salaris/uurtarief): alleen het bedrag dat de KANDIDAAT zelf als zijn eigen ' +
     'huidige of gewenste salaris/tarief noemt. Een bedrag dat een vacature/opdracht biedt, of dat de consultant ' +
-    'voorstelt, telt niet mee — alleen wat de kandidaat over zichzelf zegt.\n' +
+    'voorstelt, telt niet mee — alleen wat de kandidaat over zichzelf zegt. De ranges zijn inclusief aan de ' +
+    'ONDERKANT en exclusief aan de bovenkant: een bedrag dat precies op een grens ligt hoort bij de range die ' +
+    'ERMEE BEGINT, niet de range die ermee eindigt (bv. exact 5000 euro -> "5000 - 6000 EUR", NIET "4500 - 5000 ' +
+    'EUR"; exact 100 euro/uur -> "100 - 110", NIET "90 - 100").\n' +
     '- "employmentPreference" (voorkeur dienstverband): alleen de EIGEN voorkeur van de kandidaat, nooit wat een ' +
     'vacature vereist. Dit veld ondersteunt BEIDE waarden tegelijk — als de kandidaat stellig aangeeft dat hij/zij ' +
     'BEIDE vormen doet of accepteert (bv. "werkt nu zowel in loondienst als als interim", "doet sinds kort ook ' +
