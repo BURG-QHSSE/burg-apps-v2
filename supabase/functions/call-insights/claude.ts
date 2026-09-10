@@ -121,6 +121,12 @@ function bouwSysteemPrompt(): string {
     'Reken dit precies uit, schat niet op gevoel: 90.000 / 12 = 7.500 -> "7000 - 8000 EUR" (NIET "8000 - 9000 ' +
     'EUR" — dat zou fout zijn). "customText11" (uurtarief) heeft deze omrekening niet nodig, dat is al een ' +
     'uurbedrag.\n' +
+    '- "customText22" wordt ALTIJD op basis van een 40-urige werkweek ingevuld. Noemt de kandidaat een bedrag bij ' +
+    'een AFWIJKEND aantal uren (bv. "3500 euro op basis van 32 uur"), reken dat EERST exact door naar 40 uur ' +
+    'voordat je (eventueel na de jaar->maand-omrekening hierboven) een range kiest: bedrag × (40 / genoemde uren). ' +
+    'Voorbeeld: 3500 bij 32 uur -> 3500 × (40/32) = 4375 -> "4000 - 4500 EUR" (NIET "3500 - 4000 EUR" — dat is het ' +
+    'ongecorrigeerde 32-uurbedrag). Wordt er geen afwijkend aantal uren genoemd, ga dan uit van 40 uur (geen ' +
+    'omrekening nodig).\n' +
     '- "customText22"/"customText11": alleen het bedrag dat de KANDIDAAT zelf als zijn eigen huidige of gewenste ' +
     'salaris/tarief noemt. Een bedrag dat een vacature/opdracht biedt, of dat de consultant voorstelt, telt niet ' +
     'mee — alleen wat de kandidaat over zichzelf zegt. De ranges zijn inclusief aan de ONDERKANT en exclusief aan ' +
