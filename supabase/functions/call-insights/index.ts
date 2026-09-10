@@ -98,6 +98,7 @@ async function verwerkGesprekVoorKandidaat(
       current_value: VELD_NAAR_CURRENT_VALUE[s.field]?.(velden) ?? null,
       suggested_value: s.suggested_value,
       quote: s.quote,
+      call_summary: summary,
     }))
     const { error: insertError } = await admin.from('call_field_suggestions').insert(rijen)
     if (insertError) throw new Error(insertError.message)

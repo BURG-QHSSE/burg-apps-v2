@@ -3631,6 +3631,15 @@ a.tool-card:hover .tool-card-hint .arrow {
   gap: var(--space-2);
 }
 
+.insights-samenvatting {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--inkt-60);
+}
+
 .insights-ambigu-sectie {
   display: flex;
   flex-direction: column;

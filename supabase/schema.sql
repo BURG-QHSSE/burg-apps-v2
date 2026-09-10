@@ -1765,6 +1765,11 @@ create table call_field_suggestions (
   current_value text,
   suggested_value text not null,
   quote text,
+  -- Kopie van recordings.summary op het moment van detectie (niet een live
+  -- join, want recordings is een 3CX-staging-tabel buiten RLS-bereik van
+  -- gewone gebruikers) — puur zodat de consultant in de UI het volledige
+  -- gesprek kan lezen, niet alleen het korte citaat per veld.
+  call_summary text,
   status text not null default 'pending' check (status in ('pending', 'geaccepteerd', 'afgewezen')),
   final_value text,
   resolved_at timestamptz,

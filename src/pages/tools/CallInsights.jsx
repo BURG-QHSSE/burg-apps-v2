@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import bullhornLogo from '../../assets/bullhorn-icon.png'
 import {
   fetchPendingSuggesties,
   fetchAmbigueMatches,
@@ -12,9 +13,10 @@ import {
 } from '../../lib/callInsightsApi'
 
 /**
- * Call Insights — automatisch door Claude gedetecteerde Bullhorn-
- * veldwijzigingen (salaris range, uurtarief range, woonplaats, voorkeur
- * dienstverband, status) uit 3CX-gesprekssamenvattingen.
+ * Call Insights — automatisch gedetecteerde Bullhorn-veldwijzigingen
+ * (salaris range, uurtarief range, woonplaats, voorkeur dienstverband,
+ * status) uit 3CX-gesprekssamenvattingen. Welke AI hierachter zit staat
+ * bewust nergens in de UI (zelfde afspraak als Kandidaat Matcher).
  *
  * MVP: admin-only (zie toolRegistry.js) en bewust beperkt tot één actieve
  * consultant tegelijk, ingesteld in het AdminPanel (call_insights_mvp_
@@ -27,6 +29,8 @@ import {
  * Kandidaatnamen worden live opgehaald, nooit opgeslagen — zelfde AVG-
  * voorzichtigheid als Kandidaat Matcher.
  */
+
+const BULLHORN_CANDIDATE_URL = (id) => `https://cls22.bullhornstaffing.com/BullhornSTAFFING/OpenWindow.cfm?Entity=Candidate&id=${id}`
 
 const VELD_LABELS = {
   customText22: 'Salaris range',
@@ -140,6 +144,7 @@ export default function CallInsights() {
           recordingUrl: s.recording_url,
           candidateId: s.bullhorn_candidate_id,
           callStartedAt: s.call_started_at,
+          samenvatting: s.call_summary,
           velden: [],
         })
       }
@@ -194,8 +199,8 @@ export default function CallInsights() {
 
       <main className="page-content">
         <p className="page-intro">
-          Automatisch gedetecteerde wijzigingen uit gesprekken — Claude leest de 3CX-gesprekssamenvatting en vergelijkt die met wat er nu
-          in Bullhorn staat. Vink aan welke velden bijgewerkt moeten worden, corrigeer de waarde indien nodig, en klik op Bevestigen.
+          Automatisch gedetecteerde wijzigingen uit gesprekken — de 3CX-gesprekssamenvatting wordt vergeleken met wat er nu in Bullhorn
+          staat. Vink aan welke velden bijgewerkt moeten worden, corrigeer de waarde indien nodig, en klik op Bevestigen.
           {actieveConsultantNaam && (
             <>
               {' '}
@@ -262,6 +267,18 @@ export default function CallInsights() {
                 <span className="insights-kandidaat-naam">{namen[gesprek.candidateId] ?? `Kandidaat ${gesprek.candidateId}`}</span>
                 <span className="insights-call-datum">{formatDatum(gesprek.callStartedAt)}</span>
               </div>
+
+              <a
+                href={BULLHORN_CANDIDATE_URL(gesprek.candidateId)}
+                target="_blank"
+                rel="noreferrer"
+                className="matcher-bullhorn-knop"
+              >
+                <img src={bullhornLogo} alt="" className="matcher-bullhorn-logo" />
+                Bekijken in Bullhorn
+              </a>
+
+              {gesprek.samenvatting && <p className="insights-samenvatting">{gesprek.samenvatting}</p>}
 
               {gesprek.velden.map((veld) => {
                 const staat = bewerking[gesprek.recordingUrl]?.[veld.id] ?? { checked: true, waarde: veld.suggested_value }
