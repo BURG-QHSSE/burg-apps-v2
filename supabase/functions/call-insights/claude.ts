@@ -1,19 +1,24 @@
 // Claude-extractie van Bullhorn-veldwijzigingen uit een 3CX-gesprekssamen-
-// vatting. Bewust een goedkoop model (Haiku) i.p.v. het Sonnet-model van
-// kandidaat-matcher: dit is classificatie/extractie op een korte, al door
-// 3CX/Grok samengevatte tekst, geen inhoudelijke beoordeling — Haiku is hier
-// ruim toereikend en een fractie van de kosten. Geen prompt-caching nodig
-// (in tegenstelling tot kandidaat-matcher): elke aanroep heeft een uniek,
-// kort system+user-bericht, geen herbruikt gedeeld prefix om op te cachen.
+// vatting. Draaide eerst op Haiku 4.5 (goedkoper), maar bleek bij status/
+// voorkeur-dienstverband herhaaldelijk categorische uitsluitingsregels te
+// negeren zodra er een opvallend detail in de tekst stond (een concreet
+// bedrag, emotioneel geladen taal) — bv. DNC voorstellen bij het afwijzen
+// van één vacature, of "staat open voor" (expliciet uitgesloten twijfeltaal)
+// toch als wijziging lezen. Empirisch getest: Sonnet 5 hield deze regels wél
+// consistent aan op dezelfde testgevallen. Prijsverschil bij onze volumes
+// verwaarloosbaar (~$3-5/maand bij volledige uitrol i.p.v. ~$1,50-2,50) —
+// zie sessie-overleg voor het volledige kostenplaatje. Geen prompt-caching
+// nodig: elke aanroep heeft een uniek, kort system+user-bericht, geen
+// herbruikt gedeeld prefix om op te cachen.
 
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001'
+const CLAUDE_MODEL = 'claude-sonnet-5'
 const CLAUDE_MAX_TOKENS = 500
 const CLAUDE_TIMEOUT_MS = 30_000
 
-// Haiku 4.5-tarieven per token, voor eventuele kostenlogging/-limieten later.
+// Sonnet 5-tarieven per token, voor eventuele kostenlogging/-limieten later.
 const PRIJS_PER_TOKEN_USD = {
-  input: 1.0 / 1_000_000,
-  output: 5.0 / 1_000_000,
+  input: 2.0 / 1_000_000,
+  output: 10.0 / 1_000_000,
 }
 
 async function fetchMetTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
@@ -66,7 +71,10 @@ export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] |
     ],
   },
   address: { label: 'Woonplaats', opties: null },
-  employmentPreference: { label: 'Voorkeur dienstverband gewenst', opties: ['Loondienst', 'Interim'] },
+  // "Loondienst, Interim" is een derde, samengestelde optie: dit veld is in
+  // Bullhorn een echt multi-select (een kandidaat kan voor beide open
+  // staan), zie bullhorn.ts/index.ts voor de array<->string-normalisatie.
+  employmentPreference: { label: 'Voorkeur dienstverband gewenst', opties: ['Loondienst', 'Interim', 'Loondienst, Interim'] },
   status: {
     label: 'Status',
     opties: ['OTW', 'Placeable', 'Door ons geplaatst', 'Geen specialist', 'DNC', 'New Lead'],
@@ -86,18 +94,60 @@ function bouwSysteemPrompt(): string {
     'Je taak: detecteer of de kandidaat expliciet een van de volgende 5 Bullhorn-velden heeft genoemd als ' +
     'GEWIJZIGD (niet alleen bevestigd/hetzelfde gebleven) ten opzichte van de huidige waarde die je meekrijgt.\n\n' +
     `Velden:\n${veldenTekst}\n\n` +
-    'Regels:\n' +
+    'ALGEMENE REGELS (gelden voor ALLE velden hieronder, niet alleen adres):\n' +
     '- Alleen een suggestie teruggeven als de samenvatting een DUIDELIJKE, EXPLICIETE, AL DOORGEVOERDE wijziging ' +
-    'noemt — nooit raden of afleiden uit vage aanwijzingen.\n' +
-    '- Twijfelende/hypothetische taal telt NIET als wijziging: "overweegt", "denkt na over", "staat open voor", ' +
-    '"misschien", "zou eventueel willen" zijn GEEN reden voor een suggestie — alleen een reeds gebeurde of ' +
-    'stellig aangekondigde wijziging ("ben verhuisd naar", "verdien nu", "werk sinds vorige maand als", ' +
-    '"ik ga per 1 januari...") telt wel.\n' +
+    'noemt — nooit raden of afleiden uit vage aanwijzingen. Twijfel je? Dan GEEN suggestie — een gemiste ' +
+    'wijziging is veel minder erg dan een verkeerde aanpassing in Bullhorn.\n' +
+    '- Twijfelende/hypothetische taal telt NOOIT als wijziging, voor geen enkel veld: "overweegt", "denkt na ' +
+    'over", "staat open voor", "misschien", "zou eventueel willen" zijn GEEN reden voor een suggestie — alleen ' +
+    'een reeds gebeurde of stellig aangekondigde wijziging ("ben verhuisd naar", "verdien nu", "werk sinds ' +
+    'vorige maand als", "ik ga per 1 januari...") telt wel.\n' +
+    '- ATTRIBUTIE-CHECK: vraag jezelf bij elk veld af "over WIE/WAT gaat deze waarde precies?" Een waarde die over ' +
+    'de VACATURE, WERKGEVER, KLANT, OPDRACHT of functie gaat (bv. het aangeboden salaris, de vereiste ' +
+    'contractvorm, de werklocatie van de baan) telt NOOIT mee, ook niet als het de enige concrete waarde in de ' +
+    'samenvatting is. Het moet expliciet gaan over de kandidaat zelf, zijn/haar eigen situatie.\n' +
     '- Voor velden met toegestane waarden: kies altijd exact één van de gegeven opties, nooit een eigen ' +
     'formulering. Kies de best passende range/optie als een concreet bedrag genoemd wordt.\n' +
-    '- Voor "address": geef alleen de plaatsnaam terug (nooit een postcode of straatnaam verzinnen).\n' +
-    '- Als de nieuwe waarde al gelijk is aan de huidige waarde: geen suggestie voor dat veld.\n' +
-    '- Geen enkele wijziging gevonden? Geef een lege array terug: []\n\n' +
+    '- Als de nieuwe waarde al gelijk is aan de huidige waarde (of een voor de hand liggende schrijf-/' +
+    'transcriptievariant daarvan, bv. "Venendaal" i.p.v. "Veenendaal") is dat GEEN wijziging — negeer het, ook ' +
+    'al lijkt de tekst anders.\n\n' +
+    'VELD-SPECIFIEKE REGELS:\n' +
+    '- "address" (woonplaats): trigger UITSLUITEND bij taal over de EIGEN woonplaats van de kandidaat ("ik woon ' +
+    'in", "ben verhuisd naar", "mijn adres is nu"). Een reisafstand/forenzen-vermelding ("X min. vanuit Y", "te ' +
+    'ver vanuit Y") is GEEN aankondiging van een verhuizing, alleen context — sla dat over.\n' +
+    '- "customText22"/"customText11" (salaris/uurtarief): alleen het bedrag dat de KANDIDAAT zelf als zijn eigen ' +
+    'huidige of gewenste salaris/tarief noemt. Een bedrag dat een vacature/opdracht biedt, of dat de consultant ' +
+    'voorstelt, telt niet mee — alleen wat de kandidaat over zichzelf zegt.\n' +
+    '- "employmentPreference" (voorkeur dienstverband): alleen de EIGEN voorkeur van de kandidaat, nooit wat een ' +
+    'vacature vereist. Dit veld ondersteunt BEIDE waarden tegelijk — als de kandidaat stellig aangeeft dat hij/zij ' +
+    'BEIDE vormen doet of accepteert (bv. "werkt nu zowel in loondienst als als interim", "doet sinds kort ook ' +
+    'interim-opdrachten naast zijn vaste baan", "accepteert beide"), gebruik dan de samengestelde waarde ' +
+    '"Loondienst, Interim". Let op: dit is een aparte, stellige uitspraak over wat de kandidaat DAADWERKELIJK ' +
+    'DOET/ACCEPTEERT — niet hetzelfde als de twijfelende taal uit de algemene regels hierboven (die blijft ' +
+    'sowieso uitgesloten, voor dit veld net zo goed als voor elk ander veld).\n' +
+    '- "status": de meeste gesprekken geven GEEN reden voor een statuswijziging — dit veld moet je het minst ' +
+    'snel voorstellen.\n' +
+    '  * BELANGRIJKSTE REGEL: het afwijzen van, niet doorkomen bij, of geen interesse hebben in ÉÉN specifieke ' +
+    'vacature/rol is OP ZICHZELF NOOIT genoeg voor een statuswijziging, ongeacht welke status er nu al staat en ' +
+    'ongeacht welke kant je op zou willen wijzigen (dus ook niet OTW->Placeable, of Door ons geplaatst-' +
+    '>Placeable). Dit geldt voor bijna elk "geen match"/"gesprek eindigt zonder vervolg"/"niet uitgenodigd voor ' +
+    'volgende ronde"-gesprek — dat is normaal recruitmentverkeer, geen statuswijziging. Alleen een uitspraak over ' +
+    'de ALGEHELE zoeksituatie van de kandidaat (niet gekoppeld aan één specifieke vacature) telt wel, bv. "ik ben ' +
+    'weer actief op zoek" of "ik zoek nu niet meer, ben tevreden waar ik zit".\n' +
+    '  * "OTW": kandidaat geeft aan algeheel actief op zoek te zijn naar een andere baan (ongeacht of hij/zij al ' +
+    'in een sollicitatieproces zit) — niet omdat één vacature wordt besproken, maar omdat de kandidaat dat over ' +
+    'zijn/haar situatie in het algemeen zegt.\n' +
+    '  * "Placeable": neutrale standaardstatus. Gebruik dit NIET als reactie op één afgewezen vacature (zie ' +
+    'bovenaan) — alleen als de kandidaat aangeeft algeheel niet actief te zoeken.\n' +
+    '  * "Door ons geplaatst": kandidaat is expliciet succesvol geplaatst/aangenomen via BURG.\n' +
+    '  * "Geen specialist": UITSLUITEND wanneer blijkt dat de kandidaat vakinhoudelijk geen QHSSE-specialist ' +
+    'is/was — nooit in het vakgebied gewerkt, of is er inmiddels helemaal niet meer werkzaam. NOOIT gebruiken ' +
+    'voor een salaris-mismatch, locatie, of een andere reden waarom een specifieke match niet doorging.\n' +
+    '  * "DNC": UITSLUITEND bij een EXPLICIET verzoek van de kandidaat om niet meer benaderd/gecontacteerd te ' +
+    'worden (bv. "bel me niet meer", "ik wil niet meer benaderd worden").\n' +
+    '  * "New Lead": wordt in de praktijk vrijwel nooit gebruikt — stel dit zo goed als nooit voor. Twijfel je ' +
+    'tussen "New Lead" en "Placeable"? Kies dan "Placeable".\n\n' +
+    'Geen enkele wijziging gevonden? Geef een lege array terug: []\n\n' +
     'Geef uitsluitend een JSON-array terug, zonder tekst daarbuiten, in dit exacte formaat:\n' +
     '[{"field": "<veldnaam>", "suggested_value": "<nieuwe waarde>", "quote": "<kort citaat uit de samenvatting als onderbouwing>"}]'
   )
@@ -144,6 +194,14 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
         body: JSON.stringify({
           model: CLAUDE_MODEL,
           max_tokens: CLAUDE_MAX_TOKENS,
+          // Sonnet 5 draait adaptive thinking AAN als je thinking weglaat
+          // (anders dan Haiku 4.5) — voor deze simpele classificatie-taak
+          // niet nodig, en zonder dit stond het thinking-blok als
+          // content[0], waardoor de code hieronder (die content[0].text
+          // pakte) altijd een lege string las. Expliciet uitzetten i.p.v.
+          // alleen de parsing robuuster maken, om ook de tokens/latency van
+          // ongebruikt redeneren te besparen.
+          thinking: { type: 'disabled' },
           system: SYSTEEM_PROMPT,
           messages: [
             {
@@ -166,7 +224,12 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
   }
 
   const data = await response.json()
-  const raw: string = data?.content?.[0]?.text?.trim() ?? ''
+  // Zoek het eerste blok van type "text" i.p.v. blindelings content[0] te
+  // pakken — bij thinking-modellen (of andere toekomstige blok-types) staat
+  // tekst niet per se op index 0.
+  // deno-lint-ignore no-explicit-any
+  const tekstBlok = (data?.content as any[] | undefined)?.find((blok) => blok?.type === 'text')
+  const raw: string = tekstBlok?.text?.trim() ?? ''
   const tekst = stripMarkdownCodeblock(raw)
   const start = tekst.indexOf('[')
   if (start < 0) {

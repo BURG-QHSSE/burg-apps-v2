@@ -231,13 +231,26 @@ export async function getCandidateInsightsVelden(
   })
   // deno-lint-ignore no-explicit-any
   const entity = (data as any)?.data ?? {}
+  // Bullhorn's employmentPreference is een ECHT multi-select veld (een
+  // kandidaat kan open staan voor zowel Loondienst als Interim tegelijk) en
+  // komt als array terug (bv. ["Loondienst","Interim"]) — genormaliseerd
+  // naar een leesbare, komma-gescheiden string ("Loondienst, Interim") i.p.v.
+  // alleen het eerste element te pakken (zou een echte dubbele voorkeur
+  // stilzwijgend afknippen). Zie resolveSuggestion in index.ts voor de
+  // omgekeerde normalisatie (string -> array) bij het terugschrijven.
+  const employmentPreferenceRaw = entity.employmentPreference
+  const employmentPreference = Array.isArray(employmentPreferenceRaw)
+    ? employmentPreferenceRaw.length > 0
+      ? employmentPreferenceRaw.join(', ')
+      : null
+    : (employmentPreferenceRaw ?? null)
   return {
     velden: {
       id: entity.id,
       customText22: entity.customText22 ?? null,
       customText11: entity.customText11 ?? null,
       address: entity.address ?? null,
-      employmentPreference: entity.employmentPreference ?? null,
+      employmentPreference,
       status: entity.status ?? null,
     },
     session: newSession,

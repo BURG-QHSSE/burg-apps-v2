@@ -267,6 +267,12 @@ async function resolveSuggestion(
         state: null,
       }
       await bullhornPost(admin, session, `entity/Candidate/${suggestie.bullhorn_candidate_id}`, { address: gemergedAdres })
+    } else if (suggestie.field_name === 'employmentPreference') {
+      // Multi-select in Bullhorn (zie bullhorn.ts) - onze waarde is een
+      // komma-gescheiden string ("Loondienst, Interim" of "Interim"), terug
+      // te vertalen naar de array die Bullhorn verwacht.
+      const waarden = finalValue.split(',').map((v: string) => v.trim()).filter(Boolean)
+      await bullhornPost(admin, session, `entity/Candidate/${suggestie.bullhorn_candidate_id}`, { employmentPreference: waarden })
     } else {
       await bullhornPost(admin, session, `entity/Candidate/${suggestie.bullhorn_candidate_id}`, {
         [suggestie.field_name]: finalValue,
