@@ -115,10 +115,16 @@ function bouwSysteemPrompt(): string {
     '- "address" (woonplaats): trigger UITSLUITEND bij taal over de EIGEN woonplaats van de kandidaat ("ik woon ' +
     'in", "ben verhuisd naar", "mijn adres is nu"). Een reisafstand/forenzen-vermelding ("X min. vanuit Y", "te ' +
     'ver vanuit Y") is GEEN aankondiging van een verhuizing, alleen context — sla dat over.\n' +
-    '- "customText22"/"customText11" (salaris/uurtarief): alleen het bedrag dat de KANDIDAAT zelf als zijn eigen ' +
-    'huidige of gewenste salaris/tarief noemt. Een bedrag dat een vacature/opdracht biedt, of dat de consultant ' +
-    'voorstelt, telt niet mee — alleen wat de kandidaat over zichzelf zegt. De ranges zijn inclusief aan de ' +
-    'ONDERKANT en exclusief aan de bovenkant: een bedrag dat precies op een grens ligt hoort bij de range die ' +
+    '- "customText22" (salaris range) is een MAANDSALARIS. Als de kandidaat een JAARSALARIS noemt (bv. "90k", ' +
+    '"90.000 euro bruto per jaar", of een kaal bedrag boven de ~20.000 zonder "per maand" erbij — dat is in het ' +
+    'Nederlands vrijwel altijd een jaarbedrag), moet je dat EERST exact door 12 delen voordat je een range kiest. ' +
+    'Reken dit precies uit, schat niet op gevoel: 90.000 / 12 = 7.500 -> "7000 - 8000 EUR" (NIET "8000 - 9000 ' +
+    'EUR" — dat zou fout zijn). "customText11" (uurtarief) heeft deze omrekening niet nodig, dat is al een ' +
+    'uurbedrag.\n' +
+    '- "customText22"/"customText11": alleen het bedrag dat de KANDIDAAT zelf als zijn eigen huidige of gewenste ' +
+    'salaris/tarief noemt. Een bedrag dat een vacature/opdracht biedt, of dat de consultant voorstelt, telt niet ' +
+    'mee — alleen wat de kandidaat over zichzelf zegt. De ranges zijn inclusief aan de ONDERKANT en exclusief aan ' +
+    'de bovenkant: een (eventueel al omgerekend) bedrag dat precies op een grens ligt hoort bij de range die ' +
     'ERMEE BEGINT, niet de range die ermee eindigt (bv. exact 5000 euro -> "5000 - 6000 EUR", NIET "4500 - 5000 ' +
     'EUR"; exact 100 euro/uur -> "100 - 110", NIET "90 - 100").\n' +
     '- "employmentPreference" (voorkeur dienstverband): alleen de EIGEN voorkeur van de kandidaat, nooit wat een ' +
