@@ -116,6 +116,39 @@ export default function CallInsights() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Scrollpositie bewaren - zonder dit sprong je terug naar boven zodra het
+  // tabblad (bv. na het bekijken van een kandidaat in Bullhorn) naar de
+  // achtergrond ging en herladen werd. Zelfde patroon als KandidaatMatcher.jsx.
+  const SCROLL_CACHE_SLEUTEL = 'call-insights-scroll'
+
+  useEffect(() => {
+    function bewaarScroll() {
+      try {
+        sessionStorage.setItem(SCROLL_CACHE_SLEUTEL, String(window.scrollY))
+      } catch {
+        // sessionStorage kan onbeschikbaar zijn - dan blijft de scrollpositie gewoon niet bewaard
+      }
+    }
+    document.addEventListener('visibilitychange', bewaarScroll)
+    window.addEventListener('pagehide', bewaarScroll)
+    return () => {
+      document.removeEventListener('visibilitychange', bewaarScroll)
+      window.removeEventListener('pagehide', bewaarScroll)
+    }
+  }, [])
+
+  // Herstellen zodra er weer iets te tonen is - pas dan is de pagina lang
+  // genoeg om ergens naartoe te kunnen scrollen.
+  useEffect(() => {
+    if (loading) return
+    try {
+      const bewaard = sessionStorage.getItem(SCROLL_CACHE_SLEUTEL)
+      if (bewaard) window.scrollTo(0, Number(bewaard))
+    } catch {
+      // niet fataal - dan begin je gewoon bovenaan
+    }
+  }, [loading])
+
   async function bevestigKandidaatKeuze(match) {
     const candidateId = gekozenKandidaat[match.recording_url]
     if (!candidateId) return
