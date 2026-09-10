@@ -264,15 +264,26 @@ export default function CallInsights() {
                   <span className="insights-call-datum">{formatDatum(match.call_started_at)}</span>
                 </div>
                 {(match.kandidaat_kandidaten ?? []).map((candidateId) => (
-                  <label key={candidateId} className="insights-veld-header">
-                    <input
-                      type="radio"
-                      name={`kandidaat-${match.recording_url}`}
-                      checked={gekozenKandidaat[match.recording_url] === candidateId}
-                      onChange={() => setGekozenKandidaat((prev) => ({ ...prev, [match.recording_url]: candidateId }))}
-                    />
-                    <span>{namen[candidateId] ?? `Kandidaat ${candidateId}`}</span>
-                  </label>
+                  <div key={candidateId} className="insights-ambigu-optie">
+                    <label className="insights-veld-header">
+                      <input
+                        type="radio"
+                        name={`kandidaat-${match.recording_url}`}
+                        checked={gekozenKandidaat[match.recording_url] === candidateId}
+                        onChange={() => setGekozenKandidaat((prev) => ({ ...prev, [match.recording_url]: candidateId }))}
+                      />
+                      <span>{namen[candidateId] ?? `Kandidaat ${candidateId}`}</span>
+                    </label>
+                    <a
+                      href={BULLHORN_CANDIDATE_URL(candidateId)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="matcher-bullhorn-knop"
+                    >
+                      <img src={bullhornLogo} alt="" className="matcher-bullhorn-logo" />
+                      Bekijken in Bullhorn
+                    </a>
+                  </div>
                 ))}
                 <div className="insights-call-actions">
                   <button

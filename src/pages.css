@@ -3631,6 +3631,18 @@ a.tool-card:hover .tool-card-hint .arrow {
   gap: var(--space-2);
 }
 
+.insights-ambigu-optie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.insights-ambigu-optie .matcher-bullhorn-knop {
+  margin-top: 0;
+}
+
 .insights-samenvatting {
   margin: 0;
   padding: var(--space-2) var(--space-3);
