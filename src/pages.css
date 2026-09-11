@@ -3607,18 +3607,19 @@ a.tool-card:hover .tool-card-hint .arrow {
 
 .insights-veld-afwijzen {
   margin-left: auto;
-  padding: 2px 8px;
-  border: 1px solid var(--inkt-20);
+  padding: 4px 10px;
+  border: 1px solid var(--brand);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--inkt-60);
+  color: var(--brand);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .insights-veld-afwijzen:hover:not(:disabled) {
-  border-color: var(--brand);
-  color: var(--brand);
+  background: var(--brand);
+  color: var(--steen);
 }
 
 .insights-veld-afwijzen:disabled {
