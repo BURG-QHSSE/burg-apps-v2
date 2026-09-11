@@ -68,6 +68,7 @@ export default function CallInsights() {
   const [bewerking, setBewerking] = useState({})
   const [bezigMetOpslaan, setBezigMetOpslaan] = useState(new Set())
   const [bezigMetAfwijzen, setBezigMetAfwijzen] = useState(new Set())
+  const [bevestigModalGesprek, setBevestigModalGesprek] = useState(null)
   const [gekozenKandidaat, setGekozenKandidaat] = useState({})
   const [bezigMetKiezen, setBezigMetKiezen] = useState(new Set())
 
@@ -216,6 +217,13 @@ export default function CallInsights() {
         return next
       })
     }
+  }
+
+  async function handleBevestigModalConfirm() {
+    const gesprek = bevestigModalGesprek
+    if (!gesprek) return
+    setBevestigModalGesprek(null)
+    await bevestigGesprek(gesprek)
   }
 
   async function wijsVeldAf(gesprek, veld) {
@@ -408,13 +416,56 @@ export default function CallInsights() {
                   type="button"
                   className="btn btn-primary"
                   disabled={bezigMetOpslaan.has(gesprek.recordingUrl)}
-                  onClick={() => bevestigGesprek(gesprek)}
+                  onClick={() => setBevestigModalGesprek(gesprek)}
                 >
                   {bezigMetOpslaan.has(gesprek.recordingUrl) ? 'Bezig...' : 'Bevestigen'}
                 </button>
               </div>
             </div>
           ))}
+
+        {bevestigModalGesprek && (
+          <>
+            <div className="mo-modal-overlay" onClick={() => setBevestigModalGesprek(null)} />
+            <div className="mo-modal-box">
+              <div className="mo-modal-title">Weet je het zeker?</div>
+              <div className="mo-modal-sub">
+                Dit schrijft de aangevinkte velden direct naar Bullhorn voor{' '}
+                {namen[bevestigModalGesprek.candidateId] ?? `kandidaat ${bevestigModalGesprek.candidateId}`}.
+              </div>
+              {(() => {
+                const aangevinkt = bevestigModalGesprek.velden.filter(
+                  (veld) => (bewerking[bevestigModalGesprek.recordingUrl]?.[veld.id] ?? { checked: true }).checked,
+                )
+                if (aangevinkt.length === 0) {
+                  return <p className="insights-modal-melding">Geen velden aangevinkt — alle suggesties van dit gesprek worden afgewezen.</p>
+                }
+                return (
+                  <ul className="insights-modal-veldlijst">
+                    {aangevinkt.map((veld) => {
+                      const staat = bewerking[bevestigModalGesprek.recordingUrl]?.[veld.id] ?? { waarde: veld.suggested_value }
+                      return (
+                        <li key={veld.id}>
+                          <strong>{VELD_LABELS[veld.field_name] ?? veld.field_name}:</strong>{' '}
+                          {veld.current_value && <>{veld.current_value} → </>}
+                          {staat.waarde}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )
+              })()}
+              <div className="mo-modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setBevestigModalGesprek(null)}>
+                  Annuleren
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleBevestigModalConfirm}>
+                  Ja, doorvoeren
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   )
