@@ -67,6 +67,7 @@ export default function CallInsights() {
   // Per-call bewerkstatus: { [recording_url]: { [suggestionId]: { checked, waarde } } }
   const [bewerking, setBewerking] = useState({})
   const [bezigMetOpslaan, setBezigMetOpslaan] = useState(new Set())
+  const [bezigMetAfwijzen, setBezigMetAfwijzen] = useState(new Set())
   const [gekozenKandidaat, setGekozenKandidaat] = useState({})
   const [bezigMetKiezen, setBezigMetKiezen] = useState(new Set())
 
@@ -217,6 +218,28 @@ export default function CallInsights() {
     }
   }
 
+  async function wijsVeldAf(gesprek, veld) {
+    setBezigMetAfwijzen((prev) => new Set(prev).add(veld.id))
+    setError(null)
+    try {
+      await wijsSuggestieAf(veld.id)
+      setSuggesties((prev) => prev.filter((s) => s.id !== veld.id))
+      setBewerking((prev) => {
+        const gesprekBewerking = { ...prev[gesprek.recordingUrl] }
+        delete gesprekBewerking[veld.id]
+        return { ...prev, [gesprek.recordingUrl]: gesprekBewerking }
+      })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBezigMetAfwijzen((prev) => {
+        const next = new Set(prev)
+        next.delete(veld.id)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="page">
       <header className="topbar">
@@ -336,6 +359,14 @@ export default function CallInsights() {
                         onChange={(e) => updateVeldState(gesprek.recordingUrl, veld.id, { checked: e.target.checked })}
                       />
                       <span className="insights-veld-label">{VELD_LABELS[veld.field_name] ?? veld.field_name}</span>
+                      <button
+                        type="button"
+                        className="insights-veld-afwijzen"
+                        disabled={bezigMetAfwijzen.has(veld.id)}
+                        onClick={() => wijsVeldAf(gesprek, veld)}
+                      >
+                        {bezigMetAfwijzen.has(veld.id) ? 'Bezig...' : 'Suggestie afwijzen'}
+                      </button>
                     </div>
                     <div className="insights-veld-waardes">
                       {veld.current_value && <span className="insights-waarde-oud">{veld.current_value}</span>}
