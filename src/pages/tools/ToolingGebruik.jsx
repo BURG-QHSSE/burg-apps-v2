@@ -22,17 +22,20 @@ function fmtUsd(n) {
 
 /**
  * Tab 1: Kandidaat Matcher — ongewijzigde inhoud t.o.v. het vroegere
- * MatcherGebruik.jsx, alleen verplaatst naar een tabblad. Leest rechtstreeks
- * matching_runs uit en aggregeert client-side per created_by_naam.
+ * MatcherGebruik.jsx, alleen verplaatst naar een tabblad + gefilterd op de
+ * gekozen maand (zie de maandbalk in ToolingGebruik hieronder). Leest
+ * rechtstreeks matching_runs uit en aggregeert client-side per
+ * created_by_naam.
  */
-function KandidaatMatcherTab() {
+function KandidaatMatcherTab({ vanaf, tot }) {
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [fout, setFout] = useState('')
 
   useEffect(() => {
     let isMounted = true
-    fetchAlleRunsVoorGebruiksoverzicht()
+    setLoading(true)
+    fetchAlleRunsVoorGebruiksoverzicht(vanaf, tot)
       .then((data) => {
         if (isMounted) setRuns(data)
       })
@@ -45,7 +48,7 @@ function KandidaatMatcherTab() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [vanaf, tot])
 
   const perGebruiker = useMemo(() => {
     const map = new Map()
@@ -75,7 +78,7 @@ function KandidaatMatcherTab() {
 
   if (loading) return <p>Gegevens laden…</p>
   if (fout) return <p className="form-error" role="alert">Kon gegevens niet laden: {fout}</p>
-  if (runs.length === 0) return <div className="idle-state">Nog geen runs gestart.</div>
+  if (runs.length === 0) return <div className="idle-state">Geen runs in deze maand.</div>
 
   return (
     <>
@@ -159,7 +162,7 @@ function KandidaatMatcherTab() {
  * pending, en tegen welke kosten (call_insights_processed.kosten_usd, zie
  * de kosten-guardrail in de call-insights Edge Function).
  */
-function CallInsightsTab() {
+function CallInsightsTab({ vanaf, tot }) {
   const [data, setData] = useState(null)
   const [profielen, setProfielen] = useState([])
   const [loading, setLoading] = useState(true)
@@ -167,7 +170,8 @@ function CallInsightsTab() {
 
   useEffect(() => {
     let isMounted = true
-    Promise.all([fetchCallInsightsGebruikData(), fetchAllProfiles()])
+    setLoading(true)
+    Promise.all([fetchCallInsightsGebruikData(vanaf, tot), fetchAllProfiles()])
       .then(([gebruikData, profielenData]) => {
         if (!isMounted) return
         setData(gebruikData)
@@ -182,7 +186,7 @@ function CallInsightsTab() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [vanaf, tot])
 
   const naamPerId = useMemo(() => new Map(profielen.map((p) => [p.id, p.naam || p.email])), [profielen])
 
@@ -218,7 +222,7 @@ function CallInsightsTab() {
 
   if (loading) return <p>Gegevens laden…</p>
   if (fout) return <p className="form-error" role="alert">Kon gegevens niet laden: {fout}</p>
-  if (perConsultant.length === 0) return <div className="idle-state">Nog geen gesprekken verwerkt.</div>
+  if (perConsultant.length === 0) return <div className="idle-state">Geen gesprekken verwerkt in deze maand.</div>
 
   return (
     <>
@@ -279,14 +283,39 @@ const TABS = [
   { id: 'call-insights', label: 'Call Insights', Component: CallInsightsTab },
 ]
 
+/** Eerste dag van de maand (UTC-middernacht) - jaar/maand net als bij Date (maand 0-indexed). */
+function eersteVanMaand(jaar, maand) {
+  return new Date(Date.UTC(jaar, maand, 1))
+}
+
 /**
  * Tooling Gebruik — admin-only, gebruiksoverzicht per tool. Hernoemd vanuit
  * "Kandidaat Matcher - Gebruik" (2026-09-16) toen Call Insights als tweede
  * tab bijkwam — zelfde route/tool-id (matcher-gebruik) in toolRegistry.js,
  * dus geen kapotte links/bookmarks.
+ *
+ * Maandbalk (2026-09-16): beide tabbladen tonen standaard alleen de huidige
+ * maand, met vorige/volgende-navigatie — nodig zodra er meerdere maanden
+ * historie zijn (zie project-geheugen: oude test-/MVP-data uit eerdere
+ * periodes vervuilde anders het beeld van "huidig gebruik").
  */
 export default function ToolingGebruik() {
   const [actieveTab, setActieveTab] = useState(TABS[0].id)
+  const nu = new Date()
+  const [maand, setMaand] = useState({ jaar: nu.getFullYear(), maandIndex: nu.getMonth() })
+
+  const vanaf = useMemo(() => eersteVanMaand(maand.jaar, maand.maandIndex), [maand])
+  const tot = useMemo(() => eersteVanMaand(maand.jaar, maand.maandIndex + 1), [maand])
+  const maandLabel = vanaf.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const isHuidigeMaand = maand.jaar === nu.getFullYear() && maand.maandIndex === nu.getMonth()
+
+  function vorigeMaand() {
+    setMaand((m) => (m.maandIndex === 0 ? { jaar: m.jaar - 1, maandIndex: 11 } : { jaar: m.jaar, maandIndex: m.maandIndex - 1 }))
+  }
+  function volgendeMaand() {
+    setMaand((m) => (m.maandIndex === 11 ? { jaar: m.jaar + 1, maandIndex: 0 } : { jaar: m.jaar, maandIndex: m.maandIndex + 1 }))
+  }
+
   const ActieveComponent = TABS.find((t) => t.id === actieveTab)?.Component ?? TABS[0].Component
 
   return (
@@ -308,7 +337,7 @@ export default function ToolingGebruik() {
           zichtbaar.
         </p>
 
-        <div className="tab-bar" style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+        <div className="tab-bar" style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -321,7 +350,20 @@ export default function ToolingGebruik() {
           ))}
         </div>
 
-        <ActieveComponent />
+        <div
+          className="tooling-maand-balk"
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}
+        >
+          <button type="button" className="btn btn-secondary" onClick={vorigeMaand}>
+            ← Vorige maand
+          </button>
+          <strong style={{ textTransform: 'capitalize', minWidth: 140, textAlign: 'center' }}>{maandLabel}</strong>
+          <button type="button" className="btn btn-secondary" onClick={volgendeMaand} disabled={isHuidigeMaand}>
+            Volgende maand →
+          </button>
+        </div>
+
+        <ActieveComponent vanaf={vanaf} tot={tot} />
       </main>
     </div>
   )

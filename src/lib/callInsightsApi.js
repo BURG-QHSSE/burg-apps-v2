@@ -100,7 +100,7 @@ export async function fetchAlleAmbigueMatches() {
 
 /**
  * Per-consultant gebruiksoverzicht voor Tooling Gebruik (zie
- * ToolingGebruik.jsx) — geaggregeerd in de database (RPC
+ * ToolingGebruik.jsx), voor één maand — geaggregeerd in de database (RPC
  * call_insights_gebruik_overzicht), niet client-side over losse rijen: bij
  * >1000 rijen liep de eerdere aanpak (losse .select() op
  * call_insights_processed/call_field_suggestions) tegen PostgREST's
@@ -108,9 +108,15 @@ export async function fetchAlleAmbigueMatches() {
  * 'historische_backlog_overgeslagen'-rijen (nooit echt door Bullhorn/Claude
  * verwerkt, zie index.ts) ten onrechte mee als "verwerkt". Die uitsluiting
  * gebeurt nu in de SQL-functie zelf.
+ *
+ * @param {Date} vanaf - eerste dag van de maand (inclusief)
+ * @param {Date} tot - eerste dag van de volgende maand (exclusief)
  */
-export async function fetchCallInsightsGebruikData() {
-  const { data, error } = await supabase.rpc('call_insights_gebruik_overzicht')
+export async function fetchCallInsightsGebruikData(vanaf, tot) {
+  const { data, error } = await supabase.rpc('call_insights_gebruik_overzicht', {
+    p_vanaf: vanaf.toISOString(),
+    p_tot: tot.toISOString(),
+  })
   if (error) throw new Error(error.message)
   return data
 }

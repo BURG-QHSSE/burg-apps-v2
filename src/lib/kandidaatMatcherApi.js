@@ -77,11 +77,18 @@ export async function fetchMijnRuns() {
   return data
 }
 
-/** Alle runs van iedereen, zonder limiet — voor het admin-only gebruiksoverzicht (ToolingGebruik.jsx). */
-export async function fetchAlleRunsVoorGebruiksoverzicht() {
+/**
+ * Alle runs van iedereen binnen één maand, voor het admin-only
+ * gebruiksoverzicht (ToolingGebruik.jsx).
+ * @param {Date} vanaf - eerste dag van de maand (inclusief)
+ * @param {Date} tot - eerste dag van de volgende maand (exclusief)
+ */
+export async function fetchAlleRunsVoorGebruiksoverzicht(vanaf, tot) {
   const { data, error } = await supabase
     .from('matching_runs')
     .select('id, created_by_naam, vacature_naam, aantal_kandidaten, status, geschatte_kosten_usd, created_at')
+    .gte('created_at', vanaf.toISOString())
+    .lt('created_at', tot.toISOString())
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
