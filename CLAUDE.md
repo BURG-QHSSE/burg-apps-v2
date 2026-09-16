@@ -16,6 +16,17 @@ React/Vite multi-tool portal voor BURG QHSSE met een rollen-systeem (admin/manag
 - **Doorgroei Tracker**: leest géén Supabase, maar een extern Google Apps Script-endpoint gekoppeld aan een Google Sheet (zie `src/lib/doorgroeiTrackerApi.js`)
 - **Los, ouder Supabase-project** (`ziwqshuabwcthqjspuso`): levert data voor "Mijn Omgeving" (vacatures/employees), zie `VITE_BURG_JOBS_URL` in `.env`
 
+## Claude-modelkeuze (check bij elke AI-tool)
+
+Elke Edge Function die de Anthropic API aanroept, gebruikt zijn eigen hardcoded model-ID (`CLAUDE_MODEL` in het bijbehorende `claude.ts`) — die kunnen dus uit de pas gaan lopen zonder dat iemand het merkt. Huidige stand (bijgewerkt 2026-09-16):
+
+| Tool / Edge Function | Model | Waarom |
+|---|---|---|
+| Kandidaat Matcher (`kandidaat-matcher/claude.ts`) | `claude-sonnet-5` | Gemigreerd van `claude-sonnet-4-6` op 2026-09-16 — Sonnet 5 is zowel goedkoper (~33%) als de nieuwere generatie, geen reden om op 4.6 te blijven. |
+| Call Insights (`call-insights/claude.ts`) | `claude-sonnet-5` | Draaide eerst op Haiku 4.5, bleek categorische uitsluitingsregels te negeren — Sonnet 5 hield die wel consistent aan (zie code-comment in dat bestand). |
+
+**Bij het aanraken van een bestaande AI-tool, of het bouwen van een nieuwe:** check of het gebruikte model nog het huidige/aanbevolen model is (niet zomaar aannemen dat het al goed staat) — vraag de `claude-api`-skill om de actuele modeltabel (prijs + generatie) op te halen, en leg een eventuele wissel altijd eerst voor aan de gebruiker vóór je 'm doorvoert (een modelwissel kan gedrag/output subtiel veranderen, zie de "Sonnet thinking-block parsing bug" in de Call Insights-projectgeschiedenis — altijd even een sanity-check van de output na een wissel).
+
 ## Structuur
 - `src/pages/` — routepagina's (Dashboard, AdminPanel, Login, etc.)
 - `src/pages/tools/` — losse tools (Fee Checker, Definitief Honorarium, Verdeling Plaatsing, Sales Overdracht, Doorgroei Tracker, GPB Beoordelingstool, Proeftijd Tracker, Mijn Omgeving, Kandidaat Matcher)

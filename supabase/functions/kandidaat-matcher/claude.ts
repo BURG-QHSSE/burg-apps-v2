@@ -3,17 +3,22 @@
 // bereid_vacaturetekst_voor_cache() uit server.py (kandidaat-ranker-repo) —
 // systeemprompt letterlijk overgenomen (Nederlandstalig, QHSSE-context).
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6'
-const CLAUDE_MAX_TOKENS = 400
+const CLAUDE_MODEL = 'claude-sonnet-5'
+// Was 400 op Sonnet 4.6. Sonnet 5 gebruikt een nieuwe tokenizer (~30% meer
+// tokens voor dezelfde tekst) - een Nederlandse onderbouwing van 2-3 zinnen
+// kost dus meer output-tokens dan voorheen bij hetzelfde teken-aantal. Ruim
+// opgehoogd zodat de JSON-output niet afgekapt raakt (stop_reason=max_tokens).
+const CLAUDE_MAX_TOKENS = 600
 
-// Sonnet 4.6-tarieven per token (uit $/1M-tokens), voor de kostenlimiet per
-// run (zie MAX_KOSTEN_PER_RUN_USD in index.ts). Cache-write/-read zijn de
-// standaard Anthropic-verhoudingen (~1.25x resp. ~0.1x het basis-inputtarief).
+// Sonnet 5-tarieven per token (uit $/1M-tokens; goedkoper dan Sonnet 4.6's
+// $3/$15), voor de kostenlimiet per run (zie MAX_KOSTEN_PER_RUN_USD in
+// index.ts). Cache-write/-read zijn de standaard Anthropic-verhoudingen
+// (~1.25x resp. ~0.1x het basis-inputtarief).
 const PRIJS_PER_TOKEN_USD = {
-  input: 3.0 / 1_000_000,
-  output: 15.0 / 1_000_000,
-  cacheWrite: 3.75 / 1_000_000,
-  cacheRead: 0.3 / 1_000_000,
+  input: 2.0 / 1_000_000,
+  output: 10.0 / 1_000_000,
+  cacheWrite: 2.5 / 1_000_000,
+  cacheRead: 0.2 / 1_000_000,
 }
 
 interface AnthropicUsage {
@@ -99,12 +104,30 @@ const RANK_FALLBACK = 'Kon niet beoordeeld worden door een technische fout'
 function claudeHeaders(): Record<string, string> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY secret ontbreekt')
+  // Geen 'anthropic-beta: prompt-caching-2024-07-31' meer - prompt caching is
+  // al lang GA, die beta-header was hier stale (Sonnet 4.6 had 'm ook niet
+  // meer nodig, maar hij deed geen kwaad; opgeruimd tijdens de Sonnet 5-migratie).
   return {
     'x-api-key': apiKey,
     'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'prompt-caching-2024-07-31',
     'content-type': 'application/json',
   }
+}
+
+/**
+ * Zoekt het eerste text-block in de content-array i.p.v. blind content[0] aan
+ * te nemen. Sonnet 5 draait adaptive thinking aan zodra `thinking` ontbreekt
+ * (anders dan Sonnet 4.6, dat zonder expliciete config thinking-uit draaide)
+ * - content[0] zou dan een thinking-block kunnen zijn i.p.v. het text-block,
+ * wat rankKandidaat leeg zou laten teruggeven. Wij zetten thinking hieronder
+ * expliciet uit (zie CLAUDE_MODEL-aanroepen), maar deze helper is een
+ * goedkope garantie tegen exact deze bug - die eerder al eens misging bij de
+ * Sonnet-wissel van de call-insights Edge Function.
+ */
+function pakTextBlock(content: unknown): string {
+  if (!Array.isArray(content)) return ''
+  const blok = content.find((b): b is { type: string; text?: string } => b?.type === 'text')
+  return blok?.text?.trim() ?? ''
 }
 
 function stripMarkdownCodeblock(tekst: string): string {
@@ -169,6 +192,12 @@ export async function prewarmCache(vacatureTekstVoorCache: string): Promise<{ ko
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 0,
+        // Expliciet uit i.p.v. weggelaten - op Sonnet 5 draait adaptive
+        // thinking automatisch aan zodra dit veld ontbreekt (zie
+        // pakTextBlock hierboven). Deze aanroep schrijft alleen de cache
+        // (max_tokens: 0, geen echte output), dus thinking heeft hier toch
+        // geen functie.
+        thinking: { type: 'disabled' },
         system: [
           { type: 'text', text: QHSSE_SYSTEEM_PROMPT, cache_control: { type: 'ephemeral' } },
         ],
@@ -216,6 +245,11 @@ export async function rankKandidaat(
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: CLAUDE_MAX_TOKENS,
+        // Expliciet uit: dit is een gebonden classificatietaak (één JSON-
+        // object, vaste velden) met een krappe max_tokens - adaptive
+        // thinking zou daar zinvolle output-ruimte van kunnen opeten
+        // (stop_reason=max_tokens) voor weinig kwaliteitswinst op deze taak.
+        thinking: { type: 'disabled' },
         system: [
           { type: 'text', text: QHSSE_SYSTEEM_PROMPT, cache_control: { type: 'ephemeral' } },
         ],
@@ -245,7 +279,7 @@ export async function rankKandidaat(
   if (data?.stop_reason === 'max_tokens') {
     console.warn(`[kandidaat-matcher] WAARSCHUWING: response afgekapt (stop_reason=max_tokens) voor ${label}`)
   }
-  const raw: string = data?.content?.[0]?.text?.trim() ?? ''
+  const raw: string = pakTextBlock(data?.content)
   const tekst = stripMarkdownCodeblock(raw)
   const start = tekst.indexOf('{')
 
