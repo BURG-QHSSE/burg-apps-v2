@@ -60,6 +60,30 @@ const XAPI_SYNC_BATCH_SIZE = 300
 // herlaad-cyclus, inclusief deze naam-fetch).
 const NAMEN_CONCURRENCY = 20
 
+/**
+ * Voorkomt overlappende gelijktijdige runs van dezelfde sync-actie — nodig
+ * sinds bleek dat een handmatige testaanroep en de nieuw ingeschakelde cron
+ * elkaar konden overlappen, wat leidde tot een dubbele suggestie (2x dezelfde
+ * recording verwerkt) en een gemiste recording (race op de dedupe-check).
+ * Rij-gebaseerde lock i.p.v. pg_advisory_lock, want die laatste is niet
+ * betrouwbaar via PgBouncer se connection pooling (sessie-scoped locks gaan
+ * verloren tussen aanroepen). p_duur_seconden is een vangnet: als de functie
+ * crasht zonder de lock vrij te geven, verloopt hij vanzelf.
+ */
+async function metSyncLock<T>(admin: any, naam: string, duurSeconden: number, fn: () => Promise<T>): Promise<T | { overgeslagen: true; reden: string }> {
+  const { data: lockGelukt, error: lockError } = await admin.rpc('call_insights_probeer_lock', { p_naam: naam, p_duur_seconden: duurSeconden })
+  if (lockError) throw new Error(`Lock-poging mislukt voor ${naam}: ${lockError.message}`)
+  if (!lockGelukt) {
+    return { overgeslagen: true, reden: 'al bezig (lock in gebruik)' }
+  }
+  try {
+    return await fn()
+  } finally {
+    const { error: vrijgaveError } = await admin.rpc('call_insights_geef_lock_vrij', { p_naam: naam })
+    if (vrijgaveError) console.error(`Lock vrijgeven mislukt voor ${naam}:`, vrijgaveError.message)
+  }
+}
+
 /** Simpele concurrency-limiter — zelfde implementatie als kandidaat-matcher/index.ts (bewust gedupliceerd, geen gedeelde _shared-map in dit project). */
 async function mapMetLimiet<T, R>(items: T[], limiet: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const resultaten: R[] = new Array(items.length)
@@ -212,6 +236,7 @@ async function syncRecordingsFromXapi(
   // deno-lint-ignore no-explicit-any
   admin: any,
   limiet: number,
+  vanafOverride?: Date,
 ): Promise<{ opgehaald: number; nieuw: number; oudsteNieuw: string | null; nieuwsteNieuw: string | null }> {
   const { data: laatste } = await admin
     .from('recordings')
@@ -222,10 +247,17 @@ async function syncRecordingsFromXapi(
 
   // Kleine overlap (5 min) i.p.v. exact vanaf de laatst bekende start_time —
   // recordings kunnen met een kleine vertraging binnenkomen. Duplicaten
-  // worden hieronder toch geskipt op recording_url.
-  const vanaf = laatste?.start_time
-    ? new Date(new Date(laatste.start_time as string).getTime() - 5 * 60 * 1000)
-    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // eerste keer: laatste 30 dagen
+  // worden hieronder toch geskipt op recording_url. LET OP: dit betekent dat
+  // een recording die ooit gemist is (bv. door een race condition) NIET
+  // vanzelf wordt ingehaald zodra er nieuwere recordings binnen zijn — het
+  // venster schuift altijd mee met de nieuwste bekende start_time. Voor
+  // handmatig herstel van zo'n gat: vanafOverride meegeven (body.vanaf,
+  // cron-secret-gated, zie actiehandler hieronder).
+  const vanaf =
+    vanafOverride ??
+    (laatste?.start_time
+      ? new Date(new Date(laatste.start_time as string).getTime() - 5 * 60 * 1000)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) // eerste keer: laatste 30 dagen
 
   const opgehaald = await haalRecordingsOp(vanaf, limiet)
   if (opgehaald.length === 0) {
@@ -420,12 +452,22 @@ async function syncNewCalls(
     // een suggestie was, want dan bestond de rij waar het naar verwijst nog
     // niet. Bij een fout hierna: UPDATE i.p.v. nogmaals INSERT (de rij
     // bestaat al, een 2e insert zou de primary key schenden).
-    await admin.from('call_insights_processed').insert({
+    //
+    // De insert-error wordt hier bewust gecontroleerd (defense-in-depth naast
+    // metSyncLock hierboven): als deze recording ooit alsnog dubbel verwerkt
+    // wordt (bv. door een toekomstige wijziging die de lock omzeilt), voorkomt
+    // deze check dat verwerkGesprekVoorKandidaat een 2e keer draait en een
+    // dubbele suggestie aanmaakt — precies het bug-scenario van 2026-09-16.
+    const { error: processedInsertError } = await admin.from('call_insights_processed').insert({
       recording_url: recording.recording_url,
       user_id: recording.user_id,
       call_started_at: recording.start_time,
       bullhorn_candidate_id: candidateId,
     })
+    if (processedInsertError) {
+      console.warn(`[call-insights] ${recording.recording_url} is al verwerkt (dubbele insert voorkomen):`, processedInsertError.message)
+      continue
+    }
 
     try {
       const resultaat = await verwerkGesprekVoorKandidaat(
@@ -742,7 +784,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: 'Ongeldig of ontbrekend cron-secret' }, 401)
       }
       const limiet = Number.isFinite(Number(body.limiet)) && Number(body.limiet) > 0 ? Number(body.limiet) : XAPI_SYNC_BATCH_SIZE
-      const resultaat = await syncRecordingsFromXapi(admin, limiet)
+      const vanafOverride = typeof body.vanaf === 'string' && !isNaN(Date.parse(body.vanaf)) ? new Date(body.vanaf) : undefined
+      const resultaat = await metSyncLock(admin, 'syncRecordingsFromXapi', 120, () => syncRecordingsFromXapi(admin, limiet, vanafOverride))
       return jsonResponse(resultaat)
     }
 
@@ -750,7 +793,7 @@ Deno.serve(async (req) => {
       if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) {
         return jsonResponse({ error: 'Ongeldig of ontbrekend cron-secret' }, 401)
       }
-      const resultaat = await syncNewCalls(admin)
+      const resultaat = await metSyncLock(admin, 'syncNewCalls', 120, () => syncNewCalls(admin))
       return jsonResponse(resultaat)
     }
 
