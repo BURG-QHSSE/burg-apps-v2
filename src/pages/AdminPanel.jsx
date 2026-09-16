@@ -16,7 +16,7 @@ import { setYieldTeltMee, setYieldSinds, setYieldTot } from '../lib/yieldApi'
 import { fetchToolUsageCounts, fetchToolUsageByUser } from '../lib/toolUsage'
 import { TOOLS } from '../lib/toolRegistry'
 import { DOORGROEI_SHEET_URL, fetchDoorgroeiRosterNamen, normalizeNaam } from '../lib/doorgroeiTrackerApi'
-import CallInsightsUitsluitingen from '../components/CallInsightsUitsluitingen'
+import CallInsightsInstellingen from '../components/CallInsightsInstellingen'
 
 const ROLE_OPTIONS = ['admin', 'manager', 'hr', 'user']
 
@@ -1004,7 +1004,7 @@ export default function AdminPanel() {
           </div>
         )}
 
-        <CallInsightsUitsluitingen />
+        <CallInsightsInstellingen />
       </main>
     </div>
   )

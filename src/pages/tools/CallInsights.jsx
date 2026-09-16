@@ -83,6 +83,11 @@ export default function CallInsights() {
   const [bevestigModalGesprek, setBevestigModalGesprek] = useState(null)
   const [gekozenKandidaat, setGekozenKandidaat] = useState({})
   const [bezigMetKiezen, setBezigMetKiezen] = useState(new Set())
+  // Admin-only weergavefilter — puur om in te kunnen zoomen op de gesprekken
+  // van één consultant (bv. om voorbeelden van hun data te bekijken); heeft
+  // geen effect op wie er daadwerkelijk verwerkt wordt (dat bepaalt
+  // profiles.team alleen). '' = iedereen.
+  const [consultantFilter, setConsultantFilter] = useState('')
 
   const consultantNaamPerId = useMemo(
     () => new Map(consultantProfielen.map((c) => [c.id, c.naam || c.email])),
@@ -192,9 +197,15 @@ export default function CallInsights() {
     }
   }
 
+  const ambigueMatchesGefilterd = useMemo(
+    () => (consultantFilter ? ambigueMatches.filter((m) => m.user_id === consultantFilter) : ambigueMatches),
+    [ambigueMatches, consultantFilter],
+  )
+
   const gesprekken = useMemo(() => {
     const perGesprek = new Map()
-    for (const s of suggesties) {
+    const relevanteSuggesties = consultantFilter ? suggesties.filter((s) => s.user_id === consultantFilter) : suggesties
+    for (const s of relevanteSuggesties) {
       if (!perGesprek.has(s.recording_url)) {
         perGesprek.set(s.recording_url, {
           recordingUrl: s.recording_url,
@@ -208,7 +219,7 @@ export default function CallInsights() {
       perGesprek.get(s.recording_url).velden.push(s)
     }
     return [...perGesprek.values()].sort((a, b) => new Date(b.callStartedAt) - new Date(a.callStartedAt))
-  }, [suggesties])
+  }, [suggesties, consultantFilter])
 
   // Admin-only: puur ter oriëntatie boven de inbox — wie moet nog wat
   // afhandelen. Historie (al afgehandeld, kosten) staat in Tooling Gebruik.
@@ -305,7 +316,10 @@ export default function CallInsights() {
         <p className="page-intro">
           Automatisch gedetecteerde wijzigingen uit gesprekken — de 3CX-gesprekssamenvatting wordt vergeleken met wat er nu in Bullhorn
           staat. Vink aan welke velden bijgewerkt moeten worden, corrigeer de waarde indien nodig, en klik op Bevestigen.
-          {isAdmin && ' Je ziet hier de gesprekken van alle consultants.'}
+          {isAdmin &&
+            (consultantFilter
+              ? ` Je ziet nu alleen de gesprekken van ${consultantNaamPerId.get(consultantFilter) ?? 'deze consultant'}.`
+              : ' Je ziet hier de gesprekken van alle consultants.')}
         </p>
 
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -342,13 +356,27 @@ export default function CallInsights() {
           </div>
         )}
 
-        {!loading && ambigueMatches.length > 0 && (
+        {!loading && isAdmin && consultantProfielen.length > 0 && (
+          <div className="field" style={{ maxWidth: 320, marginBottom: 'var(--space-6)' }}>
+            <label>Bekijk gesprekken van</label>
+            <select className="field-select" value={consultantFilter} onChange={(e) => setConsultantFilter(e.target.value)}>
+              <option value="">— Iedereen —</option>
+              {consultantProfielen.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.naam || c.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!loading && ambigueMatchesGefilterd.length > 0 && (
           <div className="insights-ambigu-sectie">
             <h2>Welke kandidaat is dit?</h2>
             <p className="page-intro">
               Dit telefoonnummer komt bij meerdere kandidaten voor — kies de juiste, dan wordt het gesprek alsnog beoordeeld.
             </p>
-            {ambigueMatches.map((match) => (
+            {ambigueMatchesGefilterd.map((match) => (
               <div key={match.recording_url} className="insights-call-card">
                 <div className="insights-call-header">
                   {isAdmin && <span className="insights-kandidaat-naam">{consultantNaamPerId.get(match.user_id) ?? 'Onbekend'}</span>}
@@ -391,7 +419,7 @@ export default function CallInsights() {
           </div>
         )}
 
-        {!loading && gesprekken.length === 0 && ambigueMatches.length === 0 && !error && (
+        {!loading && gesprekken.length === 0 && ambigueMatchesGefilterd.length === 0 && !error && (
           <div className="idle-state">Geen openstaande suggesties — alles is al beoordeeld.</div>
         )}
 
