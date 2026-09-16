@@ -7,18 +7,27 @@
 // toch als wijziging lezen. Empirisch getest: Sonnet 5 hield deze regels wél
 // consistent aan op dezelfde testgevallen. Prijsverschil bij onze volumes
 // verwaarloosbaar (~$3-5/maand bij volledige uitrol i.p.v. ~$1,50-2,50) —
-// zie sessie-overleg voor het volledige kostenplaatje. Geen prompt-caching
-// nodig: elke aanroep heeft een uniek, kort system+user-bericht, geen
-// herbruikt gedeeld prefix om op te cachen.
-
+// zie sessie-overleg voor het volledige kostenplaatje.
+//
+// Prompt-caching (2026-09-16, bij het openzetten naar alle consultants): de
+// systeemprompt (SYSTEEM_PROMPT) is 100% statisch, ongeacht consultant/
+// kandidaat/gesprek — een ideale caching-kandidaat, alleen het korte
+// user-bericht per gesprek varieert. syncNewCalls verwerkt gesprekken al
+// sequentieel (index.ts), dus geen aparte prewarm-stap nodig zoals bij
+// kandidaat-matcher (die wél parallel scoort): de eerste aanroep binnen een
+// uur schrijft de cache vanzelf, elke volgende leest 'm goedkoop terug.
 const CLAUDE_MODEL = 'claude-sonnet-5'
 const CLAUDE_MAX_TOKENS = 500
 const CLAUDE_TIMEOUT_MS = 30_000
 
-// Sonnet 5-tarieven per token, voor eventuele kostenlogging/-limieten later.
+// Sonnet 5-tarieven per token. cacheWrite/cacheRead: standaard Anthropic-
+// verhoudingen (~1.25x resp. ~0.1x het basis-inputtarief), zelfde als
+// kandidaat-matcher/claude.ts.
 const PRIJS_PER_TOKEN_USD = {
   input: 2.0 / 1_000_000,
   output: 10.0 / 1_000_000,
+  cacheWrite: 2.5 / 1_000_000,
+  cacheRead: 0.2 / 1_000_000,
 }
 
 async function fetchMetTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
@@ -184,13 +193,21 @@ interface HuidigeVelden {
   status: string | null
 }
 
+export interface DetectieResultaat {
+  suggesties: VeldSuggestie[]
+  kostenUsd: number
+}
+
 /**
  * Detecteert veldwijzigingen in een gesprekssamenvatting. Bij een parse- of
  * API-fout: lege array (geen suggestie is veiliger dan een gok), nooit
  * crashen — één mislukte extractie mag de rest van een sync-batch niet
- * blokkeren.
+ * blokkeren. kostenUsd wordt ook bij een lege/mislukte extractie zo goed
+ * mogelijk teruggegeven (0 als de aanroep zelf al mislukte, anders de
+ * werkelijke usage) — de aanroeper (index.ts) telt dit op bij het
+ * dagelijkse kostenplafond, ongeacht of er suggesties uitkwamen.
  */
-export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: HuidigeVelden): Promise<VeldSuggestie[]> {
+export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: HuidigeVelden): Promise<DetectieResultaat> {
   const huidigeVeldenTekst = [
     `customText22 (Salaris range): ${huidigeVelden.customText22 ?? 'onbekend'}`,
     `customText11 (Uurtarief range): ${huidigeVelden.customText11 ?? 'onbekend'}`,
@@ -217,7 +234,9 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
           // alleen de parsing robuuster maken, om ook de tokens/latency van
           // ongebruikt redeneren te besparen.
           thinking: { type: 'disabled' },
-          system: SYSTEEM_PROMPT,
+          // cache_control i.p.v. een platte string: SYSTEEM_PROMPT verandert
+          // nooit, zie de uitleg bovenaan dit bestand.
+          system: [{ type: 'text', text: SYSTEEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }],
           messages: [
             {
               role: 'user',
@@ -230,15 +249,16 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
     )
   } catch (err) {
     console.error('[call-insights] Claude-aanroep gaf een netwerkfout:', err)
-    return []
+    return { suggesties: [], kostenUsd: 0 }
   }
 
   if (!response.ok) {
     console.error(`[call-insights] Claude-aanroep mislukt: ${response.status} ${await response.text()}`)
-    return []
+    return { suggesties: [], kostenUsd: 0 }
   }
 
   const data = await response.json()
+  const kostenUsd = schatKostenUsd(data?.usage)
   // Zoek het eerste blok van type "text" i.p.v. blindelings content[0] te
   // pakken — bij thinking-modellen (of andere toekomstige blok-types) staat
   // tekst niet per se op index 0.
@@ -249,26 +269,37 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
   const start = tekst.indexOf('[')
   if (start < 0) {
     console.error(`[call-insights] Geen JSON-array in Claude-response: ${raw.slice(0, 300)}`)
-    return []
+    return { suggesties: [], kostenUsd }
   }
 
   try {
     const parsed = JSON.parse(tekst.slice(start))
-    if (!Array.isArray(parsed)) return []
-    return parsed
+    if (!Array.isArray(parsed)) return { suggesties: [], kostenUsd }
+    const suggesties = parsed
       .filter((item) => item && typeof item.field === 'string' && Object.keys(VELD_DEFINITIES).includes(item.field) && item.suggested_value)
       .map((item) => ({
         field: String(item.field),
         suggested_value: String(item.suggested_value),
         quote: String(item.quote ?? ''),
       }))
+    return { suggesties, kostenUsd }
   } catch (err) {
     console.error(`[call-insights] JSON-parsefout in Claude-response: ${raw.slice(0, 300)}`, err)
-    return []
+    return { suggesties: [], kostenUsd }
   }
 }
 
-export function schatKostenUsd(usage: { input_tokens?: number; output_tokens?: number } | undefined): number {
+function schatKostenUsd(usage: {
+  input_tokens?: number
+  output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
+} | undefined): number {
   if (!usage) return 0
-  return (usage.input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.input + (usage.output_tokens ?? 0) * PRIJS_PER_TOKEN_USD.output
+  return (
+    (usage.input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.input +
+    (usage.output_tokens ?? 0) * PRIJS_PER_TOKEN_USD.output +
+    (usage.cache_creation_input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.cacheWrite +
+    (usage.cache_read_input_tokens ?? 0) * PRIJS_PER_TOKEN_USD.cacheRead
+  )
 }

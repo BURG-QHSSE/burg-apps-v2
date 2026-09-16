@@ -108,6 +108,27 @@ export async function setUserNaam(targetId, naam) {
 }
 
 /**
+ * Wijzigt het `team`-veld van een profiel ('sales'|'consultant'|null) — los
+ * van de rol-hiërarchie (die alleen toegangsniveau regelt). Gaat via de
+ * `set_user_team` Postgres-functie (security definer, admin-only), zelfde
+ * patroon als setMijnOmgevingUitgebreid hieronder.
+ *
+ * @param {string} targetId
+ * @param {'sales'|'consultant'|null} team
+ * @throws {Error} met de Postgres-foutmelding
+ */
+export async function setUserTeam(targetId, team) {
+  const { error } = await supabase.rpc('set_user_team', {
+    target_id: targetId,
+    new_team: team,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
+/**
  * Zet de "Kansen Swiper uitgebreid"-vlag — los van de rol-hiërarchie,
  * bepaalt of iemand binnen Kansen Swiper de extra tabbladen (Second
  * Check/Analytics/Monitoring) te zien krijgt. Gaat via de

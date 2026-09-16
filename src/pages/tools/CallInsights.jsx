@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import bullhornLogo from '../../assets/bullhorn-icon.png'
+import { useAuth } from '../../lib/AuthProvider'
 import {
   fetchPendingSuggesties,
   fetchAmbigueMatches,
+  fetchAllePendingSuggesties,
+  fetchAlleAmbigueMatches,
+  fetchConsultantProfielen,
   fetchKandidaatNamen,
-  fetchActieveConsultant,
-  fetchExtensieRoster,
   accepteerSuggestie,
   wijsSuggestieAf,
   resolveCandidateMatch,
@@ -18,13 +20,17 @@ import {
  * status) uit 3CX-gesprekssamenvattingen. Welke AI hierachter zit staat
  * bewust nergens in de UI (zelfde afspraak als Kandidaat Matcher).
  *
- * MVP: admin-only (zie toolRegistry.js) en bewust beperkt tot één actieve
- * consultant tegelijk, ingesteld in het AdminPanel (call_insights_mvp_
- * actieve_consultant) — dus niet per se de ingelogde admin zelf. Matching +
- * extractie gebeurt buiten deze UI om (call-insights Edge Function, actie
- * syncNewCalls, op een cron) — dit scherm toont alleen wat al klaarstaat en
- * verwerkt het besluit (accepteren schrijft direct naar Bullhorn, zie
- * supabase/functions/call-insights).
+ * Twee weergaven, bepaald door de ingelogde gebruiker (zie toolRegistry.js
+ * canAccessTool voor wie hier überhaupt mag komen):
+ * - Admin: overzicht + inbox over ALLE consultants heen (RLS "admin leest
+ *   alle suggesties/verwerkte recordings" staat dit toe).
+ * - Consultant (team='consultant', en de live-schakelaar in Instellingen
+ *   staat aan): ziet uitsluitend de eigen gesprekken (auth.uid()).
+ *
+ * Matching + extractie gebeurt buiten deze UI om (call-insights Edge
+ * Function, actie syncNewCalls, op een cron) — dit scherm toont alleen wat
+ * al klaarstaat en verwerkt het besluit (accepteren schrijft direct naar
+ * Bullhorn, zie supabase/functions/call-insights).
  *
  * Kandidaatnamen worden live opgehaald, nooit opgeslagen — zelfde AVG-
  * voorzichtigheid als Kandidaat Matcher.
@@ -57,8 +63,10 @@ function formatDatum(iso) {
 }
 
 export default function CallInsights() {
-  const [actieveConsultant, setActieveConsultant] = useState(null)
-  const [actieveConsultantNaam, setActieveConsultantNaam] = useState(null)
+  const { user, profile } = useAuth()
+  const isAdmin = profile?.role === 'admin'
+
+  const [consultantProfielen, setConsultantProfielen] = useState([])
   const [suggesties, setSuggesties] = useState([])
   const [ambigueMatches, setAmbigueMatches] = useState([])
   const [namen, setNamen] = useState({})
@@ -76,22 +84,24 @@ export default function CallInsights() {
   const [gekozenKandidaat, setGekozenKandidaat] = useState({})
   const [bezigMetKiezen, setBezigMetKiezen] = useState(new Set())
 
+  const consultantNaamPerId = useMemo(
+    () => new Map(consultantProfielen.map((c) => [c.id, c.naam || c.email])),
+    [consultantProfielen],
+  )
+
   async function laadGegevens() {
     setLoading(true)
     setError(null)
     try {
-      const userId = await fetchActieveConsultant()
-      setActieveConsultant(userId)
-      if (!userId) {
-        setSuggesties([])
-        setAmbigueMatches([])
-        return
+      let suggestiesData
+      let ambigueData
+      if (isAdmin) {
+        const consultanten = await fetchConsultantProfielen()
+        setConsultantProfielen(consultanten)
+        ;[suggestiesData, ambigueData] = await Promise.all([fetchAllePendingSuggesties(), fetchAlleAmbigueMatches()])
+      } else {
+        ;[suggestiesData, ambigueData] = await Promise.all([fetchPendingSuggesties(user.id), fetchAmbigueMatches(user.id)])
       }
-
-      const roster = await fetchExtensieRoster()
-      setActieveConsultantNaam(roster.find((r) => r.userId === userId)?.naam ?? null)
-
-      const [suggestiesData, ambigueData] = await Promise.all([fetchPendingSuggesties(userId), fetchAmbigueMatches(userId)])
       setSuggesties(suggestiesData)
       setAmbigueMatches(ambigueData)
 
@@ -118,9 +128,10 @@ export default function CallInsights() {
   }
 
   useEffect(() => {
+    if (!user?.id) return
     laadGegevens()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id, isAdmin])
 
   // Scrollpositie bewaren - zonder dit sprong je terug naar boven zodra het
   // tabblad (bv. na het bekijken van een kandidaat in Bullhorn) naar de
@@ -188,6 +199,7 @@ export default function CallInsights() {
         perGesprek.set(s.recording_url, {
           recordingUrl: s.recording_url,
           candidateId: s.bullhorn_candidate_id,
+          userId: s.user_id,
           callStartedAt: s.call_started_at,
           samenvatting: s.call_summary,
           velden: [],
@@ -197,6 +209,24 @@ export default function CallInsights() {
     }
     return [...perGesprek.values()].sort((a, b) => new Date(b.callStartedAt) - new Date(a.callStartedAt))
   }, [suggesties])
+
+  // Admin-only: puur ter oriëntatie boven de inbox — wie moet nog wat
+  // afhandelen. Historie (al afgehandeld, kosten) staat in Tooling Gebruik.
+  const overzichtPerConsultant = useMemo(() => {
+    if (!isAdmin) return []
+    const perGebruiker = new Map(
+      consultantProfielen.map((c) => [c.id, { userId: c.id, naam: c.naam || c.email, pendingSuggesties: 0, ambigu: 0 }]),
+    )
+    for (const s of suggesties) {
+      const entry = perGebruiker.get(s.user_id)
+      if (entry) entry.pendingSuggesties += 1
+    }
+    for (const m of ambigueMatches) {
+      const entry = perGebruiker.get(m.user_id)
+      if (entry) entry.ambigu += 1
+    }
+    return [...perGebruiker.values()].sort((a, b) => b.pendingSuggesties + b.ambigu - (a.pendingSuggesties + a.ambigu))
+  }, [isAdmin, consultantProfielen, suggesties, ambigueMatches])
 
   function updateVeldState(recordingUrl, suggestionId, wijziging) {
     setBewerking((prev) => ({
@@ -275,12 +305,7 @@ export default function CallInsights() {
         <p className="page-intro">
           Automatisch gedetecteerde wijzigingen uit gesprekken — de 3CX-gesprekssamenvatting wordt vergeleken met wat er nu in Bullhorn
           staat. Vink aan welke velden bijgewerkt moeten worden, corrigeer de waarde indien nodig, en klik op Bevestigen.
-          {actieveConsultantNaam && (
-            <>
-              {' '}
-              Toont nu: <strong>{actieveConsultantNaam}</strong> (in te stellen via AdminPanel).
-            </>
-          )}
+          {isAdmin && ' Je ziet hier de gesprekken van alle consultants.'}
         </p>
 
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -288,13 +313,36 @@ export default function CallInsights() {
 
         {loading && <div className="idle-state">Bezig met laden...</div>}
 
-        {!loading && !actieveConsultant && (
-          <div className="idle-state">
-            Nog geen consultant ingesteld — kies er één bij "Call Insights — actieve consultant" in het AdminPanel.
+        {!loading && isAdmin && overzichtPerConsultant.length > 0 && (
+          <div className="admin-table-wrap" style={{ marginBottom: 'var(--space-6)' }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Consultant</th>
+                  <th>Openstaande suggesties</th>
+                  <th>Openstaande kandidaat-keuzes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overzichtPerConsultant.map((c) => (
+                  <tr key={c.userId}>
+                    <td data-label="Consultant">{c.naam}</td>
+                    <td data-label="Openstaande suggesties">{c.pendingSuggesties}</td>
+                    <td data-label="Openstaande kandidaat-keuzes">{c.ambigu}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
-        {!loading && actieveConsultant && ambigueMatches.length > 0 && (
+        {!loading && isAdmin && consultantProfielen.length === 0 && (
+          <div className="idle-state">
+            Nog geen enkele gebruiker met team "Consultant" ingesteld — zie "Alle gebruikers" in Instellingen.
+          </div>
+        )}
+
+        {!loading && ambigueMatches.length > 0 && (
           <div className="insights-ambigu-sectie">
             <h2>Welke kandidaat is dit?</h2>
             <p className="page-intro">
@@ -303,6 +351,7 @@ export default function CallInsights() {
             {ambigueMatches.map((match) => (
               <div key={match.recording_url} className="insights-call-card">
                 <div className="insights-call-header">
+                  {isAdmin && <span className="insights-kandidaat-naam">{consultantNaamPerId.get(match.user_id) ?? 'Onbekend'}</span>}
                   <span className="insights-call-datum">{formatDatum(match.call_started_at)}</span>
                 </div>
                 {(match.kandidaat_kandidaten ?? []).map((candidateId) => (
@@ -342,7 +391,7 @@ export default function CallInsights() {
           </div>
         )}
 
-        {!loading && actieveConsultant && gesprekken.length === 0 && ambigueMatches.length === 0 && !error && (
+        {!loading && gesprekken.length === 0 && ambigueMatches.length === 0 && !error && (
           <div className="idle-state">Geen openstaande suggesties — alles is al beoordeeld.</div>
         )}
 
@@ -351,6 +400,9 @@ export default function CallInsights() {
             <div key={gesprek.recordingUrl} className="insights-call-card">
               <div className="insights-call-header">
                 <span className="insights-kandidaat-naam">{namen[gesprek.candidateId] ?? `Kandidaat ${gesprek.candidateId}`}</span>
+                {isAdmin && (
+                  <span className="insights-kandidaat-naam">— {consultantNaamPerId.get(gesprek.userId) ?? 'Onbekend'}</span>
+                )}
                 <span className="insights-call-datum">{formatDatum(gesprek.callStartedAt)}</span>
               </div>
 

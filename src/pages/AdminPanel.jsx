@@ -7,6 +7,7 @@ import {
   changeUserRole,
   setUserActief,
   setUserNaam,
+  setUserTeam,
   setMijnOmgevingUitgebreid,
   createUser,
   deleteUserPermanently,
@@ -233,6 +234,30 @@ export default function AdminPanel() {
       // Terugdraaien naar de vorige waarde en foutmelding tonen bij deze rij.
       setProfiles((current) =>
         current.map((p) => (p.id === profileId ? { ...p, role: previousRole } : p)),
+      )
+      setRowErrors((current) => ({ ...current, [profileId]: err.message }))
+    } finally {
+      setPendingIds((current) => ({ ...current, [profileId]: false }))
+    }
+  }
+
+  async function handleTeamChange(profileId, newTeamValue) {
+    const previousProfile = profiles.find((p) => p.id === profileId)
+    const previousTeam = previousProfile?.team
+    const nieuweWaarde = newTeamValue || null
+
+    setProfiles((current) =>
+      current.map((p) => (p.id === profileId ? { ...p, team: nieuweWaarde } : p)),
+    )
+    setRowErrors((current) => ({ ...current, [profileId]: null }))
+    setPendingIds((current) => ({ ...current, [profileId]: true }))
+
+    try {
+      await setUserTeam(profileId, nieuweWaarde)
+      await loadProfiles()
+    } catch (err) {
+      setProfiles((current) =>
+        current.map((p) => (p.id === profileId ? { ...p, team: previousTeam } : p)),
       )
       setRowErrors((current) => ({ ...current, [profileId]: err.message }))
     } finally {
@@ -679,6 +704,7 @@ export default function AdminPanel() {
                     </button>
                   </th>
                   <th>Rol</th>
+                  <th>Team</th>
                   <th>Actief</th>
                   <th>Telt mee voor yield</th>
                   <th>Details</th>
@@ -757,6 +783,17 @@ export default function AdminPanel() {
                             {role}
                           </option>
                         ))}
+                      </select>
+                    </td>
+                    <td data-label="Team">
+                      <select
+                        value={profile.team ?? ''}
+                        disabled={pendingIds[profile.id]}
+                        onChange={(event) => handleTeamChange(profile.id, event.target.value)}
+                      >
+                        <option value="">— niet ingesteld —</option>
+                        <option value="sales">Sales</option>
+                        <option value="consultant">Consultant</option>
                       </select>
                     </td>
                     <td data-label="Actief">

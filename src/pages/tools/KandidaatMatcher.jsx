@@ -59,7 +59,7 @@ function scoreBadgeClass(score) {
  * support) — een notitie is wél meteen zichtbaar.
  *
  * Open voor iedereen (zie toolRegistry.js minimumRole: 'user') - zie
- * MatcherGebruik.jsx voor het admin-only gebruiksoverzicht (wie, hoe vaak,
+ * ToolingGebruik.jsx voor het admin-only gebruiksoverzicht (wie, hoe vaak,
  * hoeveel kandidaten, kosten).
  *
  * process-batch mag maar ~150s per aanroep duren (Supabase's wall-clock-

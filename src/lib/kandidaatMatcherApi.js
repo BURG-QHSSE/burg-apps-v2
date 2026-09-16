@@ -77,7 +77,7 @@ export async function fetchMijnRuns() {
   return data
 }
 
-/** Alle runs van iedereen, zonder limiet — voor het admin-only gebruiksoverzicht (MatcherGebruik.jsx). */
+/** Alle runs van iedereen, zonder limiet — voor het admin-only gebruiksoverzicht (ToolingGebruik.jsx). */
 export async function fetchAlleRunsVoorGebruiksoverzicht() {
   const { data, error } = await supabase
     .from('matching_runs')

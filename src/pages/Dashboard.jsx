@@ -7,6 +7,7 @@ import { fetchMyToolUsageSummary } from '../lib/toolUsage'
 import { fetchMijnGpb, telOpenstaandeGpbActies } from '../lib/gpbApi'
 import { fetchNieuweVacaturesCount } from './tools/mijn-omgeving/burgJobsHelpers'
 import { fetchNieuweTroubleshootItems } from '../lib/troubleshootApi'
+import { fetchCallInsightsLive } from '../lib/callInsightsApi'
 import ToolIcon from '../lib/toolIcons'
 import NotificatiesMenu from '../components/NotificatiesMenu'
 import YieldThermometer from './YieldThermometer'
@@ -65,7 +66,9 @@ function ToolCard({ tool, unlocked, badgeAantal }) {
         <div className="tool-card-text">
           <span className="tool-card-name">{tool.naam}</span>
           <div className="tool-card-rule" />
-          <span className="tool-card-hint">Vereist rol: {roleLabel(tool.minimumRole)}</span>
+          <span className="tool-card-hint">
+            {tool.id === 'call-insights' ? 'Nog niet beschikbaar' : `Vereist rol: ${roleLabel(tool.minimumRole)}`}
+          </span>
         </div>
       </div>
     )
@@ -97,9 +100,16 @@ export default function Dashboard() {
   const [gpbOpenstaand, setGpbOpenstaand] = useState(0)
   const [nieuweVacaturesCount, setNieuweVacaturesCount] = useState(0)
   const [nieuweTicketsCount, setNieuweTicketsCount] = useState(0)
+  const [callInsightsLive, setCallInsightsLive] = useState(false)
 
   useEffect(() => {
     let isMounted = true
+
+    fetchCallInsightsLive()
+      .then((live) => {
+        if (isMounted) setCallInsightsLive(live)
+      })
+      .catch((err) => console.error('[Dashboard] Kon call-insights-instelling niet laden:', err.message))
 
     if (user?.id) {
       fetchMyToolUsageSummary(user.id).then((summary) => {
@@ -137,7 +147,7 @@ export default function Dashboard() {
 
   const featuredTools = gebruik
     .map((entry) => ({ entry, tool: TOOLS.find((t) => t.id === entry.toolId) }))
-    .filter(({ tool }) => tool && canAccessTool(profile, tool))
+    .filter(({ tool }) => tool && canAccessTool(profile, tool, { callInsightsLive }))
     .slice(0, 2)
 
   return (
@@ -191,7 +201,9 @@ export default function Dashboard() {
 
         {TOOL_CATEGORIES.map((category) => {
           const toolsInCategory = TOOLS.filter(
-            (tool) => tool.category === category.id && (!profile?.restricted_to_tool || canAccessTool(profile, tool)),
+            (tool) =>
+              tool.category === category.id &&
+              (!profile?.restricted_to_tool || canAccessTool(profile, tool, { callInsightsLive })),
           )
 
           if (toolsInCategory.length === 0) return null
@@ -204,7 +216,7 @@ export default function Dashboard() {
                   <ToolCard
                     key={tool.id}
                     tool={tool}
-                    unlocked={canAccessTool(profile, tool)}
+                    unlocked={canAccessTool(profile, tool, { callInsightsLive })}
                     badgeAantal={
                       tool.id === 'gpb-beoordelingstool'
                         ? gpbOpenstaand

@@ -112,10 +112,10 @@ async function verwerkGesprekVoorKandidaat(
   callStartedAt: string,
   summary: string,
   candidateId: number,
-): Promise<{ suggestiesAantal: number; session: BullhornSession }> {
+): Promise<{ suggestiesAantal: number; kostenUsd: number; session: BullhornSession }> {
   const { velden, session: newSession } = await getCandidateInsightsVelden(admin, session, candidateId)
 
-  const suggesties = await detecteerVeldwijzigingen(summary, {
+  const { suggesties, kostenUsd } = await detecteerVeldwijzigingen(summary, {
     customText22: velden.customText22,
     customText11: velden.customText11,
     city: velden.address?.city ?? null,
@@ -139,7 +139,56 @@ async function verwerkGesprekVoorKandidaat(
     if (insertError) throw new Error(insertError.message)
   }
 
-  return { suggestiesAantal: suggesties.length, session: newSession }
+  return { suggestiesAantal: suggesties.length, kostenUsd, session: newSession }
+}
+
+// Dagelijks kostenplafond (guardrail tegen een bug die onbeperkt Claude-
+// kosten zou kunnen maken) - instelbaar, default $2/dag. SYNC_BATCH_SIZE
+// begrenst al hoeveel Claude-calls één enkele tick maximaal kan maken; dit
+// plafond vangt het scenario af waarbij herhaalde ticks (elke 15 min, zie
+// pg_cron) toch geld blijven kosten, bv. door een dedupe-bug die dezelfde
+// recordings steeds als "nieuw" blijft aanbieden.
+const MAX_KOSTEN_USD_PER_DAG = Number(Deno.env.get('CALL_INSIGHTS_MAX_KOSTEN_USD_PER_DAG')) || 2
+
+/** Som van kosten_usd voor vandaag (UTC) - geen aparte running-total-tabel nodig, zie planning-notities. */
+async function haalKostenVandaagOp(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+): Promise<number> {
+  const vandaag = new Date().toISOString().slice(0, 10) // YYYY-MM-DD, UTC
+  const { data, error } = await admin
+    .from('call_insights_processed')
+    .select('kosten_usd')
+    .gte('processed_at', `${vandaag}T00:00:00Z`)
+  if (error) {
+    console.error('[call-insights] Kon dagkosten niet ophalen, guardrail slaat deze check over:', error.message)
+    return 0
+  }
+  return (data ?? []).reduce((som: number, r: { kosten_usd: number }) => som + (r.kosten_usd ?? 0), 0)
+}
+
+/**
+ * Stuurt een Slack-melding bij het bereiken van het dagplafond. Fire-and-
+ * forget: een mislukte Slack-post mag syncNewCalls niet laten crashen, dus
+ * fouten worden alleen gelogd.
+ */
+async function stuurKostenplafondMelding(kostenUsd: number): Promise<void> {
+  const webhookUrl = Deno.env.get('CALL_INSIGHTS_SLACK_WEBHOOK_URL')
+  if (!webhookUrl) return
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text:
+          `*Call Insights: dagelijks kostenplafond bereikt*\n` +
+          `Vandaag al $${kostenUsd.toFixed(2)} uitgegeven (plafond: $${MAX_KOSTEN_USD_PER_DAG}). ` +
+          `Verwerking is gestopt tot morgen (UTC) — resterende gesprekken worden dan alsnog opgepakt.`,
+      }),
+    })
+  } catch (err) {
+    console.error('[call-insights] Slack-melding voor kostenplafond mislukt:', err)
+  }
 }
 
 /**
@@ -233,7 +282,13 @@ async function syncRecordingsFromXapi(
 async function syncNewCalls(
   // deno-lint-ignore no-explicit-any
   admin: any,
-): Promise<{ verwerkt: number; matches: number; ambigu: number; suggesties: number }> {
+): Promise<{ verwerkt: number; matches: number; ambigu: number; suggesties: number; kostenplafondBereikt?: boolean }> {
+  let kostenVandaag = await haalKostenVandaagOp(admin)
+  if (kostenVandaag >= MAX_KOSTEN_USD_PER_DAG) {
+    console.warn(`[call-insights] Dagelijks kostenplafond al bereikt ($${kostenVandaag.toFixed(2)}) - sync overgeslagen.`)
+    return { verwerkt: 0, matches: 0, ambigu: 0, suggesties: 0, kostenplafondBereikt: true }
+  }
+
   const { data: nieuw, error } = await admin.rpc('call_insights_nieuwe_recordings', { p_limiet: SYNC_BATCH_SIZE })
   if (error) throw new Error(`call_insights_nieuwe_recordings mislukt: ${error.message}`)
 
@@ -241,8 +296,15 @@ async function syncNewCalls(
   let matches = 0
   let ambigu = 0
   let suggestiesTotaal = 0
+  let kostenplafondBereikt = false
 
   for (const recording of nieuw ?? []) {
+    if (kostenVandaag >= MAX_KOSTEN_USD_PER_DAG) {
+      kostenplafondBereikt = true
+      await stuurKostenplafondMelding(kostenVandaag)
+      break
+    }
+
     const laatste9 = normaliseerTelefoonnummer(recording.extern_nummer ?? '')
     if (!laatste9) {
       await admin.from('call_insights_processed').insert({
@@ -314,6 +376,11 @@ async function syncNewCalls(
       )
       session = resultaat.session
       suggestiesTotaal += resultaat.suggestiesAantal
+      kostenVandaag += resultaat.kostenUsd
+      await admin
+        .from('call_insights_processed')
+        .update({ kosten_usd: resultaat.kostenUsd })
+        .eq('recording_url', recording.recording_url)
     } catch (err) {
       console.error(`[call-insights] Verwerken van ${recording.recording_url} mislukt:`, err)
       await admin
@@ -323,7 +390,7 @@ async function syncNewCalls(
     }
   }
 
-  return { verwerkt: (nieuw ?? []).length, matches, ambigu, suggesties: suggestiesTotaal }
+  return { verwerkt: (nieuw ?? []).length, matches, ambigu, suggesties: suggestiesTotaal, kostenplafondBereikt }
 }
 
 /**
@@ -351,9 +418,9 @@ async function resolveSuggestion(
   if (error || !suggestie) {
     return { ok: false, error: 'Suggestie niet gevonden', status: 404 }
   }
-  // MVP: Call Insights is admin-only (zie toolRegistry.js) - een admin
-  // handelt suggesties af namens de gekozen actieve consultant, vandaar de
-  // isAdmin-uitzondering op de eigenaarschap-check.
+  // Een admin mag suggesties ook namens een andere consultant afhandelen
+  // (bv. vanuit het admin-overzicht), vandaar de isAdmin-uitzondering op de
+  // eigenaarschap-check.
   if (suggestie.user_id !== callerId && !isAdmin) {
     return { ok: false, error: 'Deze suggestie hoort niet bij jouw gesprekken', status: 403 }
   }
@@ -438,7 +505,7 @@ async function resolveCandidateMatch(
   if (error || !rij) {
     return { ok: false, error: 'Gesprek niet gevonden', status: 404 }
   }
-  // MVP: zelfde isAdmin-uitzondering als resolveSuggestion hierboven.
+  // Zelfde isAdmin-uitzondering als resolveSuggestion hierboven.
   if (rij.user_id !== callerId && !isAdmin) {
     return { ok: false, error: 'Dit gesprek hoort niet bij jou', status: 403 }
   }
@@ -460,7 +527,7 @@ async function resolveCandidateMatch(
 
   try {
     const session = await getBullhornSession(admin)
-    const { suggestiesAantal } = await verwerkGesprekVoorKandidaat(
+    const { suggestiesAantal, kostenUsd } = await verwerkGesprekVoorKandidaat(
       admin,
       session,
       recordingUrl,
@@ -471,7 +538,7 @@ async function resolveCandidateMatch(
     )
     await admin
       .from('call_insights_processed')
-      .update({ bullhorn_candidate_id: gekozenCandidateId, skipped_reason: null, kandidaat_kandidaten: null })
+      .update({ bullhorn_candidate_id: gekozenCandidateId, skipped_reason: null, kandidaat_kandidaten: null, kosten_usd: kostenUsd })
       .eq('recording_url', recordingUrl)
     return { ok: true, suggestiesAantal }
   } catch (err) {

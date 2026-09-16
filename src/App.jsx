@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthProvider'
 import { TOOLS, canAccessTool } from './lib/toolRegistry'
 import { logToolUsage } from './lib/toolUsage'
+import { fetchCallInsightsLive } from './lib/callInsightsApi'
 import RoleGate from './components/RoleGate'
 import RequireAuth from './components/RequireAuth'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -27,7 +28,7 @@ import BelOverzicht from './pages/tools/BelOverzicht'
 import CallInsights from './pages/tools/CallInsights'
 import Ontwikkeling from './pages/tools/Ontwikkeling'
 import KandidaatMatcher from './pages/tools/KandidaatMatcher'
-import MatcherGebruik from './pages/tools/MatcherGebruik'
+import ToolingGebruik from './pages/tools/ToolingGebruik'
 import TroubleshootWidget from './components/TroubleshootWidget'
 import './App.css'
 import './pages.css'
@@ -47,7 +48,7 @@ const TOOL_COMPONENTS = {
   'call-insights': CallInsights,
   'dev-projecten': Ontwikkeling,
   'kandidaat-matcher': KandidaatMatcher,
-  'matcher-gebruik': MatcherGebruik,
+  'matcher-gebruik': ToolingGebruik,
 }
 
 /**
@@ -80,6 +81,19 @@ function App() {
 function AppRoutes() {
   const { profile, user } = useAuth()
   const userRole = profile?.role
+  const [callInsightsLive, setCallInsightsLive] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    fetchCallInsightsLive()
+      .then((live) => {
+        if (isMounted) setCallInsightsLive(live)
+      })
+      .catch((err) => console.error('[App] Kon call-insights-instelling niet laden:', err.message))
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   return (
     <>
@@ -133,7 +147,7 @@ function AppRoutes() {
             path={tool.path}
             element={
               <RequireAuth>
-                {canAccessTool(profile, tool) ? (
+                {canAccessTool(profile, tool, { callInsightsLive }) ? (
                   <ToolUsageTracker toolId={tool.id} userId={user?.id}>
                     {toolElement}
                   </ToolUsageTracker>

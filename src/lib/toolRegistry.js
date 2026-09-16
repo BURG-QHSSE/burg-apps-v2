@@ -11,16 +11,17 @@ export const TOOLS = [
   { id: 'mijn-omgeving', naam: 'Kansen Swiper', minimumRole: 'user', path: '/tools/mijn-omgeving', category: 'daily' },
   { id: 'proeftijd-tracker', naam: 'Proeftijd Tracker', minimumRole: 'user', path: '/tools/proeftijd-tracker', category: 'daily' },
   { id: 'bel-overzicht', naam: 'Bel Overzicht', minimumRole: 'user', path: '/tools/bel-overzicht', category: 'daily' },
-  // MVP: tijdelijk admin-only, zie schema.sql-comment bij
-  // call_insights_mvp_actieve_consultant — verwerking + weergave zijn
-  // bewust beperkt tot één door een admin gekozen consultant, i.p.v.
-  // meteen alle 10 consultants' gesprekken te verwerken.
-  { id: 'call-insights', naam: 'Call Insights', minimumRole: 'admin', path: '/tools/call-insights', category: 'daily' },
+  // minimumRole is hier bewust 'user' - de echte toegangscheck gebeurt in
+  // canAccessTool() hieronder (admin, OF team='consultant' + de
+  // call_insights_instellingen.live_voor_consultants-schakelaar staat aan).
+  // Die schakelaar staat default UIT: functioneel dus nog steeds admin-only
+  // totdat een admin 'm in Instellingen omzet, maar dan zonder code-deploy.
+  { id: 'call-insights', naam: 'Call Insights', minimumRole: 'user', path: '/tools/call-insights', category: 'daily' },
   { id: 'doorgroei-tracker', naam: 'Doorgroei Tracker', minimumRole: 'user', path: '/tools/doorgroei-tracker', category: 'groei' },
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
   { id: 'dev-projecten', naam: 'Ontwikkeling', minimumRole: 'admin', path: '/tools/dev-projecten', category: 'beheer' },
   { id: 'kandidaat-matcher', naam: 'Kandidaat Matcher', minimumRole: 'user', path: '/tools/kandidaat-matcher', category: 'daily' },
-  { id: 'matcher-gebruik', naam: 'Kandidaat Matcher - Gebruik', minimumRole: 'admin', path: '/tools/matcher-gebruik', category: 'beheer' },
+  { id: 'matcher-gebruik', naam: 'Tooling Gebruik', minimumRole: 'admin', path: '/tools/matcher-gebruik', category: 'beheer' },
 ]
 
 /**
@@ -63,10 +64,20 @@ export function hasAccess(userRole, minimumRole) {
  * Bepaalt of `profile` toegang heeft tot `tool`. Is `restricted_to_tool`
  * gezet op het profiel, dan mag het profiel UITSLUITEND die ene tool zien,
  * ongeacht `role` — overschrijft de normale rol-ladder volledig.
+ *
+ * `context.callInsightsLive` is de waarde van
+ * `call_insights_instellingen.live_voor_consultants` (zie
+ * useCallInsightsLive() in callInsightsApi.js) — alleen relevant voor de
+ * call-insights-tool hieronder. Ontbreekt die context (nog niet geladen)?
+ * Dan is de veilige default `false`, dus de tool blijft verborgen totdat de
+ * instelling daadwerkelijk is opgehaald.
  */
-export function canAccessTool(profile, tool) {
+export function canAccessTool(profile, tool, context = {}) {
   if (profile?.restricted_to_tool) {
     return profile.restricted_to_tool === tool.id
+  }
+  if (tool.id === 'call-insights') {
+    return profile?.role === 'admin' || (profile?.team === 'consultant' && !!context.callInsightsLive)
   }
   return hasAccess(profile?.role, tool.minimumRole)
 }
