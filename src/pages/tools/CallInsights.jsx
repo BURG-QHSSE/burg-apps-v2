@@ -507,7 +507,13 @@ export default function CallInsights() {
                         nieuwe plaats) — vul zelf aan in Bullhorn indien nodig.
                       </p>
                     )}
-                    {veldStatus[veld.id]?.verouderd && (
+                    {veldStatus[veld.id]?.algeregeld && (
+                      <p className="form-success" role="status">
+                        Dit veld staat al op de voorgestelde waarde in Bullhorn (bv. handmatig al aangepast) — bevestigen is
+                        hier niet meer nodig, je kan deze suggestie ook gewoon afwijzen.
+                      </p>
+                    )}
+                    {veldStatus[veld.id]?.verouderd && !veldStatus[veld.id]?.algeregeld && (
                       <p className="form-error" role="alert">
                         Let op: dit veld staat inmiddels op "{veldStatus[veld.id].actueleWaarde || '(leeg)'}" in Bullhorn —
                         gewijzigd sinds deze suggestie is gedetecteerd. Controleer of bevestigen nog klopt.

@@ -631,13 +631,13 @@ async function verifieerSuggestiesActueel(
   callerId: string,
   isAdmin: boolean,
   suggestionIds: string[],
-): Promise<Record<string, { actueleWaarde: string | null; verouderd: boolean }>> {
-  const resultaat: Record<string, { actueleWaarde: string | null; verouderd: boolean }> = {}
+): Promise<Record<string, { actueleWaarde: string | null; verouderd: boolean; algeregeld: boolean }>> {
+  const resultaat: Record<string, { actueleWaarde: string | null; verouderd: boolean; algeregeld: boolean }> = {}
   if (suggestionIds.length === 0) return resultaat
 
   const { data: suggesties, error } = await admin
     .from('call_field_suggestions')
-    .select('id, user_id, bullhorn_candidate_id, field_name, current_value')
+    .select('id, user_id, bullhorn_candidate_id, field_name, current_value, suggested_value')
     .in('id', suggestionIds)
     .eq('status', 'pending')
   if (error) throw new Error(error.message)
@@ -661,7 +661,15 @@ async function verifieerSuggestiesActueel(
     const velden = veldenPerCandidate.get(s.bullhorn_candidate_id)
     if (!velden) continue // Bullhorn-fout hierboven - liever geen foutieve "verouderd"-melding dan een gok
     const actueleWaarde = VELD_NAAR_CURRENT_VALUE[s.field_name]?.(velden) ?? null
-    resultaat[s.id] = { actueleWaarde, verouderd: (actueleWaarde ?? '') !== (s.current_value ?? '') }
+    resultaat[s.id] = {
+      actueleWaarde,
+      verouderd: (actueleWaarde ?? '') !== (s.current_value ?? ''),
+      // Staat het veld inmiddels al op precies de voorgestelde waarde (bv.
+      // handmatig al doorgevoerd in Bullhorn)? Dan is bevestigen overbodig -
+      // apart van "verouderd", dat alleen zegt "veld is gewijzigd sinds
+      // detectie" zonder te weten of dat toevallig al de juiste waarde is.
+      algeregeld: (actueleWaarde ?? '') === (s.suggested_value ?? ''),
+    }
   }
   return resultaat
 }
