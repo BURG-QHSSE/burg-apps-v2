@@ -75,8 +75,14 @@ export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] |
   },
   customText11: {
     label: 'Uurtarief range (ZZP/interim)',
+    // Was zonder €-teken ('70 - 80' i.p.v. '€ 70 - € 80') - kwam pas aan het
+    // licht via de "is dit veld sindsdien gewijzigd"-check (2026-09-16), die
+    // een suggestie tegen een net geaccepteerde live Bullhorn-waarde
+    // vergeleek en nooit een match kon vinden. customText22/employment
+    // Preference/status zijn apart tegen meta/Candidate geverifieerd en
+    // kloppen wél al exact.
     opties: [
-      'Geen/betreft loondienst', '< 70', '70 - 80', '80 - 90', '90 - 100', '100 - 110', '110 - 120', '120 - 140', '140 of meer',
+      'Geen/betreft loondienst', '< € 70', '€ 70 - € 80', '€ 80 - € 90', '€ 90 - € 100', '€ 100 - € 110', '€ 110 - € 120', '€ 120 - € 140', '€ 140 of meer',
     ],
   },
   address: { label: 'Woonplaats', opties: null },
@@ -141,7 +147,7 @@ function bouwSysteemPrompt(): string {
     'mee — alleen wat de kandidaat over zichzelf zegt. De ranges zijn inclusief aan de ONDERKANT en exclusief aan ' +
     'de bovenkant: een (eventueel al omgerekend) bedrag dat precies op een grens ligt hoort bij de range die ' +
     'ERMEE BEGINT, niet de range die ermee eindigt (bv. exact 5000 euro -> "5000 - 6000 EUR", NIET "4500 - 5000 ' +
-    'EUR"; exact 100 euro/uur -> "100 - 110", NIET "90 - 100").\n' +
+    'EUR"; exact 100 euro/uur -> "€ 100 - € 110", NIET "€ 90 - € 100").\n' +
     '- "employmentPreference" (voorkeur dienstverband): alleen de EIGEN voorkeur van de kandidaat, nooit wat een ' +
     'vacature vereist. Dit veld ondersteunt BEIDE waarden tegelijk — als de kandidaat stellig aangeeft dat hij/zij ' +
     'BEIDE vormen doet of accepteert (bv. "werkt nu zowel in loondienst als als interim", "doet sinds kort ook ' +

@@ -53,7 +53,9 @@ const VELD_OPTIES = {
     '4000 - 4500 EUR', '4500 - 5000 EUR', '5000 - 6000 EUR', '6000 - 7000 EUR', '7000 - 8000 EUR',
     '8000 - 9000 EUR', 'EUR 9000 >', 'Onbekend', 'Geen/betreft ZZP',
   ],
-  customText11: ['Geen/betreft loondienst', '< 70', '70 - 80', '80 - 90', '90 - 100', '100 - 110', '110 - 120', '120 - 140', '140 of meer'],
+  customText11: [
+    'Geen/betreft loondienst', '< € 70', '€ 70 - € 80', '€ 80 - € 90', '€ 90 - € 100', '€ 100 - € 110', '€ 110 - € 120', '€ 120 - € 140', '€ 140 of meer',
+  ],
   employmentPreference: ['Loondienst', 'Interim', 'Loondienst, Interim'],
   status: ['OTW', 'Placeable', 'Door ons geplaatst', 'Geen specialist', 'DNC', 'New Lead'],
 }
