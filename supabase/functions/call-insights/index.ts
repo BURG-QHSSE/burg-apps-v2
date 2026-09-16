@@ -281,6 +281,17 @@ async function syncRecordingsFromXapi(
   }
 }
 
+// Een consultant voegt een kandidaat soms pas ná het telefoongesprek toe aan
+// Bullhorn (bv. bij het werven van een nieuwe kandidaat) — een gesprek dat nu
+// geen telefoon-match oplevert kan dus alsnog matchen zodra dat gebeurt.
+// I.p.v. meteen definitief 'geen_match' te registreren, blijft zo'n gesprek
+// simpelweg onverwerkt (geen call_insights_processed-rij) zodat de volgende
+// syncNewCalls-aanroep het vanzelf opnieuw probeert — pas na deze periode
+// geven we het echt op. Kost niks extra: een hernieuwde poging is alleen een
+// lichte Postgres-lookup (zoekKandidaatViaIndex), geen Bullhorn/Claude-call,
+// tenzij hij alsnog matcht.
+const GEEN_MATCH_RETRY_PERIODE_MS = 24 * 60 * 60 * 1000 // 24 uur
+
 // Ververst de telefoon-index alleen als hij ouder is dan dit (i.p.v. bij
 // elke syncNewCalls-aanroep) — kandidaat-telefoonnummers wijzigen niet elke
 // minuut, en een volledige refresh kost zelf al een dozijn Bullhorn-calls
@@ -381,12 +392,17 @@ async function syncNewCalls(
     }
 
     if (!match.candidateId) {
-      await admin.from('call_insights_processed').insert({
-        recording_url: recording.recording_url,
-        user_id: recording.user_id,
-        call_started_at: recording.start_time,
-        skipped_reason: 'geen_match',
-      })
+      const gespreksLeeftijdMs = Date.now() - new Date(recording.start_time).getTime()
+      if (gespreksLeeftijdMs >= GEEN_MATCH_RETRY_PERIODE_MS) {
+        // Retry-periode verstreken - nu pas echt definitief opgeven.
+        await admin.from('call_insights_processed').insert({
+          recording_url: recording.recording_url,
+          user_id: recording.user_id,
+          call_started_at: recording.start_time,
+          skipped_reason: 'geen_match',
+        })
+      }
+      // Anders: bewust geen insert - blijft "nieuw" voor de volgende sync.
       continue
     }
     matches++

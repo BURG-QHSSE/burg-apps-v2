@@ -188,35 +188,18 @@ function CallInsightsTab() {
 
   const perConsultant = useMemo(() => {
     if (!data) return []
-    const map = new Map()
-    const pak = (userId) => {
-      if (!map.has(userId)) {
-        map.set(userId, {
-          userId,
-          naam: naamPerId.get(userId) || 'Onbekend',
-          verwerkt: 0,
-          suggesties: 0,
-          geaccepteerd: 0,
-          afgewezen: 0,
-          pending: 0,
-          kostenUsd: 0,
-        })
-      }
-      return map.get(userId)
-    }
-    for (const r of data.verwerkt) {
-      const entry = pak(r.user_id)
-      entry.verwerkt += 1
-      entry.kostenUsd += Number(r.kosten_usd || 0)
-    }
-    for (const s of data.suggesties) {
-      const entry = pak(s.user_id)
-      entry.suggesties += 1
-      if (s.status === 'geaccepteerd') entry.geaccepteerd += 1
-      else if (s.status === 'afgewezen') entry.afgewezen += 1
-      else entry.pending += 1
-    }
-    return Array.from(map.values()).sort((a, b) => b.kostenUsd - a.kostenUsd)
+    return data
+      .map((r) => ({
+        userId: r.user_id,
+        naam: naamPerId.get(r.user_id) || 'Onbekend',
+        verwerkt: Number(r.verwerkt || 0),
+        suggesties: Number(r.suggesties || 0),
+        geaccepteerd: Number(r.geaccepteerd || 0),
+        afgewezen: Number(r.afgewezen || 0),
+        pending: Number(r.pending || 0),
+        kostenUsd: Number(r.kosten_usd || 0),
+      }))
+      .sort((a, b) => b.kostenUsd - a.kostenUsd)
   }, [data, naamPerId])
 
   const totalen = useMemo(

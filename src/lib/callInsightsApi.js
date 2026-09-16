@@ -99,19 +99,20 @@ export async function fetchAlleAmbigueMatches() {
 }
 
 /**
- * Alle verwerkte recordings + alle suggesties (admin-only via RLS), voor het
- * Tooling Gebruik-overzicht (zie ToolingGebruik.jsx) — wie heeft wat
- * afgehandeld, tegen welke kosten. Losse, platte queries + client-side
- * aggregatie, zelfde stijl als de Kandidaat Matcher-tab in ToolingGebruik.jsx.
+ * Per-consultant gebruiksoverzicht voor Tooling Gebruik (zie
+ * ToolingGebruik.jsx) — geaggregeerd in de database (RPC
+ * call_insights_gebruik_overzicht), niet client-side over losse rijen: bij
+ * >1000 rijen liep de eerdere aanpak (losse .select() op
+ * call_insights_processed/call_field_suggestions) tegen PostgREST's
+ * standaard max-rows-limiet aan, en telde bovendien de bulk
+ * 'historische_backlog_overgeslagen'-rijen (nooit echt door Bullhorn/Claude
+ * verwerkt, zie index.ts) ten onrechte mee als "verwerkt". Die uitsluiting
+ * gebeurt nu in de SQL-functie zelf.
  */
 export async function fetchCallInsightsGebruikData() {
-  const [verwerktResult, suggestiesResult] = await Promise.all([
-    supabase.from('call_insights_processed').select('user_id, kosten_usd, skipped_reason, processed_at'),
-    supabase.from('call_field_suggestions').select('user_id, status, created_at'),
-  ])
-  if (verwerktResult.error) throw new Error(verwerktResult.error.message)
-  if (suggestiesResult.error) throw new Error(suggestiesResult.error.message)
-  return { verwerkt: verwerktResult.data, suggesties: suggestiesResult.data }
+  const { data, error } = await supabase.rpc('call_insights_gebruik_overzicht')
+  if (error) throw new Error(error.message)
+  return data
 }
 
 /**
