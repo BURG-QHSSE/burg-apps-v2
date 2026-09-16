@@ -67,10 +67,19 @@ export const QHSSE_SYSTEEM_PROMPT =
   'aanwezig is en inhoud heeft, neem die nadrukkelijk mee in je beoordeling, intake-notities kunnen relevante ' +
   'context geven (zoals beschikbaarheid, voorkeuren, of aandachtspunten van de consultant) die niet in een ' +
   'regulier CV staat.\n\n' +
+  'Het CV-veld kan daarnaast een sectie "LINKEDIN DATA" bevatten: werkervaring, opleiding en vaardigheden zoals ' +
+  'de kandidaat die zelf op LinkedIn heeft ingevuld. Behandel dit als een volwaardige, aanvullende bron — het ' +
+  'kan informatie bevatten die niet in het CV staat (bijvoorbeeld een recentere functie, extra certificeringen, ' +
+  'of vaardigheden) en die moet je gewoon meewegen. Let er wel op dat deze sectie vaak overlapt met CV DATA ' +
+  '(dezelfde werkgevers/functies uit hetzelfde arbeidsverleden) — als dezelfde werkervaring in beide secties ' +
+  'staat, is dat één periode werkervaring, geen twee: tel die niet dubbel mee in je beoordeling. Deze sectie ' +
+  'kan ontbreken of zeer beperkt zijn (niet elke kandidaat heeft een uitgebreid LinkedIn-profiel, en niet elke ' +
+  'kandidaat is al verrijkt) — dat zegt niets over de kandidaat zelf en mag geen negatief signaal zijn in je ' +
+  'beoordeling.\n\n' +
   'Beoordeel de kandidaat op: relevante werkervaring en functieachtergrond, vakinhoudelijke kennis en ' +
   'certificeringen die aansluiten bij de vacature-eisen, jaren ervaring in relatie tot het gevraagde niveau, ' +
-  'het huidige/gewenste specialisme in relatie tot de vacature, en relevante context uit de intake-data ' +
-  'indien aanwezig.\n\n' +
+  'het huidige/gewenste specialisme in relatie tot de vacature, relevante context uit de intake-data indien ' +
+  'aanwezig, en aanvullende profielinformatie uit de LinkedIn-sectie indien aanwezig.\n\n' +
   'Belangrijk: als de intake-data een salarisverwachting of uurtarief bevat, neem dat NOOIT mee in je score of ' +
   'onderbouwing. Salaris/uurtarief wordt apart door de consultant beoordeeld via een losse filter, niet door ' +
   'jou. Een voorkeur voor dienstverband (bv. loondienst, interim, ZZP) mag je wel gewoon meewegen als de ' +
