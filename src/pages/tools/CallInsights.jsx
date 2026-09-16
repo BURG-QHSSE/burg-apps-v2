@@ -64,6 +64,10 @@ export default function CallInsights() {
   const [namen, setNamen] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Feedback na het bevestigen van een kandidaat-keuze bij een ambigu
+  // gesprek — anders verdwijnt de kaart na het herladen zonder dat de
+  // consultant ziet of dat wel/niet een suggestie opleverde.
+  const [keuzeResultaat, setKeuzeResultaat] = useState(null)
   // Per-call bewerkstatus: { [recording_url]: { [suggestionId]: { checked, waarde } } }
   const [bewerking, setBewerking] = useState({})
   const [bezigMetOpslaan, setBezigMetOpslaan] = useState(new Set())
@@ -156,8 +160,14 @@ export default function CallInsights() {
     if (!candidateId) return
     setBezigMetKiezen((prev) => new Set(prev).add(match.recording_url))
     setError(null)
+    setKeuzeResultaat(null)
     try {
-      await resolveCandidateMatch(match.recording_url, candidateId)
+      const resultaat = await resolveCandidateMatch(match.recording_url, candidateId)
+      setKeuzeResultaat(
+        resultaat.suggestiesAantal > 0
+          ? `Kandidaat gekozen — ${resultaat.suggestiesAantal} suggestie${resultaat.suggestiesAantal === 1 ? '' : 's'} gevonden, te zien hieronder bij de openstaande suggesties.`
+          : 'Kandidaat gekozen — geen wijzigingen gedetecteerd in dit gesprek.',
+      )
       // Er kunnen nieuwe suggesties bijgekomen zijn voor dit gesprek — herlaad alles.
       await laadGegevens()
     } catch (err) {
@@ -274,6 +284,7 @@ export default function CallInsights() {
         </p>
 
         {error && <p className="form-error" role="alert">{error}</p>}
+        {keuzeResultaat && <p className="form-success" role="status">{keuzeResultaat}</p>}
 
         {loading && <div className="idle-state">Bezig met laden...</div>}
 

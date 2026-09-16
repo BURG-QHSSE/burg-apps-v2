@@ -7,7 +7,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // vattingen, en laat de consultant per veld accepteren/afwijzen/corrigeren
 // vóór er iets naar Bullhorn geschreven wordt.
 //
-// Twee acties (body.action):
+// Acties (body.action):
+//   - "syncRecordingsFromXapi": haalt recordings/transcripties/summaries
+//     rechtstreeks op via de 3CX XAPI (zie threeCX.ts) en zet ze in dezelfde
+//     recordings/recording_participant staging-tabellen die 3CX's eigen Data
+//     Connectors-feature ook vulde — work-around sinds die laatste sinds
+//     11/12 september 2026 geen nieuwe data meer doorzet. Cron-secret-auth,
+//     zelfde patroon als syncNewCalls.
 //   - "syncNewCalls": verwerkt nieuwe recordings (matcht op telefoonnummer,
 //     laat Claude wijzigingen detecteren, schrijft suggesties weg). Wordt
 //     door pg_cron aangeroepen (zie schema.sql), niet door de browser —
@@ -22,6 +28,7 @@ import { getBullhornSession, bullhornPost, normaliseerTelefoonnummer, getCandida
 import { detecteerVeldwijzigingen } from './claude.ts'
 import { refreshPhoneIndex, zoekKandidaatViaIndex } from './phoneIndex.ts'
 import { bullhornGet, type BullhornSession } from './bullhorn.ts'
+import { haalRecordingsOp } from './threeCX.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
@@ -32,6 +39,34 @@ const CRON_SECRET = Deno.env.get('CALL_INSIGHTS_CRON_SECRET')
 // de ~150s Edge Function-limiet blijft (elke recording kost een paar
 // sequentiële Bullhorn- + Claude-aanroepen).
 const SYNC_BATCH_SIZE = 20
+
+// Aantal recordings per XAPI-ingest-aanroep — dit kost alleen een XAPI-call +
+// een paar bulk-inserts (geen Bullhorn/Claude), dus ruimer dan SYNC_BATCH_SIZE.
+const XAPI_SYNC_BATCH_SIZE = 300
+
+// Concurrency voor de kandidaatNamen-actie hieronder — een lichte naam-only
+// fetch per zichtbare kandidaat, dus mag fors hoger staan dan de
+// scoringsbatches (zelfde afweging als NAMEN_CONCURRENCY in
+// kandidaat-matcher/index.ts). Was eerder sequentieel ("een paar namen"),
+// maar sinds de recordings-achterstand is ingehaald staan er vaak veel meer
+// kandidaten open, waardoor sequentieel duidelijk merkbaar traag werd na
+// elke reload van de pagina (elke resolveCandidateMatch triggert een volledige
+// herlaad-cyclus, inclusief deze naam-fetch).
+const NAMEN_CONCURRENCY = 20
+
+/** Simpele concurrency-limiter — zelfde implementatie als kandidaat-matcher/index.ts (bewust gedupliceerd, geen gedeelde _shared-map in dit project). */
+async function mapMetLimiet<T, R>(items: T[], limiet: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const resultaten: R[] = new Array(items.length)
+  let volgende = 0
+  async function werker() {
+    while (volgende < items.length) {
+      const i = volgende++
+      resultaten[i] = await fn(items[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limiet, items.length) }, werker))
+  return resultaten
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,6 +140,94 @@ async function verwerkGesprekVoorKandidaat(
   }
 
   return { suggestiesAantal: suggesties.length, session: newSession }
+}
+
+/**
+ * Vult `recordings`/`recording_participant` rechtstreeks via de 3CX XAPI
+ * (zie threeCX.ts) — een work-around voor 3CX's eigen "Data Connectors"
+ * die sinds 11/12 september 2026 zijn opgehouden met data doorzetten. Schrijft
+ * naar dezelfde staging-tabellen die de Data Connector ook vulde, zodat
+ * syncNewCalls hieronder ongewijzigd blijft werken. Idempotent op
+ * recording_url (geen unique constraint op deze 3CX-eigen tabellen, dus
+ * dedupe op applicatieniveau) — kan dus veilig herhaald/overlappend draaien,
+ * en ook als de Data Connector het ooit weer oppakt levert dat geen
+ * duplicaten op zolang recording_url exact overeenkomt.
+ */
+async function syncRecordingsFromXapi(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  limiet: number,
+): Promise<{ opgehaald: number; nieuw: number; oudsteNieuw: string | null; nieuwsteNieuw: string | null }> {
+  const { data: laatste } = await admin
+    .from('recordings')
+    .select('start_time')
+    .order('start_time', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // Kleine overlap (5 min) i.p.v. exact vanaf de laatst bekende start_time —
+  // recordings kunnen met een kleine vertraging binnenkomen. Duplicaten
+  // worden hieronder toch geskipt op recording_url.
+  const vanaf = laatste?.start_time
+    ? new Date(new Date(laatste.start_time as string).getTime() - 5 * 60 * 1000)
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // eerste keer: laatste 30 dagen
+
+  const opgehaald = await haalRecordingsOp(vanaf, limiet)
+  if (opgehaald.length === 0) {
+    return { opgehaald: 0, nieuw: 0, oudsteNieuw: null, nieuwsteNieuw: null }
+  }
+
+  const urls = opgehaald.map((r) => r.recordingUrl)
+  const { data: bestaandeRijen } = await admin.from('recordings').select('recording_url').in('recording_url', urls)
+  const bestaande = new Set((bestaandeRijen ?? []).map((r: { recording_url: string }) => r.recording_url))
+  const nieuweRecordings = opgehaald.filter((r) => !bestaande.has(r.recordingUrl))
+
+  if (nieuweRecordings.length === 0) {
+    return { opgehaald: opgehaald.length, nieuw: 0, oudsteNieuw: null, nieuwsteNieuw: null }
+  }
+
+  const recordingRijen = nieuweRecordings.map((r) => ({
+    recording_url: r.recordingUrl,
+    start_time: r.startTime,
+    end_time: r.endTime,
+    summary: r.summary,
+    transcription: r.transcription,
+    sentiment_score: r.sentimentScore,
+  }))
+  const { error: recError } = await admin.from('recordings').insert(recordingRijen)
+  if (recError) throw new Error(`Wegschrijven recordings mislukt: ${recError.message}`)
+
+  const participantRijen = nieuweRecordings.flatMap((r) => [
+    {
+      fk_recording_url: r.recordingUrl,
+      dn_type: r.fromDnType,
+      dn: r.fromDn,
+      caller_number: r.fromCallerNumber,
+      display_name: r.fromDisplayName,
+      did_number: r.fromDidNumber,
+      is_from: true,
+      cdr_participant_id: crypto.randomUUID(),
+    },
+    {
+      fk_recording_url: r.recordingUrl,
+      dn_type: r.toDnType,
+      dn: r.toDn,
+      caller_number: r.toCallerNumber,
+      display_name: r.toDisplayName,
+      did_number: r.toDidNumber,
+      is_from: false,
+      cdr_participant_id: crypto.randomUUID(),
+    },
+  ])
+  const { error: partError } = await admin.from('recording_participant').insert(participantRijen)
+  if (partError) throw new Error(`Wegschrijven recording_participant mislukt: ${partError.message}`)
+
+  return {
+    opgehaald: opgehaald.length,
+    nieuw: nieuweRecordings.length,
+    oudsteNieuw: nieuweRecordings[0]?.startTime ?? null,
+    nieuwsteNieuw: nieuweRecordings[nieuweRecordings.length - 1]?.startTime ?? null,
+  }
 }
 
 async function syncNewCalls(
@@ -395,6 +518,15 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const admin = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!)
 
+    if (body.action === 'syncRecordingsFromXapi') {
+      if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) {
+        return jsonResponse({ error: 'Ongeldig of ontbrekend cron-secret' }, 401)
+      }
+      const limiet = Number.isFinite(Number(body.limiet)) && Number(body.limiet) > 0 ? Number(body.limiet) : XAPI_SYNC_BATCH_SIZE
+      const resultaat = await syncRecordingsFromXapi(admin, limiet)
+      return jsonResponse(resultaat)
+    }
+
     if (body.action === 'syncNewCalls') {
       if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) {
         return jsonResponse({ error: 'Ongeldig of ontbrekend cron-secret' }, 401)
@@ -454,10 +586,15 @@ Deno.serve(async (req) => {
       const ids = Array.isArray(body.candidateIds) ? body.candidateIds.map(Number).filter((n: number) => Number.isFinite(n)) : []
       const namen: Record<number, string> = {}
       const session = await getBullhornSession(admin)
-      // Sequentieel (niet parallel) — dit is een lichte, eenmalige fetch per
-      // scherm-weergave (client-side gecachet, zie callInsightsApi.js), geen
-      // reden om Bullhorn-sessie-races te riskeren voor een paar namen.
-      for (const id of ids) {
+      // Parallel (NAMEN_CONCURRENCY) i.p.v. sequentieel — bij veel
+      // openstaande kandidaten (na de recordings-achterstand-inhaal bv.)
+      // duurde dit anders merkbaar lang, vooral omdat elke
+      // resolveCandidateMatch een volledige herlaad-cyclus triggert. Elke
+      // aanroep herstelt zelf een verlopen sessie via bullhornGet's
+      // ingebouwde 401-retry, dus geen probleem om dezelfde sessie parallel
+      // te hergebruiken (zelfde redenering als BULLHORN_CONCURRENCY in
+      // kandidaat-matcher/index.ts).
+      await mapMetLimiet(ids, NAMEN_CONCURRENCY, async (id: number) => {
         try {
           const { data } = await bullhornGet(admin, session, `entity/Candidate/${id}`, { fields: 'id,firstName,lastName' })
           const entity = (data as { data?: { firstName?: string; lastName?: string } })?.data
@@ -465,7 +602,7 @@ Deno.serve(async (req) => {
         } catch {
           namen[id] = `Kandidaat ${id}`
         }
-      }
+      })
       return jsonResponse({ namen })
     }
 
