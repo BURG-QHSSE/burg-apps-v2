@@ -15,10 +15,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //     11/12 september 2026 geen nieuwe data meer doorzet. Cron-secret-auth,
 //     zelfde patroon als syncNewCalls.
 //   - "syncNewCalls": verwerkt nieuwe recordings (matcht op telefoonnummer,
-//     laat Claude wijzigingen detecteren, schrijft suggesties weg). Wordt
-//     door pg_cron aangeroepen (zie schema.sql), niet door de browser —
-//     geauthenticeerd met een gedeeld secret (x-cron-secret-header), geen
-//     user-JWT.
+//     laat Claude wijzigingen detecteren, schrijft suggesties weg). Bewust
+//     NIET op een cron (elke Claude-aanroep hier gebeurt pas na expliciete
+//     goedkeuring van de gebruiker) - handmatig getriggerd, geauthenticeerd
+//     met een gedeeld secret (x-cron-secret-header), geen user-JWT. Ververst
+//     zelf de telefoon-index als die > 1 uur oud is (zie
+//     verversPhoneIndexAlsVerouderd) voordat er gematcht wordt.
 //   - "resolveSuggestion": de consultant accepteert/wijst een suggestie af.
 //     Bij accepteren wordt direct naar Bullhorn geschreven. Normale user-JWT
 //     + rol-check, zelfde patroon als kandidaat-matcher/index.ts.
@@ -279,6 +281,46 @@ async function syncRecordingsFromXapi(
   }
 }
 
+// Ververst de telefoon-index alleen als hij ouder is dan dit (i.p.v. bij
+// elke syncNewCalls-aanroep) — kandidaat-telefoonnummers wijzigen niet elke
+// minuut, en een volledige refresh kost zelf al een dozijn Bullhorn-calls
+// (~20-30s). Zonder deze drempel zou een backlog die je in een snelle reeks
+// syncNewCalls-aanroepen wegwerkt (zoals vandaag, 5x achter elkaar) elke
+// keer opnieuw verversen en het risico op de ~150s Edge Function-limiet
+// onnodig vergroten.
+const PHONE_INDEX_MAX_LEEFTIJD_MS = 60 * 60 * 1000 // 1 uur
+
+/**
+ * Ververst bullhorn_candidate_phone_index alleen als de laatste refresh
+ * langer dan PHONE_INDEX_MAX_LEEFTIJD_MS geleden is - zie constante
+ * hierboven. Een mislukte staleness-check of refresh mag syncNewCalls niet
+ * blokkeren (matching valt dan terug op de bestaande, mogelijk iets oudere
+ * index), dus fouten worden alleen gelogd.
+ */
+async function verversPhoneIndexAlsVerouderd(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  session: BullhornSession,
+): Promise<BullhornSession> {
+  try {
+    const { data } = await admin
+      .from('bullhorn_candidate_phone_index')
+      .select('updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const leeftijdMs = data?.updated_at ? Date.now() - new Date(data.updated_at as string).getTime() : Infinity
+    if (leeftijdMs < PHONE_INDEX_MAX_LEEFTIJD_MS) {
+      return session
+    }
+    const resultaat = await refreshPhoneIndex(admin, session)
+    console.log(`[call-insights] Telefoon-index ververst (was ${Math.round(leeftijdMs / 60000)} min oud): ${resultaat.nummersGeindexeerd} nummers.`)
+  } catch (err) {
+    console.error('[call-insights] Verversen telefoon-index mislukt, ga verder met bestaande index:', err)
+  }
+  return session
+}
+
 async function syncNewCalls(
   // deno-lint-ignore no-explicit-any
   admin: any,
@@ -293,6 +335,7 @@ async function syncNewCalls(
   if (error) throw new Error(`call_insights_nieuwe_recordings mislukt: ${error.message}`)
 
   let session = await getBullhornSession(admin)
+  session = await verversPhoneIndexAlsVerouderd(admin, session)
   let matches = 0
   let ambigu = 0
   let suggestiesTotaal = 0
