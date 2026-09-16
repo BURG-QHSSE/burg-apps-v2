@@ -24,6 +24,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //   - "resolveSuggestion": de consultant accepteert/wijst een suggestie af.
 //     Bij accepteren wordt direct naar Bullhorn geschreven. Normale user-JWT
 //     + rol-check, zelfde patroon als kandidaat-matcher/index.ts.
+//   - "verifieerSuggestiesActueel": checkt of het Bullhorn-veld van pending
+//     suggesties sindsdien elders is gewijzigd (current_value staat vast op
+//     het detectiemoment) — aangeroepen bij het openen van Call Insights,
+//     user-JWT.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { getBullhornSession, bullhornPost, normaliseerTelefoonnummer, getCandidateInsightsVelden } from './bullhorn.ts'
@@ -607,6 +611,62 @@ async function resolveCandidateMatch(
 }
 
 /**
+ * Checkt voor een lijst pending suggesties of het Bullhorn-veld sindsdien
+ * elders is gewijzigd (bv. de consultant paste het rechtstreeks in Bullhorn
+ * aan, los van deze tool) — `current_value` op de suggestie is bevroren op
+ * het moment van detectie en wordt verder nergens automatisch bijgewerkt.
+ * Wordt aangeroepen bij het openen van Call Insights (zie CallInsights.jsx),
+ * zodat een consultant nooit een suggestie accepteert die een inmiddels
+ * alweer achterhaalde "oude waarde" toont.
+ *
+ * Haalt per kandidaat maar één keer de actuele velden op (niet per
+ * suggestie) — een kandidaat kan meerdere openstaande suggesties hebben.
+ * Suggesties die niet van de aanroeper zijn (en de aanroeper is geen admin)
+ * worden stilzwijgend overgeslagen, zelfde eigenaarschap-regel als
+ * resolveSuggestion.
+ */
+async function verifieerSuggestiesActueel(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  callerId: string,
+  isAdmin: boolean,
+  suggestionIds: string[],
+): Promise<Record<string, { actueleWaarde: string | null; verouderd: boolean }>> {
+  const resultaat: Record<string, { actueleWaarde: string | null; verouderd: boolean }> = {}
+  if (suggestionIds.length === 0) return resultaat
+
+  const { data: suggesties, error } = await admin
+    .from('call_field_suggestions')
+    .select('id, user_id, bullhorn_candidate_id, field_name, current_value')
+    .in('id', suggestionIds)
+    .eq('status', 'pending')
+  if (error) throw new Error(error.message)
+
+  const toegestaan = (suggesties ?? []).filter((s: { user_id: string }) => s.user_id === callerId || isAdmin)
+  const candidateIds = [...new Set(toegestaan.map((s: { bullhorn_candidate_id: number }) => s.bullhorn_candidate_id))]
+
+  const session = await getBullhornSession(admin)
+  // deno-lint-ignore no-explicit-any
+  const veldenPerCandidate = new Map<number, any>()
+  await mapMetLimiet(candidateIds, NAMEN_CONCURRENCY, async (candidateId: number) => {
+    try {
+      const { velden } = await getCandidateInsightsVelden(admin, session, candidateId)
+      veldenPerCandidate.set(candidateId, velden)
+    } catch (err) {
+      console.error(`[call-insights] Actuele velden ophalen mislukt voor kandidaat ${candidateId}:`, err)
+    }
+  })
+
+  for (const s of toegestaan) {
+    const velden = veldenPerCandidate.get(s.bullhorn_candidate_id)
+    if (!velden) continue // Bullhorn-fout hierboven - liever geen foutieve "verouderd"-melding dan een gok
+    const actueleWaarde = VELD_NAAR_CURRENT_VALUE[s.field_name]?.(velden) ?? null
+    resultaat[s.id] = { actueleWaarde, verouderd: (actueleWaarde ?? '') !== (s.current_value ?? '') }
+  }
+  return resultaat
+}
+
+/**
  * Verifieert de Authorization-header van de aanroeper en checkt dat er een
  * geldig profiel-record bestaat — zelfde patroon als kandidaat-matcher/
  * index.ts. Retourneert de user-id bij succes, of een kant-en-klare
@@ -703,6 +763,15 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: resultaat.error }, resultaat.status)
       }
       return jsonResponse({ ok: true, suggestiesAantal: resultaat.suggestiesAantal })
+    }
+
+    if (body.action === 'verifieerSuggestiesActueel') {
+      const auth = await verifieerGebruiker(req)
+      if ('errorResponse' in auth) return auth.errorResponse
+
+      const suggestionIds = Array.isArray(body.suggestionIds) ? body.suggestionIds.map(String) : []
+      const resultaat = await verifieerSuggestiesActueel(admin, auth.userId, auth.role === 'admin', suggestionIds)
+      return jsonResponse({ resultaat })
     }
 
     if (body.action === 'kandidaatNamen') {

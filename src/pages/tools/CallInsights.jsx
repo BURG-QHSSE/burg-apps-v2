@@ -9,6 +9,7 @@ import {
   fetchAlleAmbigueMatches,
   fetchConsultantProfielen,
   fetchKandidaatNamen,
+  verifieerSuggestiesActueel,
   accepteerSuggestie,
   wijsSuggestieAf,
   resolveCandidateMatch,
@@ -88,6 +89,9 @@ export default function CallInsights() {
   // geen effect op wie er daadwerkelijk verwerkt wordt (dat bepaalt
   // profiles.team alleen). '' = iedereen.
   const [consultantFilter, setConsultantFilter] = useState('')
+  // { [suggestionId]: { actueleWaarde, verouderd } } — checkt of het
+  // Bullhorn-veld sindsdien elders is gewijzigd (zie verifieerSuggestiesActueel).
+  const [veldStatus, setVeldStatus] = useState({})
 
   const consultantNaamPerId = useMemo(
     () => new Map(consultantProfielen.map((c) => [c.id, c.naam || c.email])),
@@ -116,8 +120,12 @@ export default function CallInsights() {
           ...ambigueData.flatMap((m) => m.kandidaat_kandidaten ?? []),
         ]),
       ]
-      const namenData = await fetchKandidaatNamen(kandidaatIds)
+      const [namenData, veldStatusData] = await Promise.all([
+        fetchKandidaatNamen(kandidaatIds),
+        verifieerSuggestiesActueel(suggestiesData.map((s) => s.id)),
+      ])
       setNamen(namenData)
+      setVeldStatus(veldStatusData)
 
       const initieleBewerking = {}
       for (const s of suggestiesData) {
@@ -495,6 +503,12 @@ export default function CallInsights() {
                       <p className="insights-quote">
                         Let op: straatnaam/postcode van de oude woonplaats worden bij bevestigen leeggemaakt (horen niet meer bij de
                         nieuwe plaats) — vul zelf aan in Bullhorn indien nodig.
+                      </p>
+                    )}
+                    {veldStatus[veld.id]?.verouderd && (
+                      <p className="form-error" role="alert">
+                        Let op: dit veld staat inmiddels op "{veldStatus[veld.id].actueleWaarde || '(leeg)'}" in Bullhorn —
+                        gewijzigd sinds deze suggestie is gedetecteerd. Controleer of bevestigen nog klopt.
                       </p>
                     )}
                     {veld.quote && <p className="insights-quote">“{veld.quote}”</p>}

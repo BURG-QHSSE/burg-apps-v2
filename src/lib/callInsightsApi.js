@@ -132,6 +132,19 @@ export async function fetchKandidaatNamen(candidateIds) {
   return data.namen
 }
 
+/**
+ * Checkt voor pending suggesties of het Bullhorn-veld sindsdien elders is
+ * gewijzigd (bv. rechtstreeks in Bullhorn aangepast, los van deze tool) —
+ * de "oude waarde" op een suggestie staat vast op het detectiemoment.
+ * Retourneert { [suggestionId]: { actueleWaarde, verouderd } }, alleen voor
+ * suggesties waar de live Bullhorn-check is gelukt.
+ */
+export async function verifieerSuggestiesActueel(suggestionIds) {
+  if (suggestionIds.length === 0) return {}
+  const data = await invokeCallInsights('verifieerSuggestiesActueel', { suggestionIds })
+  return data.resultaat
+}
+
 /** Accepteert een suggestie (optioneel met een handmatig gecorrigeerde waarde) — schrijft direct naar Bullhorn. */
 export async function accepteerSuggestie(suggestionId, finalValue = null) {
   return invokeCallInsights('resolveSuggestion', { suggestionId, besluit: 'accepteren', finalValue })
