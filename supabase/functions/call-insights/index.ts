@@ -610,14 +610,29 @@ async function resolveCandidateMatch(
   }
 }
 
+interface SuggestieCheck {
+  // 'algeregeld': veld staat al op de voorgestelde waarde - automatisch
+  // afgerond, niet langer pending (zie hieronder).
+  // 'verouderd': veld is gewijzigd sinds detectie, maar niet naar de
+  // voorgestelde waarde - waarschuwing tonen.
+  // 'ok': ongewijzigd sinds detectie - niks te melden.
+  status: 'algeregeld' | 'verouderd' | 'ok'
+  actueleWaarde: string | null
+}
+
 /**
  * Checkt voor een lijst pending suggesties of het Bullhorn-veld sindsdien
  * elders is gewijzigd (bv. de consultant paste het rechtstreeks in Bullhorn
  * aan, los van deze tool) — `current_value` op de suggestie is bevroren op
  * het moment van detectie en wordt verder nergens automatisch bijgewerkt.
- * Wordt aangeroepen bij het openen van Call Insights (zie CallInsights.jsx),
- * zodat een consultant nooit een suggestie accepteert die een inmiddels
- * alweer achterhaalde "oude waarde" toont.
+ * Wordt aangeroepen bij het openen van Call Insights (zie CallInsights.jsx).
+ *
+ * Staat het veld al op precies de voorgestelde waarde? Dan wordt de
+ * suggestie meteen automatisch afgerond (status 'geaccepteerd', geen
+ * Bullhorn-write nodig want de waarde staat er al) en NIET teruggegeven in
+ * het resultaat - de consultant hoeft 'm dan niet meer te zien. Suggesties
+ * waarvoor de live Bullhorn-check mislukte, staan ook niet in het
+ * resultaat (liever stil dan een foutieve melding of onterecht afronden).
  *
  * Haalt per kandidaat maar één keer de actuele velden op (niet per
  * suggestie) — een kandidaat kan meerdere openstaande suggesties hebben.
@@ -631,8 +646,8 @@ async function verifieerSuggestiesActueel(
   callerId: string,
   isAdmin: boolean,
   suggestionIds: string[],
-): Promise<Record<string, { actueleWaarde: string | null; verouderd: boolean; algeregeld: boolean }>> {
-  const resultaat: Record<string, { actueleWaarde: string | null; verouderd: boolean; algeregeld: boolean }> = {}
+): Promise<Record<string, SuggestieCheck>> {
+  const resultaat: Record<string, SuggestieCheck> = {}
   if (suggestionIds.length === 0) return resultaat
 
   const { data: suggesties, error } = await admin
@@ -659,17 +674,27 @@ async function verifieerSuggestiesActueel(
 
   for (const s of toegestaan) {
     const velden = veldenPerCandidate.get(s.bullhorn_candidate_id)
-    if (!velden) continue // Bullhorn-fout hierboven - liever geen foutieve "verouderd"-melding dan een gok
+    if (!velden) continue // Bullhorn-fout hierboven - liever stil dan een foutieve melding of onterecht afronden
+
     const actueleWaarde = VELD_NAAR_CURRENT_VALUE[s.field_name]?.(velden) ?? null
-    resultaat[s.id] = {
-      actueleWaarde,
-      verouderd: (actueleWaarde ?? '') !== (s.current_value ?? ''),
-      // Staat het veld inmiddels al op precies de voorgestelde waarde (bv.
-      // handmatig al doorgevoerd in Bullhorn)? Dan is bevestigen overbodig -
-      // apart van "verouderd", dat alleen zegt "veld is gewijzigd sinds
-      // detectie" zonder te weten of dat toevallig al de juiste waarde is.
-      algeregeld: (actueleWaarde ?? '') === (s.suggested_value ?? ''),
+    const algeregeld = (actueleWaarde ?? '') === (s.suggested_value ?? '')
+
+    if (algeregeld) {
+      // Automatisch afronden i.p.v. laten staan als pending: geen Bullhorn-
+      // write nodig (staat er al), gewoon dezelfde status/velden als een
+      // handmatige acceptatie zou opleveren. Verdwijnt zo ook uit "nog
+      // pending" in Tooling Gebruik i.p.v. voor altijd te blijven hangen.
+      await admin
+        .from('call_field_suggestions')
+        .update({ status: 'geaccepteerd', final_value: s.suggested_value, resolved_at: new Date().toISOString() })
+        .eq('id', s.id)
+        .eq('status', 'pending') // race-guard: niet overschrijven als de consultant 'm net zelf al afhandelde
+      resultaat[s.id] = { status: 'algeregeld', actueleWaarde }
+      continue
     }
+
+    const verouderd = (actueleWaarde ?? '') !== (s.current_value ?? '')
+    resultaat[s.id] = { status: verouderd ? 'verouderd' : 'ok', actueleWaarde }
   }
   return resultaat
 }

@@ -135,9 +135,12 @@ export async function fetchKandidaatNamen(candidateIds) {
 /**
  * Checkt voor pending suggesties of het Bullhorn-veld sindsdien elders is
  * gewijzigd (bv. rechtstreeks in Bullhorn aangepast, los van deze tool) —
- * de "oude waarde" op een suggestie staat vast op het detectiemoment.
- * Retourneert { [suggestionId]: { actueleWaarde, verouderd } }, alleen voor
- * suggesties waar de live Bullhorn-check is gelukt.
+ * de "oude waarde" op een suggestie staat vast op het detectiemoment. Staat
+ * een veld al op precies de voorgestelde waarde, dan wordt de suggestie
+ * server-side meteen automatisch afgerond (geen Bullhorn-write nodig) en
+ * hoort 'm uit de zichtbare lijst gehaald te worden.
+ * Retourneert { [suggestionId]: { status: 'algeregeld'|'verouderd'|'ok', actueleWaarde } },
+ * alleen voor suggesties waar de live Bullhorn-check is gelukt.
  */
 export async function verifieerSuggestiesActueel(suggestionIds) {
   if (suggestionIds.length === 0) return {}

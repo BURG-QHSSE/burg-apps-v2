@@ -113,7 +113,6 @@ export default function CallInsights() {
       } else {
         ;[suggestiesData, ambigueData] = await Promise.all([fetchPendingSuggesties(user.id), fetchAmbigueMatches(user.id)])
       }
-      setSuggesties(suggestiesData)
       setAmbigueMatches(ambigueData)
 
       const kandidaatIds = [
@@ -129,8 +128,14 @@ export default function CallInsights() {
       setNamen(namenData)
       setVeldStatus(veldStatusData)
 
+      // Suggesties die net automatisch zijn afgerond (het veld stond al op
+      // de voorgestelde waarde, zie verifieerSuggestiesActueel) horen niet
+      // meer in de lijst - ze zijn niet langer 'pending'.
+      const relevanteSuggesties = suggestiesData.filter((s) => veldStatusData[s.id]?.status !== 'algeregeld')
+      setSuggesties(relevanteSuggesties)
+
       const initieleBewerking = {}
-      for (const s of suggestiesData) {
+      for (const s of relevanteSuggesties) {
         initieleBewerking[s.recording_url] ??= {}
         initieleBewerking[s.recording_url][s.id] = { checked: true, waarde: s.suggested_value }
       }
@@ -145,6 +150,25 @@ export default function CallInsights() {
   useEffect(() => {
     if (!user?.id) return
     laadGegevens()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isAdmin])
+
+  // Opnieuw laden zodra je terugkomt op dit tabblad (bv. na "Terug naar
+  // dashboard" en de tool weer geopend, of na het bekijken van een
+  // kandidaat in Bullhorn in een ander tabblad) - zonder dit bleef de data
+  // van de vorige keer staan totdat je een volledige page-reload (F5) deed,
+  // want React Router remount alleen bleek in de praktijk niet altijd een
+  // nieuwe fetch te triggeren.
+  useEffect(() => {
+    function herladenBijZichtbaar() {
+      if (document.visibilityState === 'visible' && user?.id) {
+        laadGegevens()
+      }
+    }
+    document.addEventListener('visibilitychange', herladenBijZichtbaar)
+    return () => {
+      document.removeEventListener('visibilitychange', herladenBijZichtbaar)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, isAdmin])
 
@@ -507,13 +531,7 @@ export default function CallInsights() {
                         nieuwe plaats) — vul zelf aan in Bullhorn indien nodig.
                       </p>
                     )}
-                    {veldStatus[veld.id]?.algeregeld && (
-                      <p className="form-success" role="status">
-                        Dit veld staat al op de voorgestelde waarde in Bullhorn (bv. handmatig al aangepast) — bevestigen is
-                        hier niet meer nodig, je kan deze suggestie ook gewoon afwijzen.
-                      </p>
-                    )}
-                    {veldStatus[veld.id]?.verouderd && !veldStatus[veld.id]?.algeregeld && (
+                    {veldStatus[veld.id]?.status === 'verouderd' && (
                       <p className="form-error" role="alert">
                         Let op: dit veld staat inmiddels op "{veldStatus[veld.id].actueleWaarde || '(leeg)'}" in Bullhorn —
                         gewijzigd sinds deze suggestie is gedetecteerd. Controleer of bevestigen nog klopt.
