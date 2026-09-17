@@ -96,11 +96,21 @@ const SELECT_VELDEN = [
 ].join(',')
 
 /**
- * Haalt recordings op die na `sinds` gestart zijn, chronologisch, met
- * paginering via @odata.nextLink. `limiet` begrenst het totaal aantal
- * opgehaalde recordings (niet per pagina) zodat een enkele sync-aanroep bij
- * een grote achterstand niet onbegrensd doorloopt binnen de Edge
- * Function-tijdslimiet.
+ * Haalt recordings op die na `sinds` gestart zijn, met paginering via
+ * @odata.nextLink. `limiet` begrenst het totaal aantal opgehaalde recordings
+ * (niet per pagina) zodat een enkele sync-aanroep bij een grote achterstand
+ * niet onbegrensd doorloopt binnen de Edge Function-tijdslimiet.
+ *
+ * NIEUWSTE EERST (desc) i.p.v. chronologisch (asc) — ontdekt op 2026-09-17
+ * bij het testen van de vaste 24-uur-terugkijkperiode (zie XAPI_LOOKBACK_MS
+ * in index.ts): 3CX's XAPI gaf bij een breed `sinds`-venster met veel
+ * matches na de eerste pagina van 100 GEEN `@odata.nextLink` terug, ook al
+ * bestonden er duidelijk meer (nieuwere) recordings. Met `asc` bleef zo'n
+ * aanroep permanent in het oudste deel van het venster hangen en bereikte
+ * "nu" nooit. Met `desc` valt precies datzelfde 100-record-plafond aan de
+ * OUDE kant van het venster (die al lang gesynchroniseerd is, dus geen
+ * schade), terwijl de nieuwste — en dus meest relevante — recordings altijd
+ * als eerste binnenkomen, ongeacht of paginering daarna stopt.
  */
 export async function haalRecordingsOp(sinds: Date, limiet: number): Promise<CxRecording[]> {
   const creds = leesCredentialsUitEnv()
@@ -109,7 +119,7 @@ export async function haalRecordingsOp(sinds: Date, limiet: number): Promise<CxR
   const resultaten: CxRecording[] = []
   const filter = `StartTime gt ${sinds.toISOString()}`
   let url: string | null =
-    `${creds.baseUrl}/xapi/v1/Recordings?$filter=${encodeURIComponent(filter)}&$orderby=StartTime asc&$top=100&$select=${SELECT_VELDEN}`
+    `${creds.baseUrl}/xapi/v1/Recordings?$filter=${encodeURIComponent(filter)}&$orderby=StartTime desc&$top=100&$select=${SELECT_VELDEN}`
 
   while (url && resultaten.length < limiet) {
     const response = await fetchMetTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, XAPI_TIMEOUT_MS)
