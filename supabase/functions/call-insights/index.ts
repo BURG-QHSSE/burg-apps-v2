@@ -13,7 +13,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //     recordings/recording_participant staging-tabellen die 3CX's eigen Data
 //     Connectors-feature ook vulde — work-around sinds die laatste sinds
 //     11/12 september 2026 geen nieuwe data meer doorzet. Cron-secret-auth,
-//     zelfde patroon als syncNewCalls.
+//     zelfde patroon als syncNewCalls. Draait elke 15 min, en kijkt daarbij
+//     ELKE KEER een vaste, ruime periode terug (XAPI_LOOKBACK_MS, 24 uur)
+//     i.p.v. vanaf een "cursor" (de laatst bekende start_time) — zie de
+//     comment bij XAPI_LOOKBACK_MS voor waarom een cursor hier stragglers
+//     permanent kan missen (2026-09-17: 4 gemiste gesprekken op één dag).
+//     Dedupe op recording_url voorkomt dat dit dubbele inserts/verwerking
+//     oplevert, dus dit is veilig om elke keer een dag te herhalen.
 //   - "syncNewCalls": verwerkt nieuwe recordings (matcht op telefoonnummer,
 //     laat Claude wijzigingen detecteren, schrijft suggesties weg). Bewust
 //     NIET op een cron (elke Claude-aanroep hier gebeurt pas na expliciete
@@ -49,6 +55,19 @@ const SYNC_BATCH_SIZE = 20
 // Aantal recordings per XAPI-ingest-aanroep — dit kost alleen een XAPI-call +
 // een paar bulk-inserts (geen Bullhorn/Claude), dus ruimer dan SYNC_BATCH_SIZE.
 const XAPI_SYNC_BATCH_SIZE = 300
+
+// Hoe ver syncRecordingsFromXapi bij elke aanroep terugkijkt (i.p.v. vanaf een
+// "cursor" die meeschuift met de laatst bekende start_time). Was eerder zo'n
+// cursor (laatste start_time - overlap-marge), maar dat bleek op 2026-09-17
+// 4 gesprekken op één dag permanent te missen: als gesprek A eerder begon dan
+// gesprek B maar bij 3CX trager klaar was (summary/transcriptie), en B werd
+// al opgehaald vóórdat A klaar was, schoof de cursor voorbij A zodra B
+// binnenkwam — A werd daarna nooit meer opgevraagd, ook niet toen het alsnog
+// klaar was. Een vaste, ruime terugkijkperiode i.p.v. een cursor voorkomt dat
+// principieel: elke aanroep vraagt gewoon opnieuw de hele laatste 24 uur op en
+// laat de bestaande dedupe (op recording_url) bepalen wat al bekend is. Bij
+// dit belvolume (tientallen/dag) blijft dat ruim binnen XAPI_SYNC_BATCH_SIZE.
+const XAPI_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
 // Concurrency voor de kandidaatNamen-actie hieronder — een lichte naam-only
 // fetch per zichtbare kandidaat, dus mag fors hoger staan dan de
@@ -238,26 +257,11 @@ async function syncRecordingsFromXapi(
   limiet: number,
   vanafOverride?: Date,
 ): Promise<{ opgehaald: number; nieuw: number; oudsteNieuw: string | null; nieuwsteNieuw: string | null }> {
-  const { data: laatste } = await admin
-    .from('recordings')
-    .select('start_time')
-    .order('start_time', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // Kleine overlap (5 min) i.p.v. exact vanaf de laatst bekende start_time —
-  // recordings kunnen met een kleine vertraging binnenkomen. Duplicaten
-  // worden hieronder toch geskipt op recording_url. LET OP: dit betekent dat
-  // een recording die ooit gemist is (bv. door een race condition) NIET
-  // vanzelf wordt ingehaald zodra er nieuwere recordings binnen zijn — het
-  // venster schuift altijd mee met de nieuwste bekende start_time. Voor
-  // handmatig herstel van zo'n gat: vanafOverride meegeven (body.vanaf,
-  // cron-secret-gated, zie actiehandler hieronder).
-  const vanaf =
-    vanafOverride ??
-    (laatste?.start_time
-      ? new Date(new Date(laatste.start_time as string).getTime() - 5 * 60 * 1000)
-      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) // eerste keer: laatste 30 dagen
+  // Vaste terugkijkperiode i.p.v. een cursor — zie XAPI_LOOKBACK_MS hierboven
+  // voor waarom. vanafOverride blijft bestaan voor eenmalig handmatig herstel
+  // van een gat verder terug dan dit venster (body.vanaf, cron-secret-gated,
+  // zie actiehandler hieronder), bv. na een langere 3CX-storing.
+  const vanaf = vanafOverride ?? new Date(Date.now() - XAPI_LOOKBACK_MS)
 
   const opgehaald = await haalRecordingsOp(vanaf, limiet)
   if (opgehaald.length === 0) {
@@ -309,11 +313,13 @@ async function syncRecordingsFromXapi(
   const { error: partError } = await admin.from('recording_participant').insert(participantRijen)
   if (partError) throw new Error(`Wegschrijven recording_participant mislukt: ${partError.message}`)
 
+  // haalRecordingsOp geeft nieuwste-eerst terug (zie threeCX.ts) — dus [0] is
+  // hier de nieuwste, niet de oudste.
   return {
     opgehaald: opgehaald.length,
     nieuw: nieuweRecordings.length,
-    oudsteNieuw: nieuweRecordings[0]?.startTime ?? null,
-    nieuwsteNieuw: nieuweRecordings[nieuweRecordings.length - 1]?.startTime ?? null,
+    oudsteNieuw: nieuweRecordings[nieuweRecordings.length - 1]?.startTime ?? null,
+    nieuwsteNieuw: nieuweRecordings[0]?.startTime ?? null,
   }
 }
 
