@@ -48,6 +48,12 @@ create table profiles (
   -- individueel uit te zetten voor wie deze meldingen niet wil (bv. een
   -- admin die geen HR-achtige taken doet).
   gpb_goedkeuring_notificaties boolean not null default true,
+  -- Sales vs consultant-indeling, los van role (toegangsniveau). Door admin
+  -- handmatig ingesteld via AdminPanel (set_user_team) - geen auto-vulling.
+  -- Gebruikt door Call Insights (call_insights_nieuwe_recordings,
+  -- toolRegistry.canAccessTool) om te bepalen wie recruitment-consultant is;
+  -- herbruikbaar voor toekomstige tools. NULL = nog niet ingedeeld.
+  team text check (team in ('sales', 'consultant')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -308,6 +314,30 @@ begin
   end if;
 
   update profiles set naam = new_naam where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+-- ============================================
+-- Sales vs consultant-indeling (de)activeren — alleen admin, vanuit het
+-- AdminPanel. Los van de rol-hiërarchie (role), zie kolomcomment bij
+-- profiles.team. Bepaalt sinds 2026-09-16 wie meetelt voor Call Insights-
+-- matching (call_insights_nieuwe_recordings hieronder).
+-- ============================================
+create or replace function set_user_team(
+  target_id uuid,
+  new_team text
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen dit wijzigen';
+  end if;
+
+  if new_team is not null and new_team not in ('sales', 'consultant') then
+    raise exception 'Ongeldige team-waarde: %', new_team;
+  end if;
+
+  update profiles set team = new_team where id = target_id;
 end;
 $$ language plpgsql security definer;
 
@@ -1794,55 +1824,37 @@ create policy "admin leest alle suggesties"
   to authenticated
   using (my_role() = 'admin');
 
--- Uitsluitingslijst i.p.v. een toelatingslijst: extensies die GEEN
--- recruitment-consultant zijn (sales, andere afdeling — bv. Sam van der
--- Burg/Nick Jense op het burgbedrijven.nl-domein, en de sales-collega's
--- Pim Hartman/Milan Hogervorst/Tim Perlee/Nils den Herder). Bewust zo
--- gekozen (i.p.v. andersom alleen bekende consultant-extensies toelaten):
--- een nieuwe consultant-collega moet automatisch meegenomen worden zonder
--- dat iemand een toelatingslijst hoeft bij te werken — alleen uitzonderingen
--- (sales/andere afdeling) hoeven hier expliciet toegevoegd te worden.
+-- LEGACY, NIET MEER GEBRUIKT (sinds 2026-09-16, commit "verwijder overbodige
+-- extensie-uitsluiting + legacy MVP-picker"): call_insights_nieuwe_recordings
+-- hieronder filtert nu op profiles.team = 'consultant' i.p.v. deze
+-- uitsluitingslijst. Tabel bewust niet gedropt (geen destructieve migratie),
+-- maar wordt nergens meer gelezen of geschreven — kan ooit opgeruimd worden.
 create table call_insights_uitgesloten_extensies (
   extension text primary key,
   reden text,
   created_at timestamptz not null default now()
 );
 
-comment on table call_insights_uitgesloten_extensies is 'Extensies die nooit meetellen voor Call Insights-matching (sales/andere afdeling, geen recruitment-consultant). Uitsluitingslijst, bewust niet een toelatingslijst — zie kolomcomment call_insights_nieuwe_recordings.';
-
-insert into call_insights_uitgesloten_extensies (extension, reden) values
-  ('103', 'burgbedrijven.nl-domein, geen QHSSE-consultant'),
-  ('104', 'burgbedrijven.nl-domein, geen QHSSE-consultant'),
-  ('302', 'sales'),
-  ('303', 'sales'),
-  ('304', 'sales'),
-  ('401', 'sales');
+comment on table call_insights_uitgesloten_extensies is 'LEGACY (sinds 2026-09-16, vervangen door profiles.team) - niet meer gelezen door call_insights_nieuwe_recordings. Bewust niet gedropt, geen destructieve migratie.';
 
 alter table call_insights_uitgesloten_extensies enable row level security;
 
--- Alleen admin mag de uitsluitingslijst beheren (zelfde patroon als
--- "admin volledige toegang dev_projects") — via het AdminPanel.
 create policy "admin volledige toegang call_insights_uitgesloten_extensies"
   on call_insights_uitgesloten_extensies for all
   using (my_role() = 'admin')
   with check (my_role() = 'admin');
 
--- MVP-schaalbeperking: Call Insights verwerkt (en toont) voorlopig bewust
--- maar één consultant tegelijk — niet meteen alle 10, ondanks dat de kosten
--- daarvoor verwaarloosbaar zijn (zie sessie-overleg: backlog-kostenplaatje
--- per consultant, allemaal < $0,50 eenmalig). Eén-rij-tabel, net als
--- bullhorn_session_cache. NULL = niemand actief, dan verwerkt/toont Call
--- Insights bewust niets (veilige default, geen impliciete "alle consultants"-
--- fallback). Admin kiest/wijzigt dit via het AdminPanel.
+-- LEGACY, NIET MEER GEBRUIKT (zie call_insights_uitgesloten_extensies
+-- hierboven) — Call Insights verwerkt sinds 2026-09-16 alle actieve
+-- consultants tegelijk (profiles.team = 'consultant'), niet meer één MVP-
+-- consultant via deze tabel.
 create table call_insights_mvp_actieve_consultant (
   id smallint primary key default 1 check (id = 1),
   user_id uuid references profiles(id),
   updated_at timestamptz not null default now()
 );
 
-comment on table call_insights_mvp_actieve_consultant is 'Eén-rij MVP-instelling: welke consultant (user_id) Call Insights momenteel verwerkt/toont. NULL = niemand, dus geen verwerking. Tijdelijk, tot Call Insights breder wordt uitgerold naar alle consultants.';
-
-insert into call_insights_mvp_actieve_consultant (id, user_id) values (1, null);
+comment on table call_insights_mvp_actieve_consultant is 'LEGACY (sinds 2026-09-16, vervangen door profiles.team) - niet meer gelezen door call_insights_nieuwe_recordings. Bewust niet gedropt, geen destructieve migratie.';
 
 alter table call_insights_mvp_actieve_consultant enable row level security;
 
@@ -1858,6 +1870,9 @@ create policy "admin volledige toegang call_insights_mvp_actieve_consultant"
 -- hieronder i.p.v. een grant aan authenticated. `distinct on` omdat een
 -- recording in theorie meerdere externe deelnemers kan hebben
 -- (conferentiegesprek) — we nemen dan bewust maar één rij per recording.
+-- Filtert op profiles.team = 'consultant' (en actief) i.p.v. de oude
+-- call_insights_uitgesloten_extensies/call_insights_mvp_actieve_consultant
+-- hierboven (sinds 2026-09-16, zie set_user_team en de comments bij die tabellen).
 create or replace function call_insights_nieuwe_recordings(p_limiet int)
 returns table (
   recording_url text,
@@ -1889,8 +1904,10 @@ as $$
       and extern.cdr_participant_id is distinct from intern.cdr_participant_id
     where r.summary is not null
       and length(r.summary) > 20
-      and intern.dn not in (select extension from call_insights_uitgesloten_extensies)
-      and m.user_id = (select user_id from call_insights_mvp_actieve_consultant where id = 1)
+      and exists (
+        select 1 from profiles p
+        where p.id = m.user_id and p.team = 'consultant' and p.actief
+      )
       and not exists (
         select 1 from call_insights_processed p where p.recording_url = r.recording_url
       )
