@@ -164,9 +164,15 @@ function bouwSysteemPrompt(): string {
     'Reken dit precies uit, schat niet op gevoel: 90.000 / 12 = 7.500 -> "7000 - 8000 EUR" (NIET "8000 - 9000 ' +
     'EUR" — dat zou fout zijn). "customText11" (uurtarief) heeft deze omrekening niet nodig, dat is al een ' +
     'uurbedrag.\n' +
+    '- Noemt de kandidaat een bedrag PER 4 WEKEN in plaats van per maand (bv. "4500 euro per 4 weken"), reken dat ' +
+    'EERST exact om naar een maandbedrag voordat je een range kiest: bedrag × 13 / 12 (een jaar heeft 13 periodes ' +
+    'van 4 weken). Reken dit precies uit, schat niet op gevoel: 4500 per 4 weken -> 4500 × 13 / 12 = 4875 -> ' +
+    '"4500 - 5000 EUR" (NIET het rauwe bedrag 4500 ongewijzigd bucketen — dat geeft soms toevallig dezelfde range, ' +
+    'maar niet altijd).\n' +
     '- "customText22" wordt ALTIJD op basis van een 40-urige werkweek ingevuld. Noemt de kandidaat een bedrag bij ' +
     'een AFWIJKEND aantal uren (bv. "3500 euro op basis van 32 uur"), reken dat EERST exact door naar 40 uur ' +
-    'voordat je (eventueel na de jaar->maand-omrekening hierboven) een range kiest: bedrag × (40 / genoemde uren). ' +
+    'voordat je (eventueel na de jaar->maand- of 4-weken->maand-omrekening hierboven) een range kiest: bedrag × ' +
+    '(40 / genoemde uren). ' +
     'Voorbeeld: 3500 bij 32 uur -> 3500 × (40/32) = 4375 -> "4000 - 4500 EUR" (NIET "3500 - 4000 EUR" — dat is het ' +
     'ongecorrigeerde 32-uurbedrag). Wordt er geen afwijkend aantal uren genoemd, ga dan uit van 40 uur (geen ' +
     'omrekening nodig).\n' +
