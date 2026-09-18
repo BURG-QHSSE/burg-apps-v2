@@ -58,6 +58,34 @@ function stripMarkdownCodeblock(tekst: string): string {
   return t
 }
 
+// Vindt de index van de ']' die de top-level array (die bij `start` begint)
+// afsluit, met bracket-diepte-telling en met stringliterals overgeslagen
+// (zodat een '[' of ']' in een quote-veld niet meetelt). Geeft -1 als de
+// array niet afgesloten wordt binnen de tekst. Nodig omdat Claude soms na
+// de array nog doorschrijft (zie call boven) — we willen alleen het eerste,
+// volledige array-object parsen en de rest negeren.
+function vindArrayEinde(tekst: string, start: number): number {
+  let diepte = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < tekst.length; i++) {
+    const ch = tekst[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '[' || ch === '{') diepte++
+    else if (ch === ']' || ch === '}') {
+      diepte--
+      if (diepte === 0) return i
+    }
+  }
+  return -1
+}
+
 // Exacte Bullhorn-veldnamen + hun toegestane picklist-opties, live
 // geverifieerd via meta/Candidate (zie project-onderzoek in dit gesprek).
 // 'address' heeft bewust geen opties (vrije tekst, en we vragen alleen de
@@ -277,9 +305,20 @@ export async function detecteerVeldwijzigingen(summary: string, huidigeVelden: H
     console.error(`[call-insights] Geen JSON-array in Claude-response: ${raw.slice(0, 300)}`)
     return { suggesties: [], kostenUsd }
   }
+  // Sonnet 5 blijkt af en toe na de JSON-array nog verder te "hardop denken"
+  // ondanks thinking: disabled (bv. "Wacht, dit is geen wijziging omdat...")
+  // — tekst.slice(start) pakte voorheen alles tot het einde van de response,
+  // wat JSON.parse liet stranden op die extra tekst na de array. Zoek in
+  // plaats daarvan zelf het einde van de top-level array (bracket-diepte,
+  // met stringliterals overslaand) en negeer alles daarna.
+  const einde = vindArrayEinde(tekst, start)
+  if (einde < 0) {
+    console.error(`[call-insights] Onafgesloten JSON-array in Claude-response: ${raw.slice(0, 300)}`)
+    return { suggesties: [], kostenUsd }
+  }
 
   try {
-    const parsed = JSON.parse(tekst.slice(start))
+    const parsed = JSON.parse(tekst.slice(start, einde + 1))
     if (!Array.isArray(parsed)) return { suggesties: [], kostenUsd }
     const suggesties = parsed
       .filter((item) => item && typeof item.field === 'string' && Object.keys(VELD_DEFINITIES).includes(item.field) && item.suggested_value)

@@ -1913,11 +1913,18 @@ as $$
       )
     order by r.recording_url, r.start_time
   ) sub
-  -- Chronologisch (oudste eerst) i.p.v. de r.recording_url-volgorde die de
-  -- distinct on hierboven vereist - anders raakt de batch-verwerking
-  -- toevallig geclusterd per extensie/consultant (recording_url begint met
-  -- de extensie), i.p.v. een representatieve mix over alle consultants.
-  order by sub.start_time
+  -- Nieuwste eerst (sinds 2026-09-18, was chronologisch oudste-eerst — zie
+  -- bugfix hieronder). Bij oudste-eerst pakte elke batch van p_limiet steeds
+  -- dezelfde al-lang-onopgeloste "geen match"-recordings (die 24u lang
+  -- herhaald geprobeerd worden, zie call_insights_processed/GEEN_MATCH_RETRY_
+  -- PERIODE_MS in de Edge Function) zodra de wachtrij groter werd dan
+  -- p_limiet — nieuwe, mogelijk wél te matchen recordings kwamen daardoor
+  -- nooit meer aan bod (live bevestigd: 59 vastzittende recordings van de
+  -- vorige dag blokkeerden alle 18 nieuwe recordings van de huidige dag).
+  -- Nieuwste-eerst garandeert dat vers binnengekomen recordings altijd
+  -- voorrang krijgen; de restcapaciteit van elke batch ruimt de oude
+  -- achterstand alsnog op (of die verloopt vanzelf na 24u).
+  order by sub.start_time desc
   limit p_limiet;
 $$;
 
