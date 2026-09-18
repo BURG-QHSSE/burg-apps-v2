@@ -92,7 +92,7 @@ function vindArrayEinde(tekst: string, start: number): number {
 // plaatsnaam — zie index.ts voor waarom nooit een postcode gefabriceerd
 // wordt: NL-postcodes zijn straat-niveau, een "generieke" postcode per
 // plaatsnaam zou voor de meeste straten in die plaats gewoon fout zijn).
-export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] | null }> = {
+export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] | null; nooitSuggereren?: string[] }> = {
   customText22: {
     label: 'Salaris range (maandsalaris)',
     opties: [
@@ -112,6 +112,15 @@ export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] |
     opties: [
       'Geen/betreft loondienst', '< € 70', '€ 70 - € 80', '€ 80 - € 90', '€ 90 - € 100', '€ 100 - € 110', '€ 110 - € 120', '€ 120 - € 140', '€ 140 of meer',
     ],
+    // Blijft een geldige Bullhorn-picklistwaarde (consultant kan 'm nog
+    // steeds handmatig kiezen in de UI), maar Claude mag 'm nooit zelf
+    // voorstellen (2026-09-18, echte fout gezien: "wil zijn uurtarief niet
+    // delen" werd hiervoor aangezien, terwijl niet-willen-delen niks zegt
+    // over dienstverbandvoorkeur). Bovendien overbodig als suggestie op
+    // zich: zodra iemand geen ZZP/interim wil, blijkt dat al uit
+    // employmentPreference ("Loondienst") - dit veld hoeft dan niet apart
+    // op een "n.v.t."-waarde gezet te worden.
+    nooitSuggereren: ['Geen/betreft loondienst'],
   },
   address: { label: 'Woonplaats', opties: null },
   // "Loondienst, Interim" is een derde, samengestelde optie: dit veld is in
@@ -127,7 +136,8 @@ export const VELD_DEFINITIES: Record<string, { label: string; opties: string[] |
 function bouwSysteemPrompt(): string {
   const veldenTekst = Object.entries(VELD_DEFINITIES)
     .map(([naam, def]) => {
-      const optiesTekst = def.opties ? ` — toegestane waarden: ${def.opties.map((o) => `"${o}"`).join(', ')}` : ' — vrije tekst (alleen plaatsnaam)'
+      const suggereerbareOpties = def.opties?.filter((o) => !def.nooitSuggereren?.includes(o)) ?? null
+      const optiesTekst = suggereerbareOpties ? ` — toegestane waarden: ${suggereerbareOpties.map((o) => `"${o}"`).join(', ')}` : ' — vrije tekst (alleen plaatsnaam)'
       return `- ${naam} (${def.label})${optiesTekst}`
     })
     .join('\n')
@@ -182,6 +192,10 @@ function bouwSysteemPrompt(): string {
     'de bovenkant: een (eventueel al omgerekend) bedrag dat precies op een grens ligt hoort bij de range die ' +
     'ERMEE BEGINT, niet de range die ermee eindigt (bv. exact 5000 euro -> "5000 - 6000 EUR", NIET "4500 - 5000 ' +
     'EUR"; exact 100 euro/uur -> "€ 100 - € 110", NIET "€ 90 - € 100").\n' +
+    '- "customText11" (uurtarief): het NIET willen delen/bekendmaken van het uurtarief (bv. "wil zijn uurtarief ' +
+    'niet delen", "houdt dat liever voor zich") is GEEN aanwijzing voor een wijziging van dit veld, en al helemaal ' +
+    'geen aanwijzing voor dienstverbandvoorkeur — dat zegt alleen iets over transparantie, niks over een bedrag of ' +
+    'over loondienst/interim. Geef in dat geval GEEN suggestie voor customText11.\n' +
     '- "employmentPreference" (voorkeur dienstverband): alleen de EIGEN voorkeur van de kandidaat, nooit wat een ' +
     'vacature vereist. Dit veld ondersteunt BEIDE waarden tegelijk — als de kandidaat stellig aangeeft dat hij/zij ' +
     'BEIDE vormen doet of accepteert (bv. "werkt nu zowel in loondienst als als interim", "doet sinds kort ook ' +
