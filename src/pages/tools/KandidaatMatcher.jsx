@@ -23,7 +23,7 @@ const STATUS_LABELS = {
 
 /** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. */
 function uniekeWaarden(resultaten, veld) {
-  return Array.from(new Set(resultaten.map((r) => r[veld]).filter((w) => w && w !== 'Onbekend'))).sort()
+  return Array.from(new Set(resultaten.map((r) => r[veld]).filter(Boolean))).sort()
 }
 
 /**
