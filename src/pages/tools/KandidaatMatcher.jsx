@@ -21,9 +21,10 @@ const STATUS_LABELS = {
   kostenlimiet: 'Gestopt: kostenlimiet bereikt',
 }
 
-/** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. */
+/** Unieke, niet-lege waarden van een veld uit de resultatenlijst, voor de filter-dropdowns. "Onbekend" staat altijd bovenaan. */
 function uniekeWaarden(resultaten, veld) {
-  return Array.from(new Set(resultaten.map((r) => r[veld]).filter(Boolean))).sort()
+  const waarden = Array.from(new Set(resultaten.map((r) => r[veld]).filter(Boolean))).sort()
+  return waarden.includes('Onbekend') ? ['Onbekend', ...waarden.filter((w) => w !== 'Onbekend')] : waarden
 }
 
 /**
