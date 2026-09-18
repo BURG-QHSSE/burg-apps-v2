@@ -71,13 +71,25 @@ export function hasAccess(userRole, minimumRole) {
  * call-insights-tool hieronder. Ontbreekt die context (nog niet geladen)?
  * Dan is de veilige default `false`, dus de tool blijft verborgen totdat de
  * instelling daadwerkelijk is opgehaald.
+ *
+ * `profile.call_insights_test_toegang` (2026-09-18): losstaand van de
+ * globale schakelaar, geeft één specifieke consultant vaste toegang om te
+ * testen zonder de tool voor het hele team open te zetten — zet-baar via
+ * de RPC set_call_insights_test_toegang (admin-only). De gewone
+ * team='consultant'-scoping in CallInsights.jsx (auth.uid(), + RLS erop)
+ * blijft ongewijzigd van toepassing: deze persoon ziet dus nog steeds
+ * uitsluitend zijn eigen gesprekken/suggesties.
  */
 export function canAccessTool(profile, tool, context = {}) {
   if (profile?.restricted_to_tool) {
     return profile.restricted_to_tool === tool.id
   }
   if (tool.id === 'call-insights') {
-    return profile?.role === 'admin' || (profile?.team === 'consultant' && !!context.callInsightsLive)
+    return (
+      profile?.role === 'admin' ||
+      (profile?.team === 'consultant' && !!context.callInsightsLive) ||
+      !!profile?.call_insights_test_toegang
+    )
   }
   return hasAccess(profile?.role, tool.minimumRole)
 }

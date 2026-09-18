@@ -54,6 +54,15 @@ create table profiles (
   -- toolRegistry.canAccessTool) om te bepalen wie recruitment-consultant is;
   -- herbruikbaar voor toekomstige tools. NULL = nog niet ingedeeld.
   team text check (team in ('sales', 'consultant')),
+  -- Losstaand van call_insights_instellingen.live_voor_consultants (de
+  -- globale schakelaar voor alle consultants, nog uit sinds 2026-09-16):
+  -- geeft één specifieke consultant vast toegang tot Call Insights om te
+  -- testen, zonder de tool voor het hele team open te zetten. Door admin
+  -- gezet via set_call_insights_test_toegang, gelezen door
+  -- toolRegistry.canAccessTool(). Verandert niets aan de normale
+  -- auth.uid()-scoping (+ RLS) in CallInsights.jsx/call_field_suggestions —
+  -- deze persoon ziet dus alsnog uitsluitend zijn eigen gesprekken.
+  call_insights_test_toegang boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -340,6 +349,27 @@ begin
   update profiles set team = new_team where id = target_id;
 end;
 $$ language plpgsql security definer;
+
+-- ============================================
+-- Eén consultant vast toegang geven tot Call Insights om te testen (los van
+-- de globale live_voor_consultants-schakelaar) — alleen admin, vanuit
+-- AdminPanel. Zie kolomcomment bij profiles.call_insights_test_toegang.
+-- ============================================
+create or replace function set_call_insights_test_toegang(
+  target_id uuid,
+  new_waarde boolean
+)
+returns void as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    raise exception 'Alleen admins mogen dit wijzigen';
+  end if;
+
+  update profiles set call_insights_test_toegang = new_waarde where id = target_id;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function set_call_insights_test_toegang(uuid, boolean) to authenticated;
 
 -- ============================================
 -- Mijn Omgeving: uitgebreide toegang (de)activeren — alleen admin
