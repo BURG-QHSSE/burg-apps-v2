@@ -1953,13 +1953,76 @@ as $$
   -- vorige dag blokkeerden alle 18 nieuwe recordings van de huidige dag).
   -- Nieuwste-eerst garandeert dat vers binnengekomen recordings altijd
   -- voorrang krijgen; de restcapaciteit van elke batch ruimt de oude
-  -- achterstand alsnog op (of die verloopt vanzelf na 24u).
+  -- achterstand alsnog op (of die verloopt vanzelf na 24u) — MAAR zie de
+  -- spiegelbeeld-bug hieronder bij call_insights_verlopen_recordings.
   order by sub.start_time desc
   limit p_limiet;
 $$;
 
 revoke execute on function call_insights_nieuwe_recordings(int) from public, anon, authenticated;
 grant execute on function call_insights_nieuwe_recordings(int) to service_role;
+
+-- Spiegelbeeld van de nieuwste-eerst-fix hierboven, gevonden door de
+-- wekelijkse geautomatiseerde verificatie-routine (2026-09-18, 15:00 run):
+-- zodra de instroom van nieuwe recordings de batchgrootte (SYNC_BATCH_SIZE)
+-- structureel overtreft, bereiken de oudste, allang-24u-verlopen recordings
+-- de hoofdlus in syncNewCalls nooit meer — en dus ook nooit de
+-- 'geen_match'-afschrijving die daar gebeurt zodra GEEN_MATCH_RETRY_PERIODE_MS
+-- is verstreken. Ze bleven zo voor altijd onverwerkt ÉN ongemarkeerd hangen
+-- (live bevestigd: 38 recordings van vóór vandaag, 31 daarvan >24u oud).
+-- Losstaande, ongelimiteerde "veeg"-functie specifiek voor alles voorbij de
+-- retry-termijn (p_voor), los van de nieuwste-eerst-volgorde/batchgrootte
+-- hierboven — syncNewCalls roept deze apart aan en verwerkt het resultaat
+-- via dezelfde hoofdlus (index.ts, VERLOPEN_SWEEP_BATCH_SIZE = 200). Kost
+-- vrijwel niets: alleen een telefoon-index-lookup per item, geen Bullhorn/
+-- Claude-aanroep tenzij een gesprek alsnog matcht.
+create or replace function call_insights_verlopen_recordings(p_voor timestamptz, p_limiet int)
+returns table (
+  recording_url text,
+  start_time timestamptz,
+  summary text,
+  user_id uuid,
+  extern_nummer text
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select sub.recording_url, sub.start_time, sub.summary, sub.user_id, sub.extern_nummer
+  from (
+    select distinct on (r.recording_url)
+      r.recording_url,
+      r.start_time,
+      r.summary,
+      m.user_id,
+      extern.caller_number as extern_nummer
+    from recordings r
+    join recording_participant intern
+      on intern.fk_recording_url = r.recording_url
+    join cx_extension_mapping m
+      on m.extension = intern.dn
+    join recording_participant extern
+      on extern.fk_recording_url = r.recording_url
+      and extern.cdr_participant_id is distinct from intern.cdr_participant_id
+    where r.summary is not null
+      and length(r.summary) > 20
+      and r.start_time < p_voor
+      and exists (
+        select 1 from profiles p
+        where p.id = m.user_id and p.team = 'consultant' and p.actief
+      )
+      and not exists (
+        select 1 from call_insights_processed p where p.recording_url = r.recording_url
+      )
+    order by r.recording_url, r.start_time
+  ) sub
+  order by sub.start_time
+  limit p_limiet;
+$$;
+
+revoke execute on function call_insights_verlopen_recordings(timestamptz, int) from public, anon, authenticated;
+grant execute on function call_insights_verlopen_recordings(timestamptz, int) to service_role;
 
 -- Eigen genormaliseerde telefoonnummer-index van Bullhorn-kandidaten, om de
 -- telefoon->kandidaat-matching in call-insights te doen. NIET via een live

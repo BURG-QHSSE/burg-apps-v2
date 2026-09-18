@@ -52,6 +52,13 @@ const CRON_SECRET = Deno.env.get('CALL_INSIGHTS_CRON_SECRET')
 // sequentiële Bullhorn- + Claude-aanroepen).
 const SYNC_BATCH_SIZE = 20
 
+// Aantal >24u-verlopen recordings dat elke tick ONGEACHT SYNC_BATCH_SIZE
+// wordt meegeveegd (zie call_insights_verlopen_recordings hieronder) - ruim
+// hoger dan SYNC_BATCH_SIZE omdat dit vrijwel altijd alleen een goedkope
+// telefoon-index-lookup kost (geen Bullhorn/Claude), tenzij een gesprek
+// alsnog matcht.
+const VERLOPEN_SWEEP_BATCH_SIZE = 200
+
 // Aantal recordings per XAPI-ingest-aanroep — dit kost alleen een XAPI-call +
 // een paar bulk-inserts (geen Bullhorn/Claude), dus ruimer dan SYNC_BATCH_SIZE.
 const XAPI_SYNC_BATCH_SIZE = 300
@@ -387,6 +394,25 @@ async function syncNewCalls(
   const { data: nieuw, error } = await admin.rpc('call_insights_nieuwe_recordings', { p_limiet: SYNC_BATCH_SIZE })
   if (error) throw new Error(`call_insights_nieuwe_recordings mislukt: ${error.message}`)
 
+  // Nieuwste-eerst (hierboven) voorkomt dat vastzittende oude gesprekken
+  // nieuwe verdringen (zie 2026-09-18-fix) - maar spiegelbeeld-risico: zodra
+  // de instroom aan nieuwe gesprekken de batchgrootte structureel overtreft,
+  // bereiken de oudste, allang-24u-verlopen gesprekken de hoofdlus hieronder
+  // nooit meer, en dus ook nooit de 'geen_match'-afschrijving verderop in
+  // die lus - ze blijven voor altijd onverwerkt EN ongemarkeerd hangen. Live
+  // bevestigd door de wekelijkse verificatie-routine (2026-09-18 15:00): 38
+  // gesprekken ouder dan vandaag, waarvan 31 al >24u oud, zaten muurvast.
+  // Aparte, ongelimiteerde veeg-batch specifiek voor alles voorbij de
+  // retry-termijn lost dit los van de nieuwste-eerst-volgorde op - kost
+  // vrijwel niets extra (alleen een telefoon-index-lookup per item, geen
+  // Bullhorn/Claude tenzij het alsnog matcht) omdat deze gesprekken per
+  // definitie al voorbij GEEN_MATCH_RETRY_PERIODE_MS zijn.
+  const { data: verlopen, error: verlopenError } = await admin.rpc('call_insights_verlopen_recordings', {
+    p_voor: new Date(Date.now() - GEEN_MATCH_RETRY_PERIODE_MS).toISOString(),
+    p_limiet: VERLOPEN_SWEEP_BATCH_SIZE,
+  })
+  if (verlopenError) console.error(`[call-insights] call_insights_verlopen_recordings mislukt:`, verlopenError)
+
   let session = await getBullhornSession(admin)
   session = await verversPhoneIndexAlsVerouderd(admin, session)
   let matches = 0
@@ -394,7 +420,7 @@ async function syncNewCalls(
   let suggestiesTotaal = 0
   let kostenplafondBereikt = false
 
-  for (const recording of nieuw ?? []) {
+  for (const recording of [...(nieuw ?? []), ...(verlopen ?? [])]) {
     if (kostenVandaag >= MAX_KOSTEN_USD_PER_DAG) {
       kostenplafondBereikt = true
       await stuurKostenplafondMelding(kostenVandaag)
@@ -501,7 +527,7 @@ async function syncNewCalls(
     }
   }
 
-  return { verwerkt: (nieuw ?? []).length, matches, ambigu, suggesties: suggestiesTotaal, kostenplafondBereikt }
+  return { verwerkt: (nieuw ?? []).length + (verlopen ?? []).length, matches, ambigu, suggesties: suggestiesTotaal, kostenplafondBereikt }
 }
 
 /**
