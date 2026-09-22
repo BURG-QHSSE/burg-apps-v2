@@ -500,6 +500,11 @@ as $$
     and (yield_tot is null or yield_tot >= current_date);
 $$;
 
+-- Tot 2026-09-22 stond dit nog open voor anon/public (zelfde bugklasse als
+-- uitgebreid_emails() hierboven, gevonden bij het dichten van dát gat) —
+-- alleen authenticated hoort dit te mogen.
+revoke execute on function yield_consultant_count() from public, anon;
+
 grant execute on function yield_consultant_count() to authenticated;
 
 -- ============================================
