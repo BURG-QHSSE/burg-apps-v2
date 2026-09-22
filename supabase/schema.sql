@@ -391,6 +391,28 @@ end;
 $$ language plpgsql security definer;
 
 -- ============================================
+-- Mijn Omgeving: e-mailadressen van iedereen met uitgebreide toegang —
+-- nodig zodat een uitgebreide gebruiker kan zien wie er nog meer uitgebreide
+-- toegang heeft, zonder de volledige profiles-tabel te mogen lezen (RLS
+-- laat een gewone 'user' alleen de eigen rij lezen). SECURITY DEFINER +
+-- grant ALLEEN aan authenticated (nooit anon/public — dit gaf tot
+-- 2026-09-21 personeels-e-mailadressen vrij aan niet-ingelogde bezoekers
+-- via de publieke REST-API, gevonden door de wekelijkse security-audit en
+-- gefixt door de PUBLIC/anon-grant te revoken).
+-- ============================================
+create or replace function uitgebreid_emails()
+returns setof text
+language sql
+stable security definer
+set search_path to 'public'
+as $$
+  select email from profiles where mijn_omgeving_uitgebreid = true and actief = true;
+$$;
+
+revoke execute on function uitgebreid_emails() from public, anon;
+grant execute on function uitgebreid_emails() to authenticated;
+
+-- ============================================
 -- Yield-thermometer: wie telt mee als consultant (de)activeren — alleen
 -- admin, vanuit het Adminpaneel. Zelfde patroon als
 -- set_mijn_omgeving_uitgebreid hierboven.
@@ -1133,11 +1155,12 @@ grant execute on function hr_update_gpb_doelen(uuid, jsonb) to authenticated;
 -- ============================================
 -- Bel Overzicht: belstatistieken per medewerker uit 3CX CDR-data
 --
--- `call_daily_stats` wordt buiten dit bestand om gevuld (een cron job zet
--- elke nacht om 00:20 de vorige dag over vanuit de ruwe 3CX-CDR-staging-
--- tabellen `cdroutput`/`cdrbilling`, die zelf geen onderdeel zijn van het
--- applicatie-schema en daarom hier niet gedocumenteerd worden). Alleen
--- daadwerkelijk gevoerde (beantwoorde) gesprekken tellen mee.
+-- `call_daily_stats` wordt gevuld door aggregate_call_stats() hieronder,
+-- aangeroepen door pg_cron job `aggregate-call-stats-15min` (elke 15 min,
+-- voor zowel vandaag als gisteren — de ruwe 3CX-CDR-staging-tabellen
+-- `cdroutput`/`cdrbilling` zelf zijn geen onderdeel van het applicatie-
+-- schema en daarom hier niet gedocumenteerd). Alleen daadwerkelijk
+-- gevoerde (beantwoorde) gesprekken tellen mee.
 -- `call_weekly_stats`/`call_quarterly_stats` zijn views die daar automatisch
 -- op groeperen — geen aparte opslag, geen aparte schrijf-policy nodig.
 -- ============================================
@@ -1160,6 +1183,56 @@ create policy "authenticated read daily stats"
   on call_daily_stats for select
   to authenticated
   using (true);
+
+-- Herberekent calls_in/calls_out/minutes_in/minutes_out per user_id voor
+-- p_date, uit de ruwe cdroutput-CDR-legs (gekoppeld via cx_extension_mapping
+-- hieronder). Uitsluitend aangeroepen door pg_cron (als postgres) — nooit
+-- door client-code — vandaar de revoke hieronder i.p.v. een grant aan
+-- authenticated/anon (tot 2026-09-21 stond dit nog open, gevonden door de
+-- wekelijkse security-audit).
+create or replace function aggregate_call_stats(p_date date)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  with legs as (
+    select
+      m.user_id,
+      o.call_history_id,
+      min(o.cdr_answered_at) as answered_at,
+      max(o.cdr_ended_at) as ended_at,
+      bool_or(o.source_dn_number = m.extension) as was_source
+    from cdroutput o
+    join cx_extension_mapping m
+      on m.extension in (o.source_dn_number, o.destination_dn_number)
+    where o.cdr_started_at::date = p_date
+      and o.cdr_answered_at is not null
+    group by m.user_id, o.call_history_id
+  )
+  insert into call_daily_stats (user_id, call_date, calls_in, calls_out, minutes_in, minutes_out, updated_at)
+  select
+    user_id,
+    p_date,
+    count(*) filter (where not was_source) as calls_in,
+    count(*) filter (where was_source) as calls_out,
+    coalesce(round(sum(extract(epoch from (ended_at - answered_at))) filter (where not was_source) / 60.0, 2), 0) as minutes_in,
+    coalesce(round(sum(extract(epoch from (ended_at - answered_at))) filter (where was_source) / 60.0, 2), 0) as minutes_out,
+    now()
+  from legs
+  group by user_id
+  on conflict (user_id, call_date)
+  do update set
+    calls_in = excluded.calls_in,
+    calls_out = excluded.calls_out,
+    minutes_in = excluded.minutes_in,
+    minutes_out = excluded.minutes_out,
+    updated_at = now();
+end;
+$$;
+
+revoke execute on function aggregate_call_stats(date) from public, anon, authenticated;
+grant execute on function aggregate_call_stats(date) to service_role;
 
 create view call_weekly_stats as
   select
@@ -1892,6 +1965,52 @@ create policy "admin volledige toegang call_insights_mvp_actieve_consultant"
   on call_insights_mvp_actieve_consultant for all
   using (my_role() = 'admin')
   with check (my_role() = 'admin');
+
+-- Voorkomt overlappende cron-runs van syncNewCalls/syncRecordingsFromXapi
+-- (2026-09-16, na een live race condition: twee gelijktijdige runs gaven een
+-- dubbele call_field_suggestions-rij + een gemiste recording). Rij-gebaseerde
+-- lock i.p.v. pg_advisory_lock, omdat sessie-gebonden advisory locks
+-- onbetrouwbaar zijn door PgBouncer-connection-pooling. Pre-geseed met
+-- precies twee rijen ('syncNewCalls'/'syncRecordingsFromXapi') —
+-- call_insights_probeer_lock werkt alleen voor namen die al een rij hebben.
+-- Uitsluitend gebruikt door de call-insights Edge Function via de
+-- service-role-client, die RLS altijd omzeilt — RLS staat daarom aan zonder
+-- policies (zelfde patroon als bullhorn_session_cache/cdroutput hieronder/
+-- hierboven). Tot 2026-09-21 stond RLS hier nog uit, met volledige
+-- lees/schrijftoegang voor anon — gevonden door de wekelijkse security-audit.
+create table call_insights_sync_lock (
+  naam text primary key,
+  vergrendeld_tot timestamptz
+);
+
+alter table call_insights_sync_lock enable row level security;
+
+create or replace function call_insights_probeer_lock(p_naam text, p_duur_seconden int)
+returns boolean
+language plpgsql
+as $$
+declare
+  aantal int;
+begin
+  update call_insights_sync_lock
+  set vergrendeld_tot = now() + make_interval(secs => p_duur_seconden)
+  where naam = p_naam and (vergrendeld_tot is null or vergrendeld_tot < now());
+  get diagnostics aantal = row_count;
+  return aantal > 0;
+end;
+$$;
+
+create or replace function call_insights_geef_lock_vrij(p_naam text)
+returns void
+language sql
+as $$
+  update call_insights_sync_lock set vergrendeld_tot = null where naam = p_naam;
+$$;
+
+revoke execute on function call_insights_probeer_lock(text, int) from public, anon, authenticated;
+revoke execute on function call_insights_geef_lock_vrij(text) from public, anon, authenticated;
+grant execute on function call_insights_probeer_lock(text, int) to service_role;
+grant execute on function call_insights_geef_lock_vrij(text) to service_role;
 
 -- Vindt nieuwe, nog niet verwerkte recordings + bepaalt welke deelnemer de
 -- interne consultant is (via cx_extension_mapping) en welke het externe
