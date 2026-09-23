@@ -78,6 +78,14 @@ const ICONS = {
       <path d="M9 11.5 10.5 13 13.5 9.5" />
     </svg>
   ),
+  'extern-zoeken': (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="10" cy="10" r="6" />
+      <line x1="20" y1="20" x2="14.5" y2="14.5" />
+      <line x1="10" y1="7" x2="10" y2="13" />
+      <line x1="7" y1="10" x2="13" y2="10" />
+    </svg>
+  ),
 }
 
 /** Rendert het icoon voor `toolId`, of niets als er (nog) geen mapping is. */

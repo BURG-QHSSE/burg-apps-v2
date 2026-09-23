@@ -28,6 +28,7 @@ import BelOverzicht from './pages/tools/BelOverzicht'
 import CallInsights from './pages/tools/CallInsights'
 import Ontwikkeling from './pages/tools/Ontwikkeling'
 import KandidaatMatcher from './pages/tools/KandidaatMatcher'
+import ExternZoeken from './pages/tools/ExternZoeken'
 import ToolingGebruik from './pages/tools/ToolingGebruik'
 import TroubleshootWidget from './components/TroubleshootWidget'
 import './App.css'
@@ -48,6 +49,7 @@ const TOOL_COMPONENTS = {
   'call-insights': CallInsights,
   'dev-projecten': Ontwikkeling,
   'kandidaat-matcher': KandidaatMatcher,
+  'extern-zoeken': ExternZoeken,
   'matcher-gebruik': ToolingGebruik,
 }
 

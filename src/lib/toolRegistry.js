@@ -21,6 +21,8 @@ export const TOOLS = [
   { id: 'gpb-beoordelingstool', naam: 'GPB Beoordelingstool', minimumRole: 'user', path: '/tools/gpb-beoordelingstool', category: 'groei' },
   { id: 'dev-projecten', naam: 'Ontwikkeling', minimumRole: 'admin', path: '/tools/dev-projecten', category: 'beheer' },
   { id: 'kandidaat-matcher', naam: 'Kandidaat Matcher', minimumRole: 'user', path: '/tools/kandidaat-matcher', category: 'daily' },
+  // Testfase: admin-only (zelfde drempel als TOEGESTANE_ROLLEN in supabase/functions/extern-zoeken).
+  { id: 'extern-zoeken', naam: 'Extern Zoeken', minimumRole: 'admin', path: '/tools/extern-zoeken', category: 'daily' },
   { id: 'matcher-gebruik', naam: 'Tooling Gebruik', minimumRole: 'admin', path: '/tools/matcher-gebruik', category: 'beheer' },
 ]
 
