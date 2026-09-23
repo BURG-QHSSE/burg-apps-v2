@@ -2170,3 +2170,72 @@ comment on table bullhorn_candidate_phone_index is 'Genormaliseerde (laatste 9 c
 create index bullhorn_candidate_phone_index_phone_idx on bullhorn_candidate_phone_index (normalized_phone);
 
 alter table bullhorn_candidate_phone_index enable row level security;
+
+-- ============================================================
+-- EXTERN ZOEKEN (admin-only, testfase) — extern_zoeken_opdrachten + extern_zoeken_resultaten
+-- ============================================================
+-- Externe search via LinkedIn Recruiter. Een opdracht = één vacature + de
+-- (door de consultant gecontroleerde) zoekopdracht uit extern-zoeken/claude.ts.
+-- De BURG Chrome-extensie voert die uit in Recruiter en schrijft per gevonden
+-- profiel een resultaat-rij; de Edge Function extern-zoeken scoort ze.
+-- recruiter_id is het versleutelde Recruiter-profiel-ID (/talent/profile/AEMAA…),
+-- géén openbare LinkedIn-URL. kaart bevat de uitgelezen gegevens van het
+-- resultatenkaartje (naam, kopregel, locatie, ervaring) — nodig voor scoren en
+-- het persoonlijke bericht; alleen admins kunnen dit lezen.
+
+create table extern_zoeken_opdrachten (
+  id uuid default gen_random_uuid() primary key,
+  created_by uuid references profiles(id) on delete set null default auth.uid(),
+  vacature_id text,
+  vacaturetekst text not null,
+  strategie jsonb not null,
+  recruiter_project_id text,
+  doel_aantal int not null default 200,
+  status text not null default 'concept' check (status in ('concept', 'bezig', 'klaar', 'gestopt', 'fout')),
+  foutmelding text,
+  geschatte_kosten_usd numeric not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table extern_zoeken_opdrachten is 'Eén Extern Zoeken-opdracht = één vacature + zoekopdracht (strategie, bewerkt door de consultant). recruiter_project_id wordt door de extensie ingevuld zodra het project in Recruiter is aangemaakt. doel_aantal = gewenste pipelinegrootte (standaard 200).';
+
+alter table extern_zoeken_opdrachten enable row level security;
+
+create policy "admin toegang extern_zoeken_opdrachten"
+  on extern_zoeken_opdrachten for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
+
+create table extern_zoeken_resultaten (
+  id uuid default gen_random_uuid() primary key,
+  opdracht_id uuid not null references extern_zoeken_opdrachten(id) on delete cascade,
+  recruiter_id text not null,
+  kaart jsonb not null,
+  in_bullhorn boolean not null default false,
+  aantal_berichten int not null default 0,
+  aantal_projecten int not null default 0,
+  score int check (score between 0 and 100),
+  onderbouwing text,
+  twijfel boolean not null default false,
+  engels boolean,
+  status text not null default 'gevonden' check (status in ('gevonden', 'gescoord', 'toegevoegd', 'overgeslagen', 'bericht_klaar', 'verzonden', 'fout')),
+  bericht text,
+  foutmelding text,
+  model text,
+  prompt_versie text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (opdracht_id, recruiter_id)
+);
+
+comment on table extern_zoeken_resultaten is 'Eén rij per gevonden Recruiter-profiel binnen een opdracht. in_bullhorn/aantal_berichten/aantal_projecten komen van de activiteitregel op het resultatenkaartje (Recruiter-Bullhorn-koppeling). twijfel = scoreband waarin de consultant zelf beslist.';
+
+create index extern_zoeken_resultaten_opdracht_idx on extern_zoeken_resultaten (opdracht_id, status);
+
+alter table extern_zoeken_resultaten enable row level security;
+
+create policy "admin toegang extern_zoeken_resultaten"
+  on extern_zoeken_resultaten for all
+  using (my_role() = 'admin')
+  with check (my_role() = 'admin');
