@@ -1,6 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { maakStrategie } from '../../lib/externZoekenApi'
+import {
+  maakStrategie,
+  slaOpdrachtOp,
+  fetchOpdracht,
+  koppelExtensie,
+  startInRecruiter,
+} from '../../lib/externZoekenApi'
 
 /**
  * Extern Zoeken — externe search via LinkedIn Recruiter (tegenhanger van de
@@ -33,6 +39,41 @@ export default function ExternZoeken() {
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState('')
   const [gekopieerd, setGekopieerd] = useState(false)
+  const [extensieVersie, setExtensieVersie] = useState(null)
+  const [opdracht, setOpdracht] = useState(null)
+
+  useEffect(
+    () =>
+      koppelExtensie({
+        onVersie: setExtensieVersie,
+        onFout: (melding) => setFout(`Extensie: ${melding}`),
+      }),
+    [],
+  )
+
+  // Voortgang live volgen zolang de extensie bezig is.
+  useEffect(() => {
+    if (!opdracht?.id || !['concept', 'bezig'].includes(opdracht.status)) return
+    const timer = setInterval(async () => {
+      try {
+        setOpdracht(await fetchOpdracht(opdracht.id))
+      } catch {
+        // volgende poging
+      }
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [opdracht?.id, opdracht?.status])
+
+  async function handleStart() {
+    setFout('')
+    try {
+      const id = await slaOpdrachtOp(vacatureId.trim(), vacaturetekst.trim(), strategie)
+      setOpdracht({ id, status: 'concept', voortgang: 'Extensie starten…' })
+      startInRecruiter(id)
+    } catch (err) {
+      setFout(err.message)
+    }
+  }
 
   async function handleMaak() {
     setBezig(true)
@@ -202,10 +243,36 @@ export default function ExternZoeken() {
               </label>
             </div>
 
-            {/* Tijdelijk tot de koppeling met de extensie er is: zoekopdracht als JSON meenemen. */}
-            <button type="button" className="btn btn-secondary" onClick={handleKopieer}>
-              {gekopieerd ? 'Gekopieerd' : 'Kopieer zoekopdracht (voor extensie)'}
-            </button>
+            <div className="matcher-upload-row">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!extensieVersie || opdracht?.status === 'bezig'}
+                onClick={handleStart}
+              >
+                Start in Recruiter
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={handleKopieer}>
+                {gekopieerd ? 'Gekopieerd' : 'Kopieer zoekopdracht'}
+              </button>
+            </div>
+            {!extensieVersie && (
+              <p className="matcher-dropdown-sub">
+                BURG-extensie niet gevonden in deze browser — installeer of activeer de extensie om te starten.
+              </p>
+            )}
+            {opdracht && (
+              <div className="field">
+                <label>Voortgang in Recruiter</label>
+                <p>
+                  <strong>{opdracht.status}</strong> — {opdracht.voortgang}
+                </p>
+                {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
+                {opdracht.status === 'bezig' && (
+                  <p className="matcher-dropdown-sub">Laat dit tabblad open zolang de extensie bezig is.</p>
+                )}
+              </div>
+            )}
           </section>
         )}
       </main>

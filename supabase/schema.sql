@@ -2239,3 +2239,47 @@ create policy "admin toegang extern_zoeken_resultaten"
   on extern_zoeken_resultaten for all
   using (my_role() = 'admin')
   with check (my_role() = 'admin');
+
+-- Bewaartermijn Extern Zoeken (AVG, afgesproken 2026-09-23): de resultaten
+-- (namen/profielgegevens uit LinkedIn) worden 30 dagen na het afronden van een
+-- opdracht verwijderd; de opdracht zelf (vacature + zoekopdracht, geen
+-- persoonsgegevens) blijft staan. Vangnet: resultaten van een opdracht die nooit
+-- is afgerond, verdwijnen na 60 dagen. afgerond_op wordt gezet door een trigger
+-- zodra de status naar klaar/gestopt/fout gaat.
+alter table extern_zoeken_opdrachten add column afgerond_op timestamptz;
+
+create or replace function extern_zoeken_zet_afgerond_op()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  if new.status in ('klaar', 'gestopt', 'fout') and new.afgerond_op is null then
+    new.afgerond_op := now();
+  elsif new.status in ('concept', 'bezig') then
+    new.afgerond_op := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger extern_zoeken_opdrachten_afgerond_op
+  before update on extern_zoeken_opdrachten
+  for each row execute function extern_zoeken_zet_afgerond_op();
+
+select cron.schedule(
+  'extern-zoeken-bewaartermijn',
+  '15 3 * * *',
+  $$
+    delete from extern_zoeken_resultaten r
+    using extern_zoeken_opdrachten o
+    where r.opdracht_id = o.id
+      and (o.afgerond_op < now() - interval '30 days' or r.created_at < now() - interval '60 days');
+  $$
+);
+
+alter table extern_zoeken_opdrachten add column voortgang text;
+alter table extern_zoeken_opdrachten add column aantal_resultaten text;
+comment on column extern_zoeken_opdrachten.voortgang is 'Laatste statusregel van de BURG-extensie (bijv. "Filters invullen: locaties"), live getoond in BURG Apps.';
+comment on column extern_zoeken_opdrachten.aantal_resultaten is 'Aantal resultaten zoals Recruiter het toont na het invullen van de filters (tekst, bijv. "487" of "2,2K+").';
