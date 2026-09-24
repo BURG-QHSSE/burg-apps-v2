@@ -32,3 +32,6 @@ dist-ssr
 
 # Supabase CLI lokale cache (project-link state, versie-info)
 supabase/.temp
+
+# Windows/OneDrive-systeembestanden
+desktop.ini

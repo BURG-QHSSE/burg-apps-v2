@@ -1,0 +1,38 @@
+{
+  "_readme": "PLACEHOLDER-fixtures — vervang deze door 10-15 echte, al door een consultant gecheckte vacature/kandidaat-paren zodra die beschikbaar zijn (anonimiseer de CV-tekst net als de tool zelf al doet, zie anonimiseren.ts). Elke fixture beschrijft wat een acceptabele score-range is en welke trefwoorden minimaal in de onderbouwing terug moeten komen. Run met: deno run --allow-net --allow-env supabase/functions/kandidaat-matcher/_evals/run-evals.ts",
+  "fixtures": [
+    {
+      "naam": "Sterke match - VCA + jaren ervaring",
+      "vacaturetekst": "Vacature: Senior HSE Adviseur (QHSSE)\n\nWij zoeken een ervaren HSE Adviseur voor een olie- en gasklant in de Rotterdamse haven. Eisen: VCA-VOL certificaat, minimaal 5 jaar ervaring als HSE-adviseur binnen de industrie, kennis van ISO 45001, zelfstandig kunnen opstellen van risicoanalyses (RI&E) en toolboxmeetings kunnen verzorgen. Rijbewijs B vereist.",
+      "cvTekst": "CV: HSE Adviseur, 7 jaar ervaring bij twee petrochemische bedrijven in de Rotterdamse haven. VCA-VOL gecertificeerd sinds 2018. ISO 45001 lead auditor opleiding afgerond. Stelde zelfstandig RI&E's op en verzorgde wekelijkse toolboxmeetings. Rijbewijs B.",
+      "verwachte_score_min": 80,
+      "verwachte_score_max": 100,
+      "moet_noemen": ["VCA", "ervaring"]
+    },
+    {
+      "naam": "Zwakke match - mist kerncertificaat",
+      "vacaturetekst": "Vacature: Veiligheidskundige (QHSSE)\n\nGezocht: gecertificeerd Hoger Veiligheidskundige (HVK) voor een bouwproject. Eisen: HVK-diploma verplicht, minimaal 3 jaar ervaring op bouwplaatsen, kennis van de Arbowet.",
+      "cvTekst": "CV: Preventiemedewerker met 2 jaar ervaring in de kantooromgeving. Geen HVK-diploma, wel een basis VCA-certificaat. Interesse in doorgroeien naar de bouwsector.",
+      "verwachte_score_min": 0,
+      "verwachte_score_max": 40,
+      "moet_noemen": ["HVK"]
+    },
+    {
+      "naam": "Redelijke match - relevante ervaring maar ander niveau",
+      "vacaturetekst": "Vacature: QHSSE Officer Offshore\n\nWij zoeken een QHSSE Officer voor offshore-werkzaamheden. Eisen: BOSIET-certificaat, minimaal 2 jaar offshore-ervaring, kennis van ISM/ISPS-codes, ervaring met incidentonderzoek.",
+      "cvTekst": "CV: HSE-medewerker met 4 jaar ervaring, uitsluitend onshore bij een chemische fabriek. BOSIET-certificaat niet aanwezig. Wel ruime ervaring met incidentonderzoek en het opstellen van veiligheidsrapportages. Op zoek naar een overstap naar offshore werk.",
+      "verwachte_score_min": 35,
+      "verwachte_score_max": 65,
+      "moet_noemen": ["offshore", "BOSIET"]
+    },
+    {
+      "naam": "Geen CV-tekst - moet expliciet vermeld worden",
+      "vacaturetekst": "Vacature: QHSSE Coördinator\n\nGezocht: QHSSE Coördinator met minimaal 3 jaar ervaring in de procesindustrie, VCA-VOL en affiniteit met kwaliteitsmanagement (ISO 9001).",
+      "cvTekst": "",
+      "verwachte_score_min": 0,
+      "verwachte_score_max": 100,
+      "moet_noemen": [],
+      "opmerking": "Lege CV-tekst wordt in de echte tool afgehandeld door de klaarZonderScore-tak in index.ts (score 0, vaste boodschap), niet door rankKandidaat zelf — deze fixture test dus vooral dat run-evals.ts een lege payload niet laat crashen; sla 'm over als hij niet relevant blijkt voor rankKandidaat direct."
+    }
+  ]
+}

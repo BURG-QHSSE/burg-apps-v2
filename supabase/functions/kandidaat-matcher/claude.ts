@@ -3,7 +3,9 @@
 // bereid_vacaturetekst_voor_cache() uit server.py (kandidaat-ranker-repo) —
 // systeemprompt letterlijk overgenomen (Nederlandstalig, QHSSE-context).
 
-const CLAUDE_MODEL = 'claude-sonnet-5'
+// Exported zodat index.ts dit kan meeschrijven naar matching_resultaten.model,
+// voor traceerbaarheid van oude scores naar het model dat ze produceerde.
+export const CLAUDE_MODEL = 'claude-sonnet-5'
 // Was 400 op Sonnet 4.6. Sonnet 5 gebruikt een nieuwe tokenizer (~30% meer
 // tokens voor dezelfde tekst) - een Nederlandse onderbouwing van 2-3 zinnen
 // kost dus meer output-tokens dan voorheen bij hetzelfde teken-aantal. Ruim
@@ -55,6 +57,13 @@ async function fetchMetTimeout(url: string, options: RequestInit, timeoutMs: num
 // veiligheidsmarge daarboven, zelfde constanten als in server.py.
 const CACHE_DOEL_TOKENS = 1100
 const CHARS_PER_TOKEN = 3.5
+
+// Ophogen bij elke inhoudelijke wijziging van QHSSE_SYSTEEM_PROMPT (nieuwe
+// instructie, andere scoringsrichtlijn, etc.), zodat oude scores in
+// matching_resultaten.prompt_versie traceerbaar blijven naar de promptversie
+// die ze daadwerkelijk produceerde. Zie ook _evals/run-evals.ts — vóór het
+// deployen van zo'n wijziging eerst de evals draaien.
+export const PROMPT_VERSIE = 'v5-linkedin-2026-09-16'
 
 export const QHSSE_SYSTEEM_PROMPT =
   'Je bent een ervaren recruitment-specialist binnen QHSSE (Quality, Health, Safety, Security, Environment). ' +
@@ -172,6 +181,11 @@ export interface RankResultaat {
   score: number
   onderbouwing: string
   kostenUsd: number
+  // true bij een afgekapte Claude-respons (stop_reason=max_tokens) of een
+  // mislukte JSON-parse (RANK_FALLBACK) - in beide gevallen is de score
+  // minder betrouwbaar dan een normaal geslaagde beoordeling. Gebruikt door
+  // KandidaatMatcher.jsx om een ⚠️-indicator te tonen.
+  laagVertrouwen: boolean
 }
 
 /**
@@ -276,7 +290,11 @@ export async function rankKandidaat(
 
   const data = await response.json()
   const kostenUsd = berekenKostenUsd(data?.usage)
-  if (data?.stop_reason === 'max_tokens') {
+  // Ook gebruikt hieronder om laagVertrouwen te zetten - een afgekapte
+  // respons kan een onvolledig/verminkt oordeel betekenen, ook als de JSON
+  // toevallig nog wel parseert.
+  const afgekapt = data?.stop_reason === 'max_tokens'
+  if (afgekapt) {
     console.warn(`[kandidaat-matcher] WAARSCHUWING: response afgekapt (stop_reason=max_tokens) voor ${label}`)
   }
   const raw: string = pakTextBlock(data?.content)
@@ -287,12 +305,12 @@ export async function rankKandidaat(
     try {
       const parsed = JSON.parse(tekst.slice(start))
       const score = Math.max(0, Math.min(100, Math.trunc(Number(parsed.score) || 0)))
-      return { score, onderbouwing: String(parsed.onderbouwing ?? ''), kostenUsd }
+      return { score, onderbouwing: String(parsed.onderbouwing ?? ''), kostenUsd, laagVertrouwen: afgekapt }
     } catch {
       // valt door naar fallback hieronder
     }
   }
 
   console.error(`[kandidaat-matcher] Geen geldige JSON in Claude-response voor ${label}: ${raw.slice(0, 300)}`)
-  return { score: 0, onderbouwing: RANK_FALLBACK, kostenUsd }
+  return { score: 0, onderbouwing: RANK_FALLBACK, kostenUsd, laagVertrouwen: true }
 }

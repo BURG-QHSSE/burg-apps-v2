@@ -43,7 +43,7 @@ import {
   haalIntakeDatumUit,
 } from './bullhorn.ts'
 import { anonimiseerVrijeTekst, stripHtml, maakKandidaatLabel } from './anonimiseren.ts'
-import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache } from './claude.ts'
+import { rankKandidaat, bereidVacaturetekstVoorCache, prewarmCache, CLAUDE_MODEL, PROMPT_VERSIE } from './claude.ts'
 import { bepaalSalarisFilterData } from './salarisfilter.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -78,7 +78,7 @@ const MAX_CV_LENGTE = 25000
 // een onbedoeld dure run oplevert — bv. `supabase secrets set
 // MATCHER_MAX_KOSTEN_USD=10`. Bij overschrijding stopt de run (status
 // 'kostenlimiet') en worden resterende kandidaten niet meer gescoord.
-const MAX_KOSTEN_PER_RUN_USD = Number(Deno.env.get('MATCHER_MAX_KOSTEN_USD')) || 5
+const MAX_KOSTEN_PER_RUN_USD = Number(Deno.env.get('MATCHER_MAX_KOSTEN_USD')) || 6
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -471,6 +471,8 @@ Deno.serve(async (req) => {
               status: 'klaar',
               score: 0,
               onderbouwing: item.klaarZonderScore,
+              model: CLAUDE_MODEL,
+              prompt_versie: PROMPT_VERSIE,
               ...filterVelden,
               updated_at: new Date().toISOString(),
             })
@@ -481,11 +483,20 @@ Deno.serve(async (req) => {
           return
         }
         try {
-          const { score, onderbouwing, kostenUsd } = await rankKandidaat(vacatureTekstVoorCache, item.label, item.payload)
+          const { score, onderbouwing, kostenUsd, laagVertrouwen } = await rankKandidaat(vacatureTekstVoorCache, item.label, item.payload)
           batchKostenUsd += kostenUsd
           await admin
             .from('matching_resultaten')
-            .update({ status: 'klaar', score, onderbouwing, ...filterVelden, updated_at: new Date().toISOString() })
+            .update({
+              status: 'klaar',
+              score,
+              onderbouwing,
+              model: CLAUDE_MODEL,
+              prompt_versie: PROMPT_VERSIE,
+              laag_vertrouwen: laagVertrouwen,
+              ...filterVelden,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', item.rowId)
         } catch (err) {
           await admin
@@ -493,6 +504,8 @@ Deno.serve(async (req) => {
             .update({
               status: 'fout',
               foutmelding: err instanceof Error ? err.message : String(err),
+              model: CLAUDE_MODEL,
+              prompt_versie: PROMPT_VERSIE,
               ...filterVelden,
               updated_at: new Date().toISOString(),
             })

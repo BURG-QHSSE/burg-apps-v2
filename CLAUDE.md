@@ -27,6 +27,8 @@ Elke Edge Function die de Anthropic API aanroept, gebruikt zijn eigen hardcoded 
 
 **Bij het aanraken van een bestaande AI-tool, of het bouwen van een nieuwe:** check of het gebruikte model nog het huidige/aanbevolen model is (niet zomaar aannemen dat het al goed staat) — vraag de `claude-api`-skill om de actuele modeltabel (prijs + generatie) op te halen, en leg een eventuele wissel altijd eerst voor aan de gebruiker vóór je 'm doorvoert (een modelwissel kan gedrag/output subtiel veranderen, zie de "Sonnet thinking-block parsing bug" in de Call Insights-projectgeschiedenis — altijd even een sanity-check van de output na een wissel).
 
+**Kandidaat Matcher specifiek:** elke score in `matching_resultaten` bewaart nu ook `model`/`prompt_versie` (traceerbaarheid) en `laag_vertrouwen` (getoond als ⚠️ in de UI bij een afgekapte of niet-parsebare Claude-respons). Vóór het deployen van een wijziging aan `QHSSE_SYSTEEM_PROMPT` of `CLAUDE_MODEL` in `kandidaat-matcher/claude.ts`: draai eerst `deno run --allow-net --allow-env supabase/functions/kandidaat-matcher/_evals/run-evals.ts` (regressietest tegen een vaste set vacature/kandidaat-fixtures) en hoog `PROMPT_VERSIE` op in dezelfde commit. De fixtures in `_evals/fixtures.json` zijn nu nog synthetische placeholders — vervang die zodra er echte, door een consultant bevestigde gevallen beschikbaar zijn.
+
 ## Structuur
 - `src/pages/` — routepagina's (Dashboard, AdminPanel, Login, etc.)
 - `src/pages/tools/` — losse tools (Fee Checker, Definitief Honorarium, Verdeling Plaatsing, Sales Overdracht, Doorgroei Tracker, GPB Beoordelingstool, Proeftijd Tracker, Mijn Omgeving, Kandidaat Matcher)

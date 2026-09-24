@@ -106,7 +106,13 @@ begin
   values (new.id, new.email, 'user');
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- Alleen ooit via de trigger hieronder aangeroepen (dus onder de definer's
+-- eigen rechten, EXECUTE-grants raken triggerwerking niet) -- nooit
+-- rechtstreeks via RPC. Revoke sluit toch het per-ongeluk-aanroepbare pad af
+-- dat de standaard PUBLIC-grant anders open zou laten (2026-09-23-audit).
+revoke execute on function handle_new_user() from public;
 
 create trigger on_auth_user_created
   after insert on auth.users
@@ -126,6 +132,21 @@ $$ language plpgsql;
 create trigger on_profile_updated
   before update on profiles
   for each row execute procedure handle_updated_at();
+
+-- Losse twin van handle_updated_at() hierboven, gebruikt door
+-- trg_dev_projects_updated_at op dev_projects (zie ONTWIKKELING verderop) --
+-- bestond al live maar ontbrak nog in dit bestand (schema drift, gevonden
+-- tijdens de 2026-09-23-audit).
+create or replace function set_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
 -- ============================================
 -- RLS aanzetten
@@ -152,6 +173,22 @@ set search_path = public
 as $$
   select role from profiles where id = auth.uid();
 $$;
+
+-- BEWUST WEL uitvoerbaar door anon (in tegenstelling tot alle andere
+-- SECURITY DEFINER-functies in dit schema, die tijdens de 2026-09-23-audit
+-- juist van anon zijn ontnomen): my_role() wordt rechtstreeks binnen RLS
+-- USING-clauses aangeroepen (zie de policies op profiles/role_audit_log/
+-- tool_usage/plaatsingen/proeftijd_kandidaten hieronder), en die worden
+-- geëvalueerd onder de AANROEPENDE rol -- inclusief anon, want anon heeft op
+-- die tabellen gewoon volledige tabel-grants (standaard Supabase-gedrag,
+-- RLS is daar de echte poort, niet de grant). EXECUTE hier weghalen bij
+-- anon breekt die evaluatie met "permission denied for function my_role"
+-- i.p.v. de bedoelde stille "0 rijen" -- live bevestigd en teruggedraaid
+-- nadat de brede anon-revoke van deze audit dit per ongeluk meenam.
+-- my_role() zelf is voor anon niet exploiteerbaar: het geeft NULL terug
+-- (geen auth.uid()), en NULL in een SQL/RLS-boolean-context sluit een rij
+-- uit i.p.v. 'm toe te staan -- dat is een ander mechanisme dan de PL/pgSQL
+-- "IF <NULL> wordt als false behandeld"-bug die de GPB-functies wél hadden.
 
 -- ============================================
 -- PROFILES: lezen
@@ -267,7 +304,17 @@ begin
   insert into role_audit_log (target_user_id, changed_by, old_role, new_role)
   values (target_id, auth.uid(), old_role_value, new_role_value);
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- Zie de "revoke ... from public"-toelichting bij create_gpb_beoordeling
+-- verderop in dit bestand: zonder deze revoke blijft de standaard Postgres
+-- PUBLIC-grant (dus ook anon) van kracht. De interne "not exists(...)"-check
+-- hierboven blokkeert anon al functioneel (EXISTS is nooit NULL, dus deze
+-- functie zelf had niet de PL/pgSQL-NULL-bug van de GPB-functies), maar
+-- deze revoke sluit het defensief toch af i.p.v. te vertrouwen op de
+-- functielogica alleen (2026-09-23-audit).
+revoke execute on function change_user_role(uuid, user_role) from public;
+grant execute on function change_user_role(uuid, user_role) to authenticated;
 
 -- ============================================
 -- Gebruiker (de)activeren — zachte verwijdering
@@ -304,7 +351,11 @@ begin
 
   update profiles set actief = new_actief where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hierboven
+revoke execute on function set_user_actief(uuid, boolean) from public;
+grant execute on function set_user_actief(uuid, boolean) to authenticated;
 
 -- ============================================
 -- Gebruiker hernoemen — alleen admin
@@ -324,7 +375,11 @@ begin
 
   update profiles set naam = new_naam where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hierboven
+revoke execute on function set_user_naam(uuid, text) from public;
+grant execute on function set_user_naam(uuid, text) to authenticated;
 
 -- ============================================
 -- Sales vs consultant-indeling (de)activeren — alleen admin, vanuit het
@@ -348,7 +403,11 @@ begin
 
   update profiles set team = new_team where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hierboven
+revoke execute on function set_user_team(uuid, text) from public;
+grant execute on function set_user_team(uuid, text) to authenticated;
 
 -- ============================================
 -- Eén consultant vast toegang geven tot Call Insights om te testen (los van
@@ -367,8 +426,10 @@ begin
 
   update profiles set call_insights_test_toegang = new_waarde where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function set_call_insights_test_toegang(uuid, boolean) from public;
 grant execute on function set_call_insights_test_toegang(uuid, boolean) to authenticated;
 
 -- ============================================
@@ -388,7 +449,11 @@ begin
 
   update profiles set mijn_omgeving_uitgebreid = new_waarde where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function set_mijn_omgeving_uitgebreid(uuid, boolean) from public;
+grant execute on function set_mijn_omgeving_uitgebreid(uuid, boolean) to authenticated;
 
 -- ============================================
 -- Mijn Omgeving: e-mailadressen van iedereen met uitgebreide toegang —
@@ -438,7 +503,11 @@ begin
       yield_tot = case when new_waarde then yield_tot else null end
   where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function set_yield_telt_mee(uuid, boolean) from public;
+grant execute on function set_yield_telt_mee(uuid, boolean) to authenticated;
 
 -- Los van set_yield_telt_mee gehouden (zelfde reden als set_user_naam los
 -- van change_user_role): het los kunnen zetten van de datum zonder de
@@ -455,7 +524,11 @@ begin
 
   update profiles set yield_sinds = nieuwe_datum where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function set_yield_sinds(uuid, date) from public;
+grant execute on function set_yield_sinds(uuid, date) to authenticated;
 
 -- Tegenhanger van set_yield_sinds: einddatum van de yield-periode (bv.
 -- laatste werkdag bij uit-dienst-treding). Los gehouden om dezelfde reden.
@@ -471,7 +544,11 @@ begin
 
   update profiles set yield_tot = nieuwe_datum where id = target_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
+
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function set_yield_tot(uuid, date) from public;
+grant execute on function set_yield_tot(uuid, date) to authenticated;
 
 -- ============================================
 -- Yield-thermometer: aantal consultants dat meetelt — nodig omdat RLS op
@@ -599,6 +676,8 @@ as $$
   where my_role() = 'admin';
 $$;
 
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function admin_last_sign_ins() from public;
 grant execute on function admin_last_sign_ins() to authenticated;
 
 -- ============================================
@@ -754,8 +833,19 @@ as $$
 declare
   nieuw_id uuid;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- "my_role() is null or" is niet cosmetisch: my_role() geeft NULL terug voor
+  -- een niet-ingelogde aanroeper (anon), en in PL/pgSQL wordt "IF <NULL>" als
+  -- false behandeld -- zonder deze null-check vuurt de exception dan NIET en
+  -- loopt de functie gewoon door. Zelfde bugklasse gevonden en gefixt in alle
+  -- 10 GPB-functies op 2026-09-23 (zie ook de "is distinct from"-fix bij
+  -- submit_gpb_medewerker/leidinggevende en save_gpb_*_concept hieronder).
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag een beoordeling aanmaken';
+  end if;
+
+  if my_role() = 'admin' and p_medewerker_id <> auth.uid()
+     and exists (select 1 from profiles where id = auth.uid() and gpb_others_restricted) then
+    raise exception 'Je hebt geen rechten om GPB-beoordelingen voor andere medewerkers klaar te zetten';
   end if;
 
   insert into gpb_beoordelingen (medewerker_id, medewerker_naam, leidinggevende_id, afdeling, functieniveau, periode)
@@ -766,6 +856,12 @@ begin
 end;
 $$;
 
+-- Zonder deze revoke blijft de standaard Postgres PUBLIC-grant (elke functie
+-- is bij aanmaak uitvoerbaar door PUBLIC, waar anon lid van is) van kracht
+-- naast de grant hieronder -- "grant ... to authenticated" alleen sluit anon
+-- dus NIET uit. Zelfde patroon toegepast op alle GPB-functies en
+-- admin/yield-functies in dit bestand (2026-09-23-audit).
+revoke execute on function create_gpb_beoordeling(uuid, text, uuid, text, int, text) from public;
 grant execute on function create_gpb_beoordeling(uuid, text, uuid, text, int, text) to authenticated;
 
 -- ============================================
@@ -796,7 +892,14 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
-  if auth.uid() <> b.medewerker_id then
+  -- "is distinct from" i.p.v. "<>": auth.uid() is NULL voor een niet-
+  -- ingelogde aanroeper, en "NULL <> x" evalueert tot NULL, niet true -- de
+  -- "IF NULL" hieromheen wordt door PL/pgSQL als false behandeld, dus de
+  -- exception vuurde voorheen NIET voor anon en de update ging gewoon door.
+  -- "is distinct from" behandelt NULL wel als een vergelijkbare waarde en
+  -- geeft hier altijd true terug voor een niet-ingelogde caller. Gevonden en
+  -- gefixt 2026-09-23 (alle vier submit/save_gpb_*-functies hadden dit).
+  if auth.uid() is distinct from b.medewerker_id then
     raise exception 'Alleen de toegewezen medewerker mag dit invullen';
   end if;
   if b.status <> 'concept' then
@@ -824,6 +927,7 @@ begin
 end;
 $$;
 
+revoke execute on function submit_gpb_medewerker(uuid, jsonb, jsonb) from public;
 grant execute on function submit_gpb_medewerker(uuid, jsonb, jsonb) to authenticated;
 
 -- ============================================
@@ -851,7 +955,8 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
-  if auth.uid() <> b.leidinggevende_id then
+  -- zie submit_gpb_medewerker hierboven voor waarom "is distinct from" i.p.v. "<>"
+  if auth.uid() is distinct from b.leidinggevende_id then
     raise exception 'Alleen de toegewezen leidinggevende mag dit invullen';
   end if;
   if b.status = 'definitief' then
@@ -868,6 +973,7 @@ begin
 end;
 $$;
 
+revoke execute on function submit_gpb_leidinggevende(uuid, jsonb) from public;
 grant execute on function submit_gpb_leidinggevende(uuid, jsonb) to authenticated;
 
 -- ============================================
@@ -903,7 +1009,8 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
-  if auth.uid() <> b.medewerker_id then
+  -- zie submit_gpb_medewerker hierboven voor waarom "is distinct from" i.p.v. "<>"
+  if auth.uid() is distinct from b.medewerker_id then
     raise exception 'Alleen de toegewezen medewerker mag dit invullen';
   end if;
   if b.status <> 'concept' then
@@ -932,6 +1039,7 @@ begin
 end;
 $$;
 
+revoke execute on function save_gpb_medewerker_concept(uuid, jsonb, jsonb) from public;
 grant execute on function save_gpb_medewerker_concept(uuid, jsonb, jsonb) to authenticated;
 
 create or replace function save_gpb_leidinggevende_concept(
@@ -951,7 +1059,8 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
-  if auth.uid() <> b.leidinggevende_id then
+  -- zie submit_gpb_medewerker hierboven voor waarom "is distinct from" i.p.v. "<>"
+  if auth.uid() is distinct from b.leidinggevende_id then
     raise exception 'Alleen de toegewezen leidinggevende mag dit invullen';
   end if;
   if b.status = 'definitief' then
@@ -967,6 +1076,7 @@ begin
 end;
 $$;
 
+revoke execute on function save_gpb_leidinggevende_concept(uuid, jsonb) from public;
 grant execute on function save_gpb_leidinggevende_concept(uuid, jsonb) to authenticated;
 
 -- ============================================
@@ -982,7 +1092,8 @@ as $$
 declare
   b gpb_beoordelingen;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- zie create_gpb_beoordeling hierboven voor waarom "my_role() is null or"
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag goedkeuren';
   end if;
 
@@ -991,6 +1102,12 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
+
+  if my_role() = 'admin' and b.medewerker_id <> auth.uid()
+     and exists (select 1 from profiles where id = auth.uid() and gpb_others_restricted) then
+    raise exception 'Je hebt geen rechten om andermans GPB-beoordeling goed te keuren';
+  end if;
+
   if b.medewerker_ingevuld_at is null or b.leidinggevende_ingevuld_at is null then
     raise exception 'Beide beoordelingen moeten eerst ingevuld zijn';
   end if;
@@ -1004,6 +1121,8 @@ begin
 end;
 $$;
 
+revoke execute on function keur_gpb_goed(uuid) from public;
+
 create or replace function maak_gpb_definitief(p_beoordeling_id uuid)
 returns void
 language plpgsql
@@ -1013,7 +1132,8 @@ as $$
 declare
   b gpb_beoordelingen;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- zie create_gpb_beoordeling hierboven voor waarom "my_role() is null or"
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag definitief maken';
   end if;
 
@@ -1022,6 +1142,12 @@ begin
   if b.id is null then
     raise exception 'Beoordeling niet gevonden';
   end if;
+
+  if my_role() = 'admin' and b.medewerker_id <> auth.uid()
+     and exists (select 1 from profiles where id = auth.uid() and gpb_others_restricted) then
+    raise exception 'Je hebt geen rechten om andermans GPB-beoordeling definitief te maken';
+  end if;
+
   if b.status <> 'goedgekeurd' then
     raise exception 'Alleen een goedgekeurde beoordeling kan definitief gemaakt worden';
   end if;
@@ -1056,7 +1182,8 @@ as $$
 declare
   b gpb_beoordelingen;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- zie create_gpb_beoordeling hierboven voor waarom "my_role() is null or"
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag dit aanpassen';
   end if;
 
@@ -1078,6 +1205,7 @@ begin
 end;
 $$;
 
+revoke execute on function hr_update_gpb_medewerker(uuid, jsonb) from public;
 grant execute on function hr_update_gpb_medewerker(uuid, jsonb) to authenticated;
 
 create or replace function hr_update_gpb_leidinggevende(
@@ -1092,7 +1220,8 @@ as $$
 declare
   b gpb_beoordelingen;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- zie create_gpb_beoordeling hierboven voor waarom "my_role() is null or"
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag dit aanpassen';
   end if;
 
@@ -1114,6 +1243,7 @@ begin
 end;
 $$;
 
+revoke execute on function hr_update_gpb_leidinggevende(uuid, jsonb) from public;
 grant execute on function hr_update_gpb_leidinggevende(uuid, jsonb) to authenticated;
 
 create or replace function hr_update_gpb_doelen(
@@ -1129,7 +1259,8 @@ declare
   b gpb_beoordelingen;
   doel jsonb;
 begin
-  if my_role() not in ('hr', 'admin') then
+  -- zie create_gpb_beoordeling hierboven voor waarom "my_role() is null or"
+  if my_role() is null or my_role() not in ('hr', 'admin') then
     raise exception 'Alleen HR of admin mag dit aanpassen';
   end if;
 
@@ -1155,6 +1286,7 @@ begin
 end;
 $$;
 
+revoke execute on function hr_update_gpb_doelen(uuid, jsonb) from public;
 grant execute on function hr_update_gpb_doelen(uuid, jsonb) to authenticated;
 
 -- ============================================
@@ -1420,6 +1552,11 @@ begin
 end;
 $$;
 
+-- Alleen ooit via de trigger hieronder aangeroepen, nooit rechtstreeks via
+-- RPC -- zie de revoke-toelichting bij handle_new_user hogerop in dit
+-- bestand voor waarom dit toch expliciet wordt afgesloten.
+revoke execute on function notify_slack_troubleshoot() from public;
+
 create trigger troubleshoot_items_notify_slack
   after insert on troubleshoot_items
   for each row
@@ -1676,6 +1813,8 @@ create trigger gpb_beoordelingen_cleanup_notificaties
 
 revoke execute on function cleanup_notificaties_gpb_delete() from public, anon, authenticated;
 
+-- zie de revoke-toelichting bij change_user_role hogerop in dit bestand
+revoke execute on function maak_gpb_definitief(uuid) from public;
 grant execute on function maak_gpb_definitief(uuid) to authenticated;
 
 -- ============================================
@@ -1752,12 +1891,22 @@ create table matching_resultaten (
   -- als sync_candidates.py in het "description"-veld verwerkt) - puur zodat
   -- de consultant kan zien hoe vers de intake-info is; gaat nooit naar Claude.
   laatste_intake_datum timestamptz,
+  -- Welk Claude-model / welke QHSSE_SYSTEEM_PROMPT-versie (zie claude.ts)
+  -- deze rij produceerde - puur traceerbaarheid, nooit gebruikt voor filtering
+  -- of scoring. Null voor rijen van vóór deze kolom bestond.
+  model text,
+  prompt_versie text,
+  -- true bij een afgekapte Claude-respons (stop_reason=max_tokens) of een
+  -- mislukte JSON-parse (RANK_FALLBACK-tekst) - in beide gevallen is de score
+  -- minder betrouwbaar dan een normaal geslaagde beoordeling. Getoond als
+  -- ⚠️-indicator in KandidaatMatcher.jsx, geen aparte goedkeuringsstap.
+  laag_vertrouwen boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (run_id, bullhorn_id)
 );
 
-comment on table matching_resultaten is 'Eén rij per kandidaat op de tearsheet van een matching-run. Naam/overige PII staan hier bewust NIET in — alleen bullhorn_id, de score en de onderbouwing (die zelf ook nooit de kandidaatnaam bevat, want Claude zag alleen het geanonimiseerde profiel). De consultant klikt door naar Bullhorn zelf voor de naam. bullhorn_status/salaris_band/uurtarief_band zijn puur voor de filterbalk in de UI — gaan NOOIT naar Claude (zie kandidaat-matcher/index.ts en salarisfilter.ts): de consultant beoordeelt salaris/status zelf, Claude scoort uitsluitend op de inhoudelijke match tussen description en vacaturetekst.';
+comment on table matching_resultaten is 'Eén rij per kandidaat op de tearsheet van een matching-run. Naam/overige PII staan hier bewust NIET in — alleen bullhorn_id, de score en de onderbouwing (die zelf ook nooit de kandidaatnaam bevat, want Claude zag alleen het geanonimiseerde profiel). De consultant klikt door naar Bullhorn zelf voor de naam. bullhorn_status/salaris_band/uurtarief_band zijn puur voor de filterbalk in de UI — gaan NOOIT naar Claude (zie kandidaat-matcher/index.ts en salarisfilter.ts): de consultant beoordeelt salaris/status zelf, Claude scoort uitsluitend op de inhoudelijke match tussen description en vacaturetekst. model/prompt_versie/laag_vertrouwen zijn traceerbaarheids-/vertrouwensvelden (zie kandidaat-matcher/claude.ts) - nooit naar Claude, puur voor de consultant en voor debugging van toekomstige promptwijzigingen.';
 
 create index matching_resultaten_run_status_idx on matching_resultaten (run_id, status);
 
@@ -1931,6 +2080,47 @@ create policy "admin leest alle suggesties"
   on call_field_suggestions for select
   to authenticated
   using (my_role() = 'admin');
+
+-- Bel Overzicht: verwerkings-/suggestiestatistieken per consultant over een
+-- periode, voor callInsightsApi.js (admin-gebruiksoverzicht). Bewust GEEN
+-- SECURITY DEFINER: draait als de aanroeper, dus de onderliggende selects op
+-- call_insights_processed/call_field_suggestions blijven zelf door RLS
+-- begrensd (geen risico op een cross-user datalek via deze functie). Bestond
+-- al live maar ontbrak nog in dit bestand (schema drift, gevonden tijdens de
+-- 2026-09-23-audit, samen met set_updated_at hierboven).
+create or replace function call_insights_gebruik_overzicht(p_vanaf timestamptz, p_tot timestamptz)
+returns table(user_id uuid, verwerkt bigint, kosten_usd numeric, suggesties bigint, geaccepteerd bigint, afgewezen bigint, pending bigint)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(p.user_id, s.user_id) as user_id,
+    coalesce(p.verwerkt, 0) as verwerkt,
+    coalesce(p.kosten_usd, 0) as kosten_usd,
+    coalesce(s.suggesties, 0) as suggesties,
+    coalesce(s.geaccepteerd, 0) as geaccepteerd,
+    coalesce(s.afgewezen, 0) as afgewezen,
+    coalesce(s.pending, 0) as pending
+  from (
+    select user_id, count(*) as verwerkt, coalesce(sum(kosten_usd), 0) as kosten_usd
+    from call_insights_processed
+    where skipped_reason is distinct from 'historische_backlog_overgeslagen'
+      and call_started_at >= p_vanaf and call_started_at < p_tot
+    group by user_id
+  ) p
+  full outer join (
+    select
+      user_id,
+      count(*) as suggesties,
+      count(*) filter (where status = 'geaccepteerd') as geaccepteerd,
+      count(*) filter (where status = 'afgewezen') as afgewezen,
+      count(*) filter (where status = 'pending') as pending
+    from call_field_suggestions
+    where call_started_at >= p_vanaf and call_started_at < p_tot
+    group by user_id
+  ) s on s.user_id = p.user_id;
+$$;
 
 -- LEGACY, NIET MEER GEBRUIKT (sinds 2026-09-16, commit "verwijder overbodige
 -- extensie-uitsluiting + legacy MVP-picker"): call_insights_nieuwe_recordings

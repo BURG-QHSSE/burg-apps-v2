@@ -655,7 +655,17 @@ export default function KandidaatMatcher() {
                       {namen[r.bullhorn_id] ?? `Kandidaat ${r.bullhorn_id}`}
                     </span>
                     {r.status === 'klaar' ? (
-                      <span className={scoreBadgeClass(r.score)}>{r.score}</span>
+                      <span className={scoreBadgeClass(r.score)}>
+                        {r.score}
+                        {r.laag_vertrouwen && (
+                          <span
+                            className="matcher-laag-vertrouwen"
+                            title="Automatische score kon niet volledig betrouwbaar bepaald worden — controleer dit profiel zelf"
+                          >
+                            {' '}⚠️
+                          </span>
+                        )}
+                      </span>
                     ) : (
                       <span className="badge">{STATUS_LABELS[r.status] ?? r.status}</span>
                     )}
