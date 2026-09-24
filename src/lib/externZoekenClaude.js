@@ -6,7 +6,12 @@
  * niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v4-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v5-2026-09-24'
+
+// MVP (2026-09-24): Claude zet berichten alleen klaar in BURG Apps en verstuurt
+// niets, zodat ze eerst gecontroleerd en aan het management getoond kunnen
+// worden. Op true zetten = Claude verstuurt InMails (behalve bij eerder contact).
+export const BERICHTEN_VERSTUREN = false
 
 // Eerder bericht korter dan dit geleden = eerst keuze van de consultant.
 const EERDER_CONTACT_MAANDEN = 3
@@ -107,6 +112,79 @@ Open aan het eind (ook als je moest stoppen) opnieuw https://claude.ai/settings/
 Sluit af met een korte samenvatting in de chat.`
 }
 
+function schrijfwijze(opdracht) {
+  const s = opdracht.strategie
+  return `SCHRIJFWIJZE
+- Nederlands; Engels alleen als het profiel duidelijk Engelstalig is.
+- Onderwerp: kort en concreet (max. ca. 60 tekens), met de functie.
+- Bericht: 80-150 woorden, aanspreken met de voornaam, informeel-zakelijk ("je").
+- Verwijs concreet naar 1-2 dingen uit het profiel (huidige rol, ervaring, certificaat) en leg uit waarom dat past bij de functie.
+- Vertel kort wat de functie is: ${s.functietitel}${s.vestigingsplaats ? ` in de regio ${s.vestigingsplaats}` : ''}, met de kern van de rol.
+- Noem de naam van de opdrachtgever niet, en geen salaris of andere details die niet in de vacaturetekst staan.
+- Sluit af met een laagdrempelige vraag (kort bellen of meer info) en onderteken met de voornaam van de eigenaar van dit Recruiter-account.
+- Nooit overdrijven, geen emoji's, niets verzinnen over de kandidaat.
+
+VACATURE (achtergrond voor de berichten)
+Ideaal profiel: ${s.ideaal_profiel}
+Harde eisen:
+${lijst(s.harde_eisen)}
+Vacaturetekst:
+${opdracht.vacaturetekst}`
+}
+
+/** MVP-variant: alleen berichten schrijven en in BURG Apps klaarzetten, nooit versturen. */
+function maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst) {
+  const s = opdracht.strategie
+  const lijstA = nieuw.length
+    ? nieuw.map((r) => `- id ${r.id}: ${r.kaart.naam} — ${r.kaart.kopregel ?? ''} — ${r.kaart.profiel_url ?? '(zoek op naam in het project)'}`).join('\n')
+    : '- (geen)'
+
+  return `OPDRACHT VOOR CLAUDE — Extern Zoeken, fase BERICHTEN KLAARZETTEN (${OPDRACHT_VERSIE})
+
+Je schrijft persoonlijke InMails voor de kandidaten in de pipeline van het project "${s.projectnaam}", voor een vacature van BURG QHSSE (recruitmentbureau), en zet ze klaar in BURG Apps. De consultant controleert ze daar.
+Deze BURG Apps-opdracht staat op: ${opdrachtUrl}
+
+HARDE REGELS
+- Verstuur NOOIT een InMail of ander bericht. Open in LinkedIn ook geen berichtvenster of InMail-scherm; je schrijft de berichten alleen in de JSON-melding voor BURG Apps.
+- Maak geen Bullhorn-records aan en wijzig geen projecten.
+- Werk in een normaal, menselijk tempo. Waarschuwing, captcha, limietmelding of uitlogscherm: stop direct en meld "status": "fout" met de reden in "voortgang".
+
+STAP 0 — Verbruik meten (start)
+Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 2) met "status": "bezig", "voortgang": "Gestart", "berichten": [] en:
+"verbruik": { "fase": "inmails", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
+
+STAP 1 — Per kandidaat een bericht schrijven
+${lijstA}
+Per kandidaat:
+a. Open het profiel en bekijk het tabblad "Berichten" (alleen lezen): wat is het laatste bericht aan deze persoon, van wie, en op welke datum?
+b. Is dat laatste bericht (van wie dan ook: een collega of dit account) verstuurd na ${grensTekst}, vul dan "eerder_contact" in, bijv. "Bericht van Jan de Vries op 12 augustus 2026". Anders "eerder_contact": null.
+c. Schrijf een persoonlijke InMail (zie SCHRIJFWIJZE) met onderwerp en bericht.
+
+STAP 2 — Terugmelden in BURG Apps (na elke 10 kandidaten en aan het eind)
+Ga naar het BURG Apps-tabblad (${opdrachtUrl}), plak in het veld "Resultaten van Claude" één JSON-object in precies dit formaat en klik op "Resultaten opslaan". Controleer de bevestiging.
+{
+  "status": "bezig",
+  "voortgang": "12 van 45 klaargezet",
+  "berichten": [
+    {
+      "id": "<id uit de lijst>",
+      "status": "bericht_klaar",
+      "onderwerp": "...",
+      "bericht": "...",
+      "eerder_contact": null
+    }
+  ]
+}
+Gebruik altijd "status": "bericht_klaar" per kandidaat (of "fout" met de reden in "eerder_contact" als het profiel niet te openen was).
+
+STAP 3 — Afronden
+Open opnieuw https://claude.ai/settings/usage en doe de laatste melding met "status": "klaar" (of "fout") en:
+"verbruik": { "fase": "inmails", "moment": "eind", "sessie_pct": 61, "week_pct": 35, "sessie_reset": "..." }
+Sluit af met een korte samenvatting in de chat: hoeveel berichten klaargezet, bij hoeveel was er recent eerder contact.
+
+${schrijfwijze(opdracht)}`
+}
+
 function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
   const s = opdracht.strategie
   const grens = new Date()
@@ -124,6 +202,8 @@ function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
         .join('\n\n')
     : '- (geen)'
   const projectLink = opdracht.recruiter_project_id?.startsWith('https://') ? ` (${opdracht.recruiter_project_id})` : ''
+
+  if (!BERICHTEN_VERSTUREN) return maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst)
 
   return `OPDRACHT VOOR CLAUDE — Extern Zoeken, fase BERICHTEN (${OPDRACHT_VERSIE})
 
@@ -175,22 +255,7 @@ Open opnieuw https://claude.ai/settings/usage en doe de laatste melding met "sta
 "verbruik": { "fase": "inmails", "moment": "eind", "sessie_pct": 61, "week_pct": 35, "sessie_reset": "..." }
 Sluit af met een korte samenvatting in de chat: hoeveel verstuurd, hoeveel wachten op de keuze van de consultant.
 
-SCHRIJFWIJZE
-- Nederlands; Engels alleen als het profiel duidelijk Engelstalig is.
-- Onderwerp: kort en concreet (max. ca. 60 tekens), met de functie.
-- Bericht: 80-150 woorden, aanspreken met de voornaam, informeel-zakelijk ("je").
-- Verwijs concreet naar 1-2 dingen uit het profiel (huidige rol, ervaring, certificaat) en leg uit waarom dat past bij de functie.
-- Vertel kort wat de functie is: ${s.functietitel}${s.vestigingsplaats ? ` in de regio ${s.vestigingsplaats}` : ''}, met de kern van de rol.
-- Noem de naam van de opdrachtgever niet, en geen salaris of andere details die niet in de vacaturetekst staan.
-- Sluit af met een laagdrempelige vraag (kort bellen of meer info) en onderteken met de voornaam van de eigenaar van dit Recruiter-account.
-- Nooit overdrijven, geen emoji's, niets verzinnen over de kandidaat.
-
-VACATURE (achtergrond voor de berichten)
-Ideaal profiel: ${s.ideaal_profiel}
-Harde eisen:
-${lijst(s.harde_eisen)}
-Vacaturetekst:
-${opdracht.vacaturetekst}`
+${schrijfwijze(opdracht)}`
 }
 
 /** Leest de JSON die Claude in het resultatenveld plakt (codeblok-omhulsel mag). */
@@ -221,6 +286,9 @@ export function leesClaudeResultaten(tekst) {
   const berichten = Array.isArray(data.berichten) ? data.berichten : []
   for (const b of berichten) {
     if (!b?.id) throw new Error('Elk bericht moet het "id" uit de lijst hebben.')
+    if (!BERICHTEN_VERSTUREN && b.status === 'verzonden') {
+      throw new Error('Berichten versturen staat uit (MVP) — meld "bericht_klaar", niet "verzonden".')
+    }
     if (!['verzonden', 'bericht_klaar', 'fout'].includes(b.status)) {
       throw new Error(`Onbekende berichtstatus "${b.status}" (verzonden, bericht_klaar of fout).`)
     }

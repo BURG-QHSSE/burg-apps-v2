@@ -8,6 +8,7 @@ import {
   startBerichtenFase,
 } from '../../../lib/externZoekenApi'
 import {
+  BERICHTEN_VERSTUREN,
   OPDRACHT_VERSIE,
   SNELKOPPELING_NAAM,
   SNELKOPPELING_TEKST,
@@ -32,7 +33,7 @@ const IN_PIPELINE = ['toegevoegd', 'bericht_klaar', 'bericht_goedgekeurd', 'beri
 
 const STATUS_LABEL = {
   toegevoegd: 'In pipeline',
-  bericht_klaar: 'Wacht op jouw keuze',
+  bericht_klaar: BERICHTEN_VERSTUREN ? 'Wacht op jouw keuze' : 'Bericht klaargezet',
   bericht_goedgekeurd: 'Goedgekeurd, wordt verstuurd',
   bericht_afgewezen: 'Niet versturen',
   verzonden: 'Bericht verstuurd',
@@ -163,7 +164,7 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
         {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
         {kanBerichtenStarten && (
           <button type="button" className="btn btn-primary" onClick={handleStartBerichten}>
-            Berichten laten versturen
+            {BERICHTEN_VERSTUREN ? 'Berichten laten versturen' : 'Berichten laten klaarzetten'}
           </button>
         )}
         {opdracht.status === 'concept' && (
@@ -190,7 +191,37 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
         </details>
       </section>
 
-      {wachtOpKeuze.length > 0 && (
+      {!BERICHTEN_VERSTUREN && wachtOpKeuze.length > 0 && (
+        <section className="matcher-setup">
+          <h2>Klaargezette berichten ({wachtOpKeuze.length})</h2>
+          <p className="matcher-dropdown-sub">
+            MVP: Claude heeft deze berichten alleen geschreven, er is niets verstuurd.
+            {' '}{wachtOpKeuze.filter((r) => r.eerder_contact).length} kandidaten hadden de afgelopen 3 maanden al
+            contact — die zouden later eerst jouw keuze vragen.
+          </p>
+          {wachtOpKeuze.map((r) => (
+            <div className="field" key={r.id}>
+              <label>
+                {r.kaart.profiel_url ? (
+                  <a href={r.kaart.profiel_url} target="_blank" rel="noreferrer">
+                    {r.kaart.naam}
+                  </a>
+                ) : (
+                  r.kaart.naam
+                )}
+                {r.kaart.kopregel && <> — {r.kaart.kopregel}</>}
+              </label>
+              {r.eerder_contact && <p className="form-error">Eerder contact: {r.eerder_contact}</p>}
+              <p className="matcher-dropdown-sub">Onderwerp: {r.onderwerp}</p>
+              <pre className="matcher-textarea" style={{ whiteSpace: 'pre-wrap' }}>
+                {r.bericht}
+              </pre>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {BERICHTEN_VERSTUREN && wachtOpKeuze.length > 0 && (
         <section className="matcher-setup">
           <h2>Wacht op jouw keuze ({wachtOpKeuze.length})</h2>
           <p className="matcher-dropdown-sub">
