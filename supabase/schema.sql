@@ -2495,7 +2495,8 @@ alter table extern_zoeken_resultaten drop constraint extern_zoeken_resultaten_st
 alter table extern_zoeken_resultaten add constraint extern_zoeken_resultaten_status_check
   check (status in ('gevonden', 'gescoord', 'toegevoegd', 'overgeslagen', 'bericht_klaar', 'bericht_goedgekeurd', 'bericht_afgewezen', 'verzonden', 'fout'));
 
--- Controle pipeline (2026-09-24): Claude meldde 159 toegevoegd terwijl Recruiter
--- er 12 toonde. Claude leest nu bij elke melding de Pipeline-teller af.
+-- Controle pipeline (2026-09-24): Claude leest aan het eind van een zoekrun op de
+-- Pipeline-pagina het getal bij "Alle kandidaten" af. (Het getal naast "Pipeline"
+-- in het linkermenu is NIET het totaal: dat stond op 12 bij 162 opgeslagen.)
 alter table extern_zoeken_opdrachten add column pipeline_teller int;
-comment on column extern_zoeken_opdrachten.pipeline_teller is 'Het getal naast "Pipeline" in het linkermenu van het Recruiter-project, zoals Claude in Chrome het bij elke melding afleest. Controle: moet overeenkomen met het aantal resultaten met status toegevoegd (Claude meldde op 2026-09-24 159 toegevoegd terwijl Recruiter 12 toonde).';
+comment on column extern_zoeken_opdrachten.pipeline_teller is 'Aantal "Alle kandidaten" op de Pipeline-pagina van het Recruiter-project, door Claude in Chrome afgelezen aan het eind van een zoekrun. Controle tegen het aantal resultaten met status toegevoegd. Niet het getal naast "Pipeline" in het linkermenu (dat is geen totaal).';
