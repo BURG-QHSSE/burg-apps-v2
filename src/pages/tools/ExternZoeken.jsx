@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import {
-  maakStrategie,
-  slaOpdrachtOp,
-  fetchOpdracht,
-  koppelExtensie,
-  startInRecruiter,
-} from '../../lib/externZoekenApi'
+import { Link, useSearchParams } from 'react-router-dom'
+import { maakStrategie, slaOpdrachtOp, fetchRecenteOpdrachten } from '../../lib/externZoekenApi'
+import OpdrachtVoorClaude from './extern-zoeken/OpdrachtVoorClaude'
 
 /**
  * Extern Zoeken — externe search via LinkedIn Recruiter (tegenhanger van de
  * Kandidaat Matcher). Stap 1: vacature → zoekopdracht, die de consultant hier
- * controleert en aanpast. Het uitvoeren in Recruiter (project aanmaken,
- * zoeken, pipeline vullen, berichten) doet straks de BURG Chrome-extensie.
+ * controleert en aanpast. Stap 2: "Klaar voor Claude" slaat de opdracht op en
+ * opent de opdrachtpagina (?opdracht=<id>), die Claude in Chrome uitvoert in
+ * Recruiter — zie extern-zoeken/OpdrachtVoorClaude.jsx.
  */
 
 // Lijstvelden worden als "één per regel" bewerkt.
@@ -39,37 +35,22 @@ export default function ExternZoeken() {
   const [bezig, setBezig] = useState(false)
   const [fout, setFout] = useState('')
   const [gekopieerd, setGekopieerd] = useState(false)
-  const [extensieVersie, setExtensieVersie] = useState(null)
-  const [opdracht, setOpdracht] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const opdrachtId = searchParams.get('opdracht')
+  const [recent, setRecent] = useState([])
 
-  useEffect(
-    () =>
-      koppelExtensie({
-        onVersie: setExtensieVersie,
-        onFout: (melding) => setFout(`Extensie: ${melding}`),
-      }),
-    [],
-  )
-
-  // Voortgang live volgen zolang de extensie bezig is.
   useEffect(() => {
-    if (!opdracht?.id || !['concept', 'bezig'].includes(opdracht.status)) return
-    const timer = setInterval(async () => {
-      try {
-        setOpdracht(await fetchOpdracht(opdracht.id))
-      } catch {
-        // volgende poging
-      }
-    }, 3000)
-    return () => clearInterval(timer)
-  }, [opdracht?.id, opdracht?.status])
+    if (opdrachtId) return
+    fetchRecenteOpdrachten()
+      .then(setRecent)
+      .catch(() => setRecent([]))
+  }, [opdrachtId])
 
-  async function handleStart() {
+  async function handleKlaarVoorClaude() {
     setFout('')
     try {
       const id = await slaOpdrachtOp(vacatureId.trim(), vacaturetekst.trim(), strategie)
-      setOpdracht({ id, status: 'concept', voortgang: 'Extensie starten…' })
-      startInRecruiter(id)
+      setSearchParams({ opdracht: id })
     } catch (err) {
       setFout(err.message)
     }
@@ -108,12 +89,36 @@ export default function ExternZoeken() {
         </div>
       </header>
       <main className="page-content">
+        {opdrachtId ? (
+          <>
+            <p>
+              <Link to="/tools/extern-zoeken">← Nieuwe zoekopdracht</Link>
+            </p>
+            <OpdrachtVoorClaude opdrachtId={opdrachtId} />
+          </>
+        ) : (
+          <>
         <p className="page-intro">
           Plak de vacature en laat de zoekopdracht voor LinkedIn Recruiter opstellen. Controleer en verbeter de boolean
-          en filters; daarna voert de BURG-extensie de search uit in Recruiter.
+          en filters; daarna voert Claude in Chrome de search uit in Recruiter.
         </p>
 
         {fout && <p className="form-error">{fout}</p>}
+
+        {recent.length > 0 && (
+          <section className="matcher-setup">
+            <h2>Recente opdrachten</h2>
+            <ul>
+              {recent.map((o) => (
+                <li key={o.id}>
+                  <Link to={`/tools/extern-zoeken?opdracht=${o.id}`}>{o.strategie?.projectnaam ?? o.vacature_id}</Link>{' '}
+                  — {o.status}
+                  {o.voortgang && <> · {o.voortgang}</>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="matcher-setup">
           <div className="field">
@@ -244,36 +249,16 @@ export default function ExternZoeken() {
             </div>
 
             <div className="matcher-upload-row">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={!extensieVersie || opdracht?.status === 'bezig'}
-                onClick={handleStart}
-              >
-                Start in Recruiter
+              <button type="button" className="btn btn-primary" onClick={handleKlaarVoorClaude}>
+                Klaar voor Claude
               </button>
               <button type="button" className="btn btn-secondary" onClick={handleKopieer}>
                 {gekopieerd ? 'Gekopieerd' : 'Kopieer zoekopdracht'}
               </button>
             </div>
-            {!extensieVersie && (
-              <p className="matcher-dropdown-sub">
-                BURG-extensie niet gevonden in deze browser — installeer of activeer de extensie om te starten.
-              </p>
-            )}
-            {opdracht && (
-              <div className="field">
-                <label>Voortgang in Recruiter</label>
-                <p>
-                  <strong>{opdracht.status}</strong> — {opdracht.voortgang}
-                </p>
-                {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
-                {opdracht.status === 'bezig' && (
-                  <p className="matcher-dropdown-sub">Laat dit tabblad open zolang de extensie bezig is.</p>
-                )}
-              </div>
-            )}
           </section>
+        )}
+          </>
         )}
       </main>
     </div>
