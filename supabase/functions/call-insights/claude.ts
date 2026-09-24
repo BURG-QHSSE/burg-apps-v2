@@ -192,6 +192,14 @@ function bouwSysteemPrompt(): string {
     'de bovenkant: een (eventueel al omgerekend) bedrag dat precies op een grens ligt hoort bij de range die ' +
     'ERMEE BEGINT, niet de range die ermee eindigt (bv. exact 5000 euro -> "5000 - 6000 EUR", NIET "4500 - 5000 ' +
     'EUR"; exact 100 euro/uur -> "€ 100 - € 110", NIET "€ 90 - € 100").\n' +
+    '- "customText22"/"customText11": noemt de kandidaat ZOWEL wat hij/zij nu verdient ALS wat hij/zij wil ' +
+    'verdienen (een wens, eis of ondergrens om over te stappen, bv. "wil minimaal 5500", "stapt alleen over ' +
+    'vanaf 5500", "mits salaris minimaal 5500"), gebruik dan ALTIJD het GEWENSTE bedrag, nooit het huidige. ' +
+    'Voorbeeld: "staat open voor een nieuwe rol mits salaris minimaal 5500 euro bruto (nu 4710 euro)" -> 5500 -> ' +
+    '"5000 - 6000 EUR" (NIET "4500 - 5000 EUR" op basis van de huidige 4710). Zo\'n concrete salariseis geldt ' +
+    'als stellige uitspraak van de kandidaat over zichzelf — de regel over twijfelende taal ("staat open voor") ' +
+    'gaat over de zoekbereidheid, niet over het genoemde bedrag. Wordt alleen het huidige salaris genoemd, dan ' +
+    'mag je dat gebruiken.\n' +
     '- "customText11" (uurtarief): het NIET willen delen/bekendmaken van het uurtarief (bv. "wil zijn uurtarief ' +
     'niet delen", "houdt dat liever voor zich") is GEEN aanwijzing voor een wijziging van dit veld, en al helemaal ' +
     'geen aanwijzing voor dienstverbandvoorkeur — dat zegt alleen iets over transparantie, niks over een bedrag of ' +
