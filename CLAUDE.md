@@ -40,7 +40,7 @@ Elke Edge Function die de Anthropic API aanroept, gebruikt zijn eigen hardcoded 
 - Voor lokale ontwikkeling: `.env.example` kopiëren naar `.env`, invullen met Supabase-projectgegevens.
 - `npm run dev`, `npm run build`, `npm run lint` (oxlint) — altijd build+lint checken na wijzigingen.
 - Database-wijzigingen: pas `supabase/schema.sql` aan én draai de daadwerkelijke SQL handmatig tegen de live database (SQL-editor of `npx supabase db query --linked`) — er is geen migratie-tooling, dit bestand is puur documentatie/bron van waarheid.
-- Edge Function-wijzigingen: na aanpassen van `supabase/functions/admin-users/index.ts` altijd opnieuw deployen met `npx supabase functions deploy admin-users`.
+- Edge Function-wijzigingen: worden automatisch gedeployd door `.github/workflows/deploy-edge-functions.yml` zodra ze op main gepusht worden (alleen de gewijzigde functies; vereist repo-secret `SUPABASE_ACCESS_TOKEN`). Handmatig kan via Actions → "Deploy Edge Functions" → Run workflow. `call-insights` draait zonder JWT-check (cron) — staat in `NO_VERIFY_JWT` in die workflow; een nieuwe functie die ook zonder JWT moet draaien daar toevoegen. Let op: dit betekent ook dat een prompt-/modelwijziging in `kandidaat-matcher/claude.ts` direct live gaat bij push — draai de evals dus vóór het pushen.
 
 ## Instructie voor Claude Code: CLAUDE.md en OVERDRACHT.md bijwerken
 Werk aan het einde van een sessie deze bestanden bij als er iets structureels is veranderd:

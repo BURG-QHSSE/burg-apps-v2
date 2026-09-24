@@ -1,0 +1,82 @@
+# Deployt Supabase Edge Functions automatisch zodra er op main iets wijzigt
+# in supabase/functions/<naam>/ — alleen de functies die daadwerkelijk
+# gewijzigd zijn. Handmatig één (of alle) functies deployen kan via
+# Actions → "Deploy Edge Functions" → Run workflow.
+#
+# Vereist repo-secret SUPABASE_ACCESS_TOKEN (persoonlijke Supabase-token,
+# supabase.com/dashboard/account/tokens) met toegang tot het project.
+
+name: Deploy Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+    inputs:
+      functie:
+        description: 'Naam van de functie (leeg = alle functies)'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-edge-functions
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: kthriaekxqxijhqboxkd
+  # Functies die zonder JWT-check draaien (cron-aanroepen met eigen
+  # x-cron-secret). Zonder deze vlag zou een deploy verify_jwt weer aanzetten
+  # en de pg_cron-jobs breken.
+  NO_VERIFY_JWT: 'call-insights'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Bepaal te deployen functies
+        id: functies
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.functie }}" ]; then
+              lijst="${{ inputs.functie }}"
+            else
+              lijst=$(ls -d supabase/functions/*/ | xargs -n1 basename | grep -v '^_')
+            fi
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            lijst=$(ls -d supabase/functions/*/ | xargs -n1 basename | grep -v '^_')
+          else
+            lijst=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- supabase/functions \
+              | cut -d/ -f3 | sort -u | grep -v '^_' || true)
+          fi
+          # Alleen functies die nog bestaan (verwijderde mappen overslaan)
+          bestaand=""
+          for f in $lijst; do
+            [ -f "supabase/functions/$f/index.ts" ] && bestaand="$bestaand $f"
+          done
+          echo "Te deployen:$bestaand"
+          echo "lijst=$bestaand" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        if: steps.functies.outputs.lijst != ''
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for f in ${{ steps.functies.outputs.lijst }}; do
+            vlag=""
+            for n in $NO_VERIFY_JWT; do
+              [ "$f" = "$n" ] && vlag="--no-verify-jwt"
+            done
+            echo "::group::Deploy $f $vlag"
+            supabase functions deploy "$f" --project-ref "$PROJECT_REF" $vlag
+            echo "::endgroup::"
+          done
