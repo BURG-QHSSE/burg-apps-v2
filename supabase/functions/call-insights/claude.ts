@@ -201,9 +201,9 @@ function bouwSysteemPrompt(): string {
     'gaat over de zoekbereidheid, niet over het genoemde bedrag. Wordt alleen het huidige salaris genoemd, dan ' +
     'mag je dat gebruiken.\n' +
     '- "customText22"/"customText11": noemt de kandidaat een BANDBREEDTE als wens (bv. "4500-5250 euro", "tussen ' +
-    '90 en 110 per uur"), gebruik dan ALTIJD de BOVENKANT van die bandbreedte om de range te kiezen (na eventuele ' +
-    'omrekeningen hierboven). Voorbeeld: "stelt 4500-5250 euro voor 40 uur als ondergrens" -> 5250 -> "5000 - ' +
-    '6000 EUR" (NIET "4500 - 5000 EUR" op basis van de onderkant).\n' +
+    '90 en 110 per uur"), gebruik dan ALTIJD de ONDERKANT van die bandbreedte om de range te kiezen (na eventuele ' +
+    'omrekeningen hierboven). Voorbeeld: "stelt 4500-5250 euro voor 40 uur als ondergrens" -> 4500 -> "4500 - ' +
+    '5000 EUR" (NIET "5000 - 6000 EUR" op basis van de bovenkant).\n' +
     '- "customText11" (uurtarief): het NIET willen delen/bekendmaken van het uurtarief (bv. "wil zijn uurtarief ' +
     'niet delen", "houdt dat liever voor zich") is GEEN aanwijzing voor een wijziging van dit veld, en al helemaal ' +
     'geen aanwijzing voor dienstverbandvoorkeur — dat zegt alleen iets over transparantie, niks over een bedrag of ' +
