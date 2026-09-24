@@ -6,7 +6,7 @@
  * niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v1-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v2-2026-09-24'
 
 export const SNELKOPPELING_NAAM = 'burg-extern-zoeken'
 
@@ -38,8 +38,7 @@ STAP 1 — Project aanmaken
 
 STAP 2 — Zoekfilters invullen (in het project, onder Zoeken)
 - Functietitels (boolean): ${s.functietitels_boolean}
-- Locaties (typ alleen de plaats- of provincienaam en kies de optie met de juiste provincie):
-${lijst(s.locaties)}
+- Locatie: zoek op postcode ${s.postcode} met een straal van ${s.straal_km ?? 40} km (gebruik de postcode/straal-optie van het locatiefilter, geen losse plaatsnamen)
 - Trefwoorden (boolean): ${s.trefwoorden_boolean || '(leeg laten)'}
 - Vaardigheden:
 ${lijst(s.vaardigheden)}

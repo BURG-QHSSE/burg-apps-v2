@@ -10,11 +10,14 @@ const CLAUDE_TIMEOUT_MS = 90_000
 // Sonnet 5-tarieven per token, zelfde als kandidaat-matcher/claude.ts.
 const PRIJS_PER_TOKEN_USD = { input: 2.0 / 1_000_000, output: 10.0 / 1_000_000 }
 
-export const PROMPT_VERSIE = 'strategie-v2-2026-09-23'
+export const PROMPT_VERSIE = 'strategie-v3-2026-09-24'
 
-// Vastgesteld op een echte Recruiter-omgeving (2026-09-23): locaties hebben
-// géén km-straal, alleen plaatsen/regio's zoals ze in de typeahead staan;
-// functietitels en trefwoorden accepteren boolean (AND/OR/NOT, aanhalingstekens).
+// Werkwijze BURG (2026-09-24): locatie = postcode van de vestiging + vaste straal.
+export const STRAAL_KM = 40
+
+// Functietitels en trefwoorden accepteren boolean (AND/OR/NOT, aanhalingstekens).
+// Locatie: BURG zoekt op de postcode van de vestiging met een straal van
+// STRAAL_KM km, niet op losse plaatsnamen.
 const STRATEGIE_SYSTEEM_PROMPT = `Je bent een ervaren sourcer binnen QHSSE (Quality, Health, Safety, Security, Environment) bij BURG QHSSE, een Nederlands recruitmentbureau. Je zet een vacature om in een zoekopdracht voor LinkedIn Recruiter.
 
 Doel: een pool van ongeveer 300-600 resultaten waaruit een pipeline van ~200 passende kandidaten gehaald kan worden. Te smal (<150) is slechter dan iets te breed, want daarna volgt nog een beoordeling per kandidaat.
@@ -22,7 +25,8 @@ Doel: een pool van ongeveer 300-600 resultaten waaruit een pipeline van ~200 pas
 Richtlijnen:
 - functietitels_boolean: alle gangbare Nederlandse én Engelse functietitels voor deze rol en directe varianten (bijv. coördinator/coordinator, adviseur/advisor, specialist, officer, KAM/QHSE/HSE/VGM-varianten). Alleen echte functietitels zoals mensen die op LinkedIn voeren, geen vakgebieden of omschrijvingen. Geen titels die duidelijk een niveau hoger of lager zitten (bijv. manager bij een coördinatorrol). Gebruik OR en aanhalingstekens rond meerwoordige titels. Geen NOT tenzij er een duidelijk storende titel is.
 - trefwoorden_boolean: alleen de ÉÉN meest bepalende harde eis die letterlijk in profielen staat (meestal een diploma/certificaat zoals HVK of MVK), met al zijn synoniemen en schrijfwijzen via OR (bijv. HVK OR "Hogere Veiligheidskundige" OR "Hoger Veiligheidskundige"). Combineer NOOIT verschillende eisen met OR (dan wordt elke eis optioneel) en ook niet met AND (dan wordt de pool te klein); overige eisen horen bij harde_eisen en worden later per kandidaat beoordeeld. Laat leeg als er geen harde, zoekbare eis is.
-- locaties: in het formaat "Plaats, Provincie, Nederland" of "Provincie, Nederland". Er is geen km-straal. Neem de provincie van de vestigingsplaats, plus alleen losse plaatsen (geen hele provincies) in aangrenzende provincies die binnen ~45 minuten reizen liggen. Noem geen plaatsen die al binnen een gekozen provincie vallen.
+- vestigingsplaats: de plaats waar de functie is (werklocatie van de opdrachtgever).
+- postcode: de postcode van die vestiging (formaat "1234 AB") als die in de vacaturetekst staat. Verzin er nooit een; laat leeg als hij er niet in staat, dan vult de consultant hem in. Er wordt gezocht in een straal van ${STRAAL_KM} km rond deze postcode.
 - vaardigheden: maximaal 6 bestaande LinkedIn-vaardigheden (één vaardigheid per regel, zoals ze op LinkedIn heten, geen combinaties met "/"), die sterk onderscheidend zijn.
 - jaren_ervaring_min / jaren_ervaring_max: realistisch voor het niveau; max mag null zijn.
 - uitsluiten_huidige_bedrijven: altijd "BURG QHSSE" plus eventueel de opdrachtgever als die in de tekst genoemd wordt.
@@ -37,7 +41,8 @@ const STRATEGIE_SCHEMA = {
     functietitel: { type: 'string' },
     functietitels_boolean: { type: 'string' },
     trefwoorden_boolean: { type: 'string' },
-    locaties: { type: 'array', items: { type: 'string' } },
+    vestigingsplaats: { type: 'string' },
+    postcode: { type: 'string' },
     vaardigheden: { type: 'array', items: { type: 'string' } },
     jaren_ervaring_min: { type: 'integer' },
     jaren_ervaring_max: { type: ['integer', 'null'] },
@@ -51,7 +56,7 @@ const STRATEGIE_SCHEMA = {
     toelichting: { type: 'string' },
   },
   required: [
-    'functietitel', 'functietitels_boolean', 'trefwoorden_boolean', 'locaties', 'vaardigheden',
+    'functietitel', 'functietitels_boolean', 'trefwoorden_boolean', 'vestigingsplaats', 'postcode', 'vaardigheden',
     'jaren_ervaring_min', 'jaren_ervaring_max', 'uitsluiten_huidige_bedrijven', 'ideaal_profiel',
     'harde_eisen', 'pluspunten', 'knock_outs', 'engels_vereist', 'nederlands_vereist', 'toelichting',
   ],
@@ -63,7 +68,9 @@ export interface Strategie {
   projectnaam: string
   functietitels_boolean: string
   trefwoorden_boolean: string
-  locaties: string[]
+  vestigingsplaats: string
+  postcode: string
+  straal_km: number
   vaardigheden: string[]
   jaren_ervaring_min: number
   jaren_ervaring_max: number | null
@@ -137,5 +144,5 @@ export async function maakStrategie(
 
   // Projectnaam volgt de bestaande conventie in Recruiter: "Functie - vacaturenummer".
   const projectnaam = vacatureId ? `${parsed.functietitel} - ${vacatureId}` : parsed.functietitel
-  return { strategie: { ...parsed, projectnaam }, kostenUsd }
+  return { strategie: { ...parsed, projectnaam, straal_km: STRAAL_KM }, kostenUsd }
 }

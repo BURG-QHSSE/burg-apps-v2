@@ -9,7 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //
 // Acties (body.action):
 //   - "strategie": vacaturetekst → zoekopdracht voor Recruiter (boolean voor
-//     functietitels en trefwoorden, locaties, vaardigheden, jaren ervaring,
+//     functietitels en trefwoorden, postcode + straal, vaardigheden, jaren ervaring,
 //     uit te sluiten bedrijven) + ideaalprofiel en harde eisen voor het
 //     scoren later. De consultant controleert/past dit aan in BURG Apps
 //     vóór de extensie ermee gaat zoeken.

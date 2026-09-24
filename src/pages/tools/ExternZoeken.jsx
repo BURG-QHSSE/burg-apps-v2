@@ -13,7 +13,6 @@ import OpdrachtVoorClaude from './extern-zoeken/OpdrachtVoorClaude'
 
 // Lijstvelden worden als "één per regel" bewerkt.
 const LIJST_VELDEN = [
-  { key: 'locaties', label: 'Locaties (één per regel, zoals in Recruiter: "Plaats, Provincie, Nederland")' },
   { key: 'vaardigheden', label: 'Vaardigheden (één per regel)' },
   { key: 'uitsluiten_huidige_bedrijven', label: 'Huidige werkgever uitsluiten (één per regel)' },
   { key: 'harde_eisen', label: 'Harde eisen (voor het scoren)' },
@@ -188,6 +187,30 @@ export default function ExternZoeken() {
               />
             </div>
             <div className="field">
+              <label htmlFor="extern-postcode">
+                Locatie: postcode van de vestiging{strategie.vestigingsplaats && ` (${strategie.vestigingsplaats})`} + straal in km
+              </label>
+              <div className="matcher-upload-row">
+                <input
+                  id="extern-postcode"
+                  type="text"
+                  placeholder="Bijv. 3011 AB"
+                  value={strategie.postcode ?? ''}
+                  onChange={(e) => zet('postcode', e.target.value)}
+                />
+                <input
+                  aria-label="Straal in km"
+                  type="number"
+                  min={1}
+                  value={strategie.straal_km ?? 40}
+                  onChange={(e) => zet('straal_km', Number(e.target.value))}
+                />
+              </div>
+              {!strategie.postcode?.trim() && (
+                <p className="form-error">Postcode staat niet in de vacaturetekst — vul hem zelf in.</p>
+              )}
+            </div>
+            <div className="field">
               <label htmlFor="extern-jaren-min">Jaren ervaring (min – max)</label>
               <div className="matcher-upload-row">
                 <input
@@ -249,7 +272,12 @@ export default function ExternZoeken() {
             </div>
 
             <div className="matcher-upload-row">
-              <button type="button" className="btn btn-primary" onClick={handleKlaarVoorClaude}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!strategie.postcode?.trim()}
+                onClick={handleKlaarVoorClaude}
+              >
                 Klaar voor Claude
               </button>
               <button type="button" className="btn btn-secondary" onClick={handleKopieer}>
