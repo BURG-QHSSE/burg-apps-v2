@@ -1,9 +1,9 @@
 /**
- * Extern Zoeken via Claude in Chrome. De consultant slaat één keer het
- * commando /burg-extern-zoeken op in de Claude-extensie (SNELKOPPELING_TEKST);
- * dat commando laat Claude de opdracht lezen uit het BURG Apps-tabblad
- * (maakClaudeOpdracht). Zo beheren we de werkinstructies centraal hier,
- * niet in ieders eigen extensie.
+ * Extern Zoeken via Claude in Chrome, in twee losse stappen met elk een eigen
+ * commando in de Claude-extensie (SNELKOPPELINGEN, één keer per consultant
+ * ingesteld): /burg-extern-zoeken leest de zoekopdracht, /burg-berichten de
+ * berichtenopdracht uit het BURG Apps-tabblad. Zo beheren we de
+ * werkinstructies centraal hier, niet in ieders eigen extensie.
  */
 
 export const OPDRACHT_VERSIE = 'claude-chrome-v5-2026-09-24'
@@ -16,20 +16,21 @@ export const BERICHTEN_VERSTUREN = false
 // Eerder bericht korter dan dit geleden = eerst keuze van de consultant.
 const EERDER_CONTACT_MAANDEN = 3
 
-export const SNELKOPPELING_NAAM = 'burg-extern-zoeken'
+export const ZOEK_BLOK = 'Zoekopdracht voor Claude'
+export const BERICHTEN_BLOK = 'Berichtenopdracht voor Claude'
 
-export const SNELKOPPELING_TEKST = `Zoek tussen mijn open tabbladen het BURG Apps-tabblad van Extern Zoeken (adres bevat "/tools/extern-zoeken?opdracht="). Lees daar het blok "Opdracht voor Claude" volledig en voer die opdracht stap voor stap uit. Volg alleen de instructies uit dat blok. Is er geen of meer dan één zo'n tabblad open, stop dan en vraag welke opdracht ik bedoel.`
+const snelkoppelingTekst = (blok) =>
+  `Zoek tussen mijn open tabbladen het BURG Apps-tabblad van Extern Zoeken (adres bevat "/tools/extern-zoeken?opdracht="). Lees daar het blok "${blok}" volledig en voer die opdracht stap voor stap uit. Volg alleen de instructies uit dat blok. Is er geen of meer dan één zo'n tabblad open, of staat het blok er niet, stop dan en vraag welke opdracht ik bedoel.`
+
+export const SNELKOPPELINGEN = {
+  zoeken: { naam: 'burg-extern-zoeken', tekst: snelkoppelingTekst(ZOEK_BLOK) },
+  berichten: { naam: 'burg-berichten', tekst: snelkoppelingTekst(BERICHTEN_BLOK) },
+}
 
 const lijst = (items) => (items?.length ? items.map((i) => `- ${i}`).join('\n') : '- (geen)')
 
-/** Opdrachttekst voor de huidige fase: pipeline vullen of berichten versturen. */
-export function maakClaudeOpdracht(opdracht, opdrachtUrl, resultaten) {
-  return opdracht.fase === 'berichten'
-    ? maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten)
-    : maakZoekOpdracht(opdracht, opdrachtUrl)
-}
-
-function maakZoekOpdracht(opdracht, opdrachtUrl) {
+/** Opdrachttekst voor /burg-extern-zoeken: pipeline vullen in Recruiter. */
+export function maakZoekOpdracht(opdracht, opdrachtUrl) {
   const s = opdracht.strategie
   const jaren = s.jaren_ervaring_max == null
     ? `minimaal ${s.jaren_ervaring_min}`
@@ -150,7 +151,7 @@ HARDE REGELS
 - Werk in een normaal, menselijk tempo. Waarschuwing, captcha, limietmelding of uitlogscherm: stop direct en meld "status": "fout" met de reden in "voortgang".
 
 STAP 0 — Verbruik meten (start)
-Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 2) met "status": "bezig", "voortgang": "Gestart", "berichten": [] en:
+Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 2) met "status": "bezig", "fase": "berichten", "voortgang": "Gestart", "berichten": [] en:
 "verbruik": { "fase": "inmails", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
 
 STAP 1 — Per kandidaat een bericht schrijven
@@ -185,7 +186,8 @@ Sluit af met een korte samenvatting in de chat: hoeveel berichten klaargezet, bi
 ${schrijfwijze(opdracht)}`
 }
 
-function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
+/** Opdrachttekst voor /burg-berichten: InMails schrijven (en, als dat aanstaat, versturen). */
+export function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
   const s = opdracht.strategie
   const grens = new Date()
   grens.setMonth(grens.getMonth() - EERDER_CONTACT_MAANDEN)
@@ -217,7 +219,7 @@ HARDE REGELS
 - Werk in een normaal, menselijk tempo. Waarschuwing, captcha, limietmelding, te weinig InMail-credits of uitlogscherm: stop direct en meld "status": "fout" met de reden in "voortgang".
 
 STAP 0 — Verbruik meten (start)
-Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 3) met "status": "bezig", "voortgang": "Gestart", "berichten": [] en:
+Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 3) met "status": "bezig", "fase": "berichten", "voortgang": "Gestart", "berichten": [] en:
 "verbruik": { "fase": "inmails", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
 
 STAP 1 — Lijst A: nieuwe berichten
@@ -272,6 +274,9 @@ export function leesClaudeResultaten(tekst) {
   }
   if (data.status && !['bezig', 'klaar', 'fout'].includes(data.status)) {
     throw new Error(`Onbekende status "${data.status}" (bezig, klaar of fout).`)
+  }
+  if (data.fase && !['zoeken', 'berichten'].includes(data.fase)) {
+    throw new Error(`Onbekende fase "${data.fase}" (zoeken of berichten).`)
   }
   if (data.verbruik) {
     const v = data.verbruik

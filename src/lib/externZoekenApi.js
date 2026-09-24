@@ -73,15 +73,6 @@ export async function fetchOpdracht(id) {
   return data
 }
 
-/** Na het zoeken: opdracht klaarzetten voor de fase berichten (Claude start via hetzelfde commando). */
-export async function startBerichtenFase(opdrachtId) {
-  const { error } = await supabase
-    .from('extern_zoeken_opdrachten')
-    .update({ fase: 'berichten', status: 'concept', voortgang: 'Klaar voor berichten', foutmelding: null })
-    .eq('id', opdrachtId)
-  if (error) throw new Error(error.message)
-}
-
 /**
  * Keuze van de consultant bij eerder contact. Na een "ja" (of met een
  * aangepaste tekst) staat het bericht in lijst B van de volgende Claude-run.
@@ -165,6 +156,7 @@ export async function slaClaudeResultatenOp(opdrachtId, melding, promptVersie) {
   )
 
   const update = { status: melding.status ?? 'bezig' }
+  if (melding.fase) update.fase = melding.fase
   if (melding.voortgang) update.voortgang = String(melding.voortgang)
   if (melding.aantal_resultaten != null) update.aantal_resultaten = String(melding.aantal_resultaten)
   if (melding.recruiter_project_url) update.recruiter_project_id = String(melding.recruiter_project_url)

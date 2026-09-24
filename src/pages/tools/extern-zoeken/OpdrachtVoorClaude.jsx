@@ -5,21 +5,23 @@ import {
   fetchResultaten,
   neemBerichtBesluit,
   slaClaudeResultatenOp,
-  startBerichtenFase,
 } from '../../../lib/externZoekenApi'
 import {
+  BERICHTEN_BLOK,
   BERICHTEN_VERSTUREN,
   OPDRACHT_VERSIE,
-  SNELKOPPELING_NAAM,
-  SNELKOPPELING_TEKST,
+  SNELKOPPELINGEN,
+  ZOEK_BLOK,
   leesClaudeResultaten,
-  maakClaudeOpdracht,
+  maakBerichtenOpdracht,
+  maakZoekOpdracht,
 } from '../../../lib/externZoekenClaude'
 
 /**
  * Eén Extern Zoeken-opdracht, uitgevoerd door Claude in Chrome. Claude leest
- * hier het blok "Opdracht voor Claude" (via het commando /burg-extern-zoeken)
- * en plakt na elke resultatenpagina een JSON-melding in "Resultaten van Claude".
+ * hier het blok "Zoekopdracht voor Claude" (commando /burg-extern-zoeken) of
+ * "Berichtenopdracht voor Claude" (commando /burg-berichten) en plakt steeds
+ * een JSON-melding in "Resultaten van Claude".
  * Deze pagina ververst zichzelf zolang de opdracht loopt, zodat de consultant
  * de voortgang ook hier ziet.
  *
@@ -91,16 +93,6 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
     }
   }
 
-  async function handleStartBerichten() {
-    setFout('')
-    try {
-      await startBerichtenFase(opdrachtId)
-      await laad()
-    } catch (err) {
-      setFout(err.message)
-    }
-  }
-
   async function handleBesluit(r, versturen) {
     setFout('')
     try {
@@ -113,13 +105,22 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
 
   if (!opdracht) return fout ? <p className="form-error">{fout}</p> : <p>Laden…</p>
 
-  const opdrachtTekst = maakClaudeOpdracht(opdracht, window.location.href, resultaten)
+  const zoekTekst = maakZoekOpdracht(opdracht, window.location.href)
+  const berichtenTekst = maakBerichtenOpdracht(opdracht, window.location.href, resultaten)
   const inPipeline = resultaten.filter((r) => IN_PIPELINE.includes(r.status)).length
   const twijfel = resultaten.filter((r) => r.twijfel).length
   const verzonden = resultaten.filter((r) => r.status === 'verzonden').length
   const wachtOpKeuze = resultaten.filter((r) => r.status === 'bericht_klaar')
-  const kanBerichtenStarten =
-    opdracht.fase === 'zoeken' && opdracht.status === 'klaar' && resultaten.some((r) => r.status === 'toegevoegd')
+  const zoekenKlaar = opdracht.fase === 'berichten' || opdracht.status === 'klaar'
+  // Werk voor /burg-berichten: kandidaten zonder bericht, of (als versturen aanstaat) goedgekeurde berichten.
+  const berichtenTeDoen = resultaten.some(
+    (r) => r.status === 'toegevoegd' || (BERICHTEN_VERSTUREN && r.status === 'bericht_goedgekeurd'),
+  )
+  const volgendCommando = !zoekenKlaar
+    ? SNELKOPPELINGEN.zoeken.naam
+    : berichtenTeDoen && opdracht.status !== 'bezig'
+      ? SNELKOPPELINGEN.berichten.naam
+      : null
   const verbruik = berekenVerbruik(opdracht.verbruik)
 
   return (
@@ -162,32 +163,37 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
           </p>
         ))}
         {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
-        {kanBerichtenStarten && (
-          <button type="button" className="btn btn-primary" onClick={handleStartBerichten}>
-            {BERICHTEN_VERSTUREN ? 'Berichten laten versturen' : 'Berichten laten klaarzetten'}
-          </button>
-        )}
-        {opdracht.status === 'concept' && (
+        {volgendCommando && opdracht.status !== 'bezig' && (
           <ol>
             <li>Laat dit tabblad open.</li>
             <li>Open Claude rechts in Chrome (het Claude-icoon in de werkbalk).</li>
             <li>
-              Typ <code>/{SNELKOPPELING_NAAM}</code> en druk op Enter. Claude leest de opdracht hieronder en gaat aan de
-              slag; je kunt in Chrome meekijken.
+              Typ <code>/{volgendCommando}</code> en druk op Enter.{' '}
+              {volgendCommando === SNELKOPPELINGEN.berichten.naam
+                ? BERICHTEN_VERSTUREN
+                  ? 'Claude schrijft en verstuurt de berichten.'
+                  : 'Claude schrijft de berichten en zet ze hier klaar (er wordt niets verstuurd).'
+                : 'Claude zoekt in Recruiter en vult de pipeline.'}{' '}
+              Je kunt in Chrome meekijken.
             </li>
           </ol>
         )}
+        {/* Tijdelijk: weg zodra de commando's bij iedereen zijn ingesteld. */}
         <details>
-          <summary>Eenmalig instellen: commando /{SNELKOPPELING_NAAM} opslaan in Claude</summary>
-          <p className="matcher-dropdown-sub">
-            Maak in Claude in Chrome een nieuwe snelkoppeling met de naam <code>{SNELKOPPELING_NAAM}</code> en deze tekst:
-          </p>
-          <pre className="matcher-textarea" style={{ whiteSpace: 'pre-wrap' }}>
-            {SNELKOPPELING_TEKST}
-          </pre>
-          <button type="button" className="btn btn-secondary" onClick={() => kopieer(SNELKOPPELING_TEKST, 'snelkoppeling')}>
-            {gekopieerd === 'snelkoppeling' ? 'Gekopieerd' : 'Kopieer tekst'}
-          </button>
+          <summary>Eenmalig instellen: commando's opslaan in Claude</summary>
+          {Object.values(SNELKOPPELINGEN).map((k) => (
+            <div className="field" key={k.naam}>
+              <p className="matcher-dropdown-sub">
+                Snelkoppeling met de naam <code>{k.naam}</code> en deze tekst:
+              </p>
+              <pre className="matcher-textarea" style={{ whiteSpace: 'pre-wrap' }}>
+                {k.tekst}
+              </pre>
+              <button type="button" className="btn btn-secondary" onClick={() => kopieer(k.tekst, k.naam)}>
+                {gekopieerd === k.naam ? 'Gekopieerd' : 'Kopieer tekst'}
+              </button>
+            </div>
+          ))}
         </details>
       </section>
 
@@ -226,7 +232,7 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
           <h2>Wacht op jouw keuze ({wachtOpKeuze.length})</h2>
           <p className="matcher-dropdown-sub">
             Deze kandidaten hebben de afgelopen 3 maanden al een bericht gehad. Claude heeft een bericht klaargezet maar
-            nog niet verstuurd. Na je keuzes start je Claude opnieuw met <code>/{SNELKOPPELING_NAAM}</code>; dan worden
+            nog niet verstuurd. Na je keuzes start je Claude opnieuw met <code>/{SNELKOPPELINGEN.berichten.naam}</code>; dan worden
             alleen de goedgekeurde berichten verstuurd.
           </p>
           {wachtOpKeuze.map((r) => (
@@ -323,14 +329,20 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
       </section>
 
       <section className="matcher-setup">
-        <h2>Opdracht voor Claude</h2>
-        <button type="button" className="btn btn-secondary" onClick={() => kopieer(opdrachtTekst, 'opdracht')}>
-          {gekopieerd === 'opdracht' ? 'Gekopieerd' : 'Kopieer opdracht'}
-        </button>
+        <h2>{ZOEK_BLOK}</h2>
         <pre className="matcher-textarea" style={{ whiteSpace: 'pre-wrap' }}>
-          {opdrachtTekst}
+          {zoekTekst}
         </pre>
       </section>
+
+      {zoekenKlaar && (
+        <section className="matcher-setup">
+          <h2>{BERICHTEN_BLOK}</h2>
+          <pre className="matcher-textarea" style={{ whiteSpace: 'pre-wrap' }}>
+            {berichtenTeDoen ? berichtenTekst : 'Er zijn geen kandidaten die nog een bericht nodig hebben — niets te doen.'}
+          </pre>
+        </section>
+      )}
     </>
   )
 }
