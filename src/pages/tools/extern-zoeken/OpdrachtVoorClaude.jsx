@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   berekenVerbruik,
+  bevestigTwijfelBeoordeling,
   fetchOpdracht,
   fetchResultaten,
   neemBerichtBesluit,
@@ -35,6 +36,7 @@ const IN_PIPELINE = ['toegevoegd', 'bericht_klaar', 'bericht_goedgekeurd', 'beri
 
 const STATUS_LABEL = {
   toegevoegd: 'In pipeline',
+  alsnog_toevoegen: 'Alsnog toevoegen (bij /burg-berichten)',
   bericht_klaar: BERICHTEN_VERSTUREN ? 'Wacht op jouw keuze' : 'Bericht klaargezet',
   bericht_goedgekeurd: 'Goedgekeurd, wordt verstuurd',
   bericht_afgewezen: 'Niet versturen',
@@ -50,6 +52,8 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
   const [bezig, setBezig] = useState(false)
   const [gekopieerd, setGekopieerd] = useState('')
   const [concepten, setConcepten] = useState({})
+  const [alsnogGekozen, setAlsnogGekozen] = useState(() => new Set())
+  const [bevestigen, setBevestigen] = useState(false)
 
   async function laad() {
     const [o, r] = await Promise.all([fetchOpdracht(opdrachtId), fetchResultaten(opdrachtId)])
@@ -93,6 +97,26 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
     }
   }
 
+  async function handleTwijfelBevestigd() {
+    setFout('')
+    try {
+      await bevestigTwijfelBeoordeling(opdrachtId, [...alsnogGekozen])
+      setBevestigen(false)
+      await laad()
+    } catch (err) {
+      setFout(err.message)
+    }
+  }
+
+  function wisselAlsnog(id) {
+    setAlsnogGekozen((huidig) => {
+      const volgend = new Set(huidig)
+      if (volgend.has(id)) volgend.delete(id)
+      else volgend.add(id)
+      return volgend
+    })
+  }
+
   async function handleBesluit(r, versturen) {
     setFout('')
     try {
@@ -112,13 +136,18 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
   const verzonden = resultaten.filter((r) => r.status === 'verzonden').length
   const wachtOpKeuze = resultaten.filter((r) => r.status === 'bericht_klaar')
   const zoekenKlaar = opdracht.fase === 'berichten' || opdracht.status === 'klaar'
+  const twijfelgevallen = resultaten.filter((r) => r.twijfel && r.status === 'overgeslagen')
+  // Eerst alle twijfelgevallen beoordelen (eenmalig), dan pas de berichtenstap.
+  const twijfelOpen = zoekenKlaar && !opdracht.twijfel_beoordeeld_op && twijfelgevallen.length > 0
   // Werk voor /burg-berichten: kandidaten zonder bericht, of (als versturen aanstaat) goedgekeurde berichten.
   const berichtenTeDoen = resultaten.some(
-    (r) => r.status === 'toegevoegd' || (BERICHTEN_VERSTUREN && r.status === 'bericht_goedgekeurd'),
+    (r) =>
+      ['toegevoegd', 'alsnog_toevoegen'].includes(r.status) ||
+      (BERICHTEN_VERSTUREN && r.status === 'bericht_goedgekeurd'),
   )
   const volgendCommando = !zoekenKlaar
     ? SNELKOPPELINGEN.zoeken.naam
-    : berichtenTeDoen && opdracht.status !== 'bezig'
+    : berichtenTeDoen && !twijfelOpen && opdracht.status !== 'bezig'
       ? SNELKOPPELINGEN.berichten.naam
       : null
   const verbruik = berekenVerbruik(opdracht.verbruik)
@@ -202,6 +231,53 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
           ))}
         </details>
       </section>
+
+      {twijfelOpen && (
+        <section className="matcher-setup">
+          <h2>Twijfelgevallen beoordelen ({twijfelgevallen.length})</h2>
+          <p className="matcher-dropdown-sub">
+            Claude heeft deze kandidaten niet zelf in de pipeline gezet. Vink aan wie alsnog goed is; de berichtenstap zet
+            die eerst in de pipeline en schrijft daarna ook voor hen een bericht.
+          </p>
+          {twijfelgevallen.map((r) => (
+            <div className="field" key={r.id}>
+              <label>
+                <input type="checkbox" checked={alsnogGekozen.has(r.id)} onChange={() => wisselAlsnog(r.id)} />{' '}
+                <strong>{r.score ?? '–'}</strong> ·{' '}
+                {r.kaart.profiel_url ? (
+                  <a href={r.kaart.profiel_url} target="_blank" rel="noreferrer">
+                    {r.kaart.naam}
+                  </a>
+                ) : (
+                  r.kaart.naam
+                )}
+                {r.kaart.kopregel && <> — {r.kaart.kopregel}</>}
+              </label>
+              <p className="matcher-dropdown-sub">{r.onderbouwing}</p>
+            </div>
+          ))}
+          {!bevestigen ? (
+            <button type="button" className="btn btn-primary" onClick={() => setBevestigen(true)}>
+              Voeg geselecteerde alsnog toe ({alsnogGekozen.size})
+            </button>
+          ) : (
+            <div className="field">
+              <p className="form-error" style={{ color: '#c62828', fontWeight: 600 }}>
+                Dit kan maar één keer per run. Beoordeel eerst elk twijfelgeval hierboven voordat je doorgaat — daarna kun
+                je niets meer aanpassen of toevoegen.
+              </p>
+              <div className="matcher-upload-row">
+                <button type="button" className="btn btn-primary" onClick={handleTwijfelBevestigd}>
+                  Ja, ik heb iedereen gecontroleerd
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setBevestigen(false)}>
+                  Terug
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {!BERICHTEN_VERSTUREN && wachtOpKeuze.length > 0 && (
         <section className="matcher-setup">

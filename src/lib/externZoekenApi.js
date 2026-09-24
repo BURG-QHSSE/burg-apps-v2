@@ -38,7 +38,7 @@ export async function slaOpdrachtOp(vacatureId, vacaturetekst, strategie) {
 }
 
 const OPDRACHT_VELDEN =
-  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik, fase, pipeline_teller'
+  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik, fase, pipeline_teller, twijfel_beoordeeld_op'
 
 /**
  * Verbruik per fase uit de start/eind-metingen: verschil in procentpunten van
@@ -90,6 +90,29 @@ export async function neemBerichtBesluit(opdrachtId, resultaatId, versturen, ber
       .eq('id', opdrachtId)
     if (fout) throw new Error(fout.message)
   }
+}
+
+/**
+ * Eenmalige beoordeling van de twijfelgevallen na de zoekrun: de gekozen
+ * kandidaten gaan naar alsnog_toevoegen (de volgende /burg-berichten-run zet
+ * ze in de Recruiter-pipeline), en de opdracht onthoudt dat er beoordeeld is.
+ */
+export async function bevestigTwijfelBeoordeling(opdrachtId, gekozenIds) {
+  if (gekozenIds.length) {
+    const { error } = await supabase
+      .from('extern_zoeken_resultaten')
+      .update({ status: 'alsnog_toevoegen' })
+      .eq('opdracht_id', opdrachtId)
+      .eq('twijfel', true)
+      .in('id', gekozenIds)
+    if (error) throw new Error(error.message)
+  }
+  const { error } = await supabase
+    .from('extern_zoeken_opdrachten')
+    .update({ twijfel_beoordeeld_op: new Date().toISOString() })
+    .eq('id', opdrachtId)
+    .is('twijfel_beoordeeld_op', null)
+  if (error) throw new Error(error.message)
 }
 
 export async function fetchRecenteOpdrachten(aantal = 10) {

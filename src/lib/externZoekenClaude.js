@@ -6,7 +6,7 @@
  * werkinstructies centraal hier, niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v8-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v9-2026-09-24'
 
 // MVP (2026-09-24): Claude zet berichten alleen klaar in BURG Apps en verstuurt
 // niets, zodat ze eerst gecontroleerd en aan het management getoond kunnen
@@ -121,6 +121,21 @@ Open aan het eind (ook als je moest stoppen) in het project de pagina "Pipeline"
 Sluit af met een korte samenvatting in de chat.`
 }
 
+// Door de consultant na de zoekrun alsnog gekozen twijfelgevallen: eerst in de
+// Recruiter-pipeline zetten, daarna krijgen ze net als de rest een bericht.
+function alsnogStap(opdracht, resultaten) {
+  const alsnog = resultaten.filter((r) => r.status === 'alsnog_toevoegen')
+  if (!alsnog.length) return ''
+  const regels = alsnog
+    .map((r) => `- id ${r.id}: ${r.kaart.naam} — ${r.kaart.kopregel ?? ''} — ${r.kaart.profiel_url ?? '(zoek op naam)'}`)
+    .join('\n')
+  return `STAP 0b — Eerst alsnog toevoegen aan de pipeline
+De consultant heeft deze twijfelgevallen goedgekeurd. Zet ze eerst in de pipeline van het project "${opdracht.strategie.projectnaam}" (fase "Niet benaderd"): open het profiel en kies "Opslaan in pipeline" voor dit project, of zoek de naam op in de Recruiter-zoekopdracht van het project. Controleer dat het gelukt is. Ze staan ook in de lijst van stap 1 en krijgen daar net als de anderen een bericht. Lukt opslaan niet: meld die kandidaat met "status": "fout" en de reden in "eerder_contact".
+${regels}
+
+`
+}
+
 function schrijfwijze(opdracht) {
   const s = opdracht.strategie
   return `SCHRIJFWIJZE
@@ -142,7 +157,7 @@ ${opdracht.vacaturetekst}`
 }
 
 /** MVP-variant: alleen berichten schrijven en in BURG Apps klaarzetten, nooit versturen. */
-function maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst) {
+function maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst, resultaten) {
   const s = opdracht.strategie
   const lijstA = nieuw.length
     ? nieuw.map((r) => `- id ${r.id}: ${r.kaart.naam} — ${r.kaart.kopregel ?? ''} — ${r.kaart.profiel_url ?? '(zoek op naam in het project)'}`).join('\n')
@@ -155,14 +170,14 @@ Deze BURG Apps-opdracht staat op: ${opdrachtUrl}
 
 HARDE REGELS
 - Verstuur NOOIT een InMail of ander bericht. Open in LinkedIn ook geen berichtvenster of InMail-scherm; je schrijft de berichten alleen in de JSON-melding voor BURG Apps.
-- Maak geen Bullhorn-records aan en wijzig geen projecten.
+- Maak geen Bullhorn-records aan en wijzig geen projecten, behalve het opslaan van de kandidaten uit stap 0b in de pipeline.
 - Werk in een normaal, menselijk tempo. Waarschuwing, captcha, limietmelding of uitlogscherm: stop direct en meld "status": "fout" met de reden in "voortgang".
 
 STAP 0 — Verbruik meten (start)
 Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 2) met "status": "bezig", "fase": "berichten", "voortgang": "Gestart", "berichten": [] en:
 "verbruik": { "fase": "inmails", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
 
-STAP 1 — Per kandidaat een bericht schrijven
+${alsnogStap(opdracht, resultaten)}STAP 1 — Per kandidaat een bericht schrijven
 ${lijstA}
 Per kandidaat:
 a. Open het profiel en bekijk het tabblad "Berichten" (alleen lezen): wat is het laatste bericht aan deze persoon, van wie, en op welke datum?
@@ -201,7 +216,7 @@ export function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
   grens.setMonth(grens.getMonth() - EERDER_CONTACT_MAANDEN)
   const grensTekst = grens.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
   const profiel = (r) => r.kaart.profiel_url ?? '(zoek op naam in het project)'
-  const nieuw = resultaten.filter((r) => r.status === 'toegevoegd')
+  const nieuw = resultaten.filter((r) => ['toegevoegd', 'alsnog_toevoegen'].includes(r.status))
   const goedgekeurd = resultaten.filter((r) => r.status === 'bericht_goedgekeurd')
   const lijstA = nieuw.length
     ? nieuw.map((r) => `- id ${r.id}: ${r.kaart.naam} — ${r.kaart.kopregel ?? ''} — ${profiel(r)}`).join('\n')
@@ -213,7 +228,7 @@ export function maakBerichtenOpdracht(opdracht, opdrachtUrl, resultaten) {
     : '- (geen)'
   const projectLink = opdracht.recruiter_project_id?.startsWith('https://') ? ` (${opdracht.recruiter_project_id})` : ''
 
-  if (!BERICHTEN_VERSTUREN) return maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst)
+  if (!BERICHTEN_VERSTUREN) return maakKlaarzetOpdracht(opdracht, opdrachtUrl, nieuw, grensTekst, resultaten)
 
   return `OPDRACHT VOOR CLAUDE — Extern Zoeken, fase BERICHTEN (${OPDRACHT_VERSIE})
 
@@ -230,7 +245,7 @@ STAP 0 — Verbruik meten (start)
 Open https://claude.ai/settings/usage, lees "Current session" (% used) en "Weekly limits → All models" (%) af en meld direct (zie stap 3) met "status": "bezig", "fase": "berichten", "voortgang": "Gestart", "berichten": [] en:
 "verbruik": { "fase": "inmails", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
 
-STAP 1 — Lijst A: nieuwe berichten
+${alsnogStap(opdracht, resultaten)}STAP 1 — Lijst A: nieuwe berichten
 ${lijstA}
 Per kandidaat:
 a. Open het profiel en bekijk het tabblad "Berichten": wat is het laatste bericht aan deze persoon, van wie, en op welke datum?

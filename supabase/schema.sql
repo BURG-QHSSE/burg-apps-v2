@@ -2500,3 +2500,13 @@ alter table extern_zoeken_resultaten add constraint extern_zoeken_resultaten_sta
 -- in het linkermenu is NIET het totaal: dat stond op 12 bij 162 opgeslagen.)
 alter table extern_zoeken_opdrachten add column pipeline_teller int;
 comment on column extern_zoeken_opdrachten.pipeline_teller is 'Aantal "Alle kandidaten" op de Pipeline-pagina van het Recruiter-project, door Claude in Chrome afgelezen aan het eind van een zoekrun. Controle tegen het aantal resultaten met status toegevoegd. Niet het getal naast "Pipeline" in het linkermenu (dat is geen totaal).';
+
+-- Twijfelgevallen (2026-09-24): na de zoekrun beoordeelt de consultant eenmalig
+-- alle twijfelgevallen; gekozen kandidaten → alsnog_toevoegen, die de
+-- /burg-berichten-run eerst in de Recruiter-pipeline zet.
+alter table extern_zoeken_opdrachten add column twijfel_beoordeeld_op timestamptz;
+comment on column extern_zoeken_opdrachten.twijfel_beoordeeld_op is 'Moment waarop de consultant na de zoekrun alle twijfelgevallen heeft beoordeeld ("Ja, ik heb iedereen gecontroleerd"). Eenmalig per opdracht; daarna pas /burg-berichten.';
+
+alter table extern_zoeken_resultaten drop constraint extern_zoeken_resultaten_status_check;
+alter table extern_zoeken_resultaten add constraint extern_zoeken_resultaten_status_check
+  check (status in ('gevonden', 'gescoord', 'toegevoegd', 'overgeslagen', 'alsnog_toevoegen', 'bericht_klaar', 'bericht_goedgekeurd', 'bericht_afgewezen', 'verzonden', 'fout'));
