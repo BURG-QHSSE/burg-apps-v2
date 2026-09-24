@@ -6,7 +6,7 @@
  * werkinstructies centraal hier, niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v5-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v6-2026-09-24'
 
 // MVP (2026-09-24): Claude zet berichten alleen klaar in BURG Apps en verstuurt
 // niets, zodat ze eerst gecontroleerd en aan het management getoond kunnen
@@ -77,9 +77,17 @@ ${lijst(s.pluspunten)}
 Knock-outs (dan niet toevoegen):
 ${lijst(s.knock_outs)}
 Taal vereist: ${talen}
-- Geef een score 0-100. Open het volledige profiel alleen als het kaartje niet genoeg zegt (bijv. voor de taaleis of bij twijfel).
+
+BELANGRIJK — beoordeel alleen op wat je op het profiel kunt zien:
+- Tel alleen mee wat zichtbaar is: functietitels, werkgevers/sector, aantal jaren ervaring, opleidingen en certificaten die vermeld staan.
+- Wat je op een profiel niet kunt zien (bijv. reisbereidheid, persoonlijkheid, taalbeheersing, werk- en denkniveau) telt NIET mee, niet positief en niet negatief. Dat checkt de consultant later in het gesprek.
+- Een eis of certificaat dat niet vermeld staat (bijv. geen MVK op het profiel) is GEEN minpunt en geen knock-out: veel mensen zetten dat er niet op. Het is alleen een pluspunt als het er wél staat.
+- Een knock-out geldt alleen als het profiel die duidelijk laat zien (bijv. overduidelijk minder dan 3 jaar ervaring in het vak, of een totaal ander vakgebied).
+- Scoor dus vooral op: past de huidige/recente functie en de ervaring (jaren, sector) bij deze rol?
+
+- Geef een score 0-100. Open het volledige profiel alleen als het kaartje niet genoeg zegt over functie en ervaring.
 - Score 70 of hoger en geen knock-out: opslaan in de pipeline van dit project (fase "Niet benaderd").
-- Score 50-69: NIET opslaan, wel rapporteren met "twijfel": true — de consultant beslist.
+- Score 50-69 (echte twijfel over de zichtbare functie/ervaring, bijv. aanpalende rol of net te weinig jaren): NIET opslaan, wel rapporteren met "twijfel": true en in de onderbouwing wat de twijfel is — de consultant beslist.
 - Lager dan 50: overslaan en niet rapporteren.
 - Staat er "In Bullhorn" op het kaartje: gewoon beoordelen, en "in_bullhorn": true rapporteren.
 
