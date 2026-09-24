@@ -20,6 +20,12 @@ const LIJST_VELDEN = [
   { key: 'knock_outs', label: 'Knock-outs' },
 ]
 
+const POSTCODE_BRON = {
+  vacature: 'uit Bullhorn (werklocatie van de vacature)',
+  bedrijf: 'uit Bullhorn (adres van het klantbedrijf — vacature had geen adres)',
+  tekst: 'uit de vacaturetekst — controleer even',
+}
+
 const naarRegels = (lijst) => (lijst ?? []).join('\n')
 const naarLijst = (tekst) =>
   tekst
@@ -206,8 +212,14 @@ export default function ExternZoeken() {
                   onChange={(e) => zet('straal_km', Number(e.target.value))}
                 />
               </div>
-              {!strategie.postcode?.trim() && (
-                <p className="form-error">Postcode staat niet in de vacaturetekst — vul hem zelf in.</p>
+              {strategie.postcode?.trim() ? (
+                POSTCODE_BRON[strategie.postcode_bron] && (
+                  <p className="matcher-dropdown-sub">Postcode {POSTCODE_BRON[strategie.postcode_bron]}.</p>
+                )
+              ) : (
+                <p className="form-error">
+                  Geen postcode gevonden in Bullhorn of de vacaturetekst — vul hem zelf in.
+                </p>
               )}
             </div>
             <div className="field">

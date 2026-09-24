@@ -9,7 +9,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //
 // Acties (body.action):
 //   - "strategie": vacaturetekst → zoekopdracht voor Recruiter (boolean voor
-//     functietitels en trefwoorden, postcode + straal, vaardigheden, jaren ervaring,
+//     functietitels en trefwoorden, postcode + straal (postcode uit
+//     Bullhorn: vacature-adres, anders bedrijfsadres), vaardigheden, jaren ervaring,
 //     uit te sluiten bedrijven) + ideaalprofiel en harde eisen voor het
 //     scoren later. De consultant controleert/past dit aan in BURG Apps
 //     vóór de extensie ermee gaat zoeken.
@@ -19,9 +20,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { maakStrategie, CLAUDE_MODEL } from './claude.ts'
+import { getVacatureLocatie, type VacatureLocatie } from './bullhorn.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
 // Voorlopig admin-only, zelfde drempel als toolRegistry.js's minimumRole
 // voor 'extern-zoeken' zolang de tool in de testfase zit.
@@ -78,7 +81,26 @@ Deno.serve(async (req) => {
       if (!vacaturetekst) {
         return jsonResponse({ error: 'vacaturetekst is verplicht' }, 400)
       }
-      const { strategie, kostenUsd } = await maakStrategie(vacaturetekst, vacatureId)
+      // Postcode uit Bullhorn (vacature-adres, anders bedrijfsadres) gaat voor
+      // op wat Claude uit de tekst haalt. Mislukt Bullhorn, dan blijft de
+      // tekst-postcode staan en vult de consultant zo nodig zelf aan.
+      const locatieVerzoek: Promise<VacatureLocatie | null> = /^\d+$/.test(vacatureId)
+        ? getVacatureLocatie(createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!), Number(vacatureId)).catch((err) => {
+            console.error('[extern-zoeken] Bullhorn-locatie ophalen mislukt:', err)
+            return null
+          })
+        : Promise.resolve(null)
+      const [{ strategie, kostenUsd }, locatie] = await Promise.all([
+        maakStrategie(vacaturetekst, vacatureId),
+        locatieVerzoek,
+      ])
+      if (locatie?.postcode) {
+        strategie.postcode = locatie.postcode
+        if (locatie.plaats) strategie.vestigingsplaats = locatie.plaats
+        strategie.postcode_bron = locatie.bron!
+      } else {
+        strategie.postcode_bron = strategie.postcode?.trim() ? 'tekst' : null
+      }
       return jsonResponse({ strategie, kostenUsd, model: CLAUDE_MODEL })
     }
 

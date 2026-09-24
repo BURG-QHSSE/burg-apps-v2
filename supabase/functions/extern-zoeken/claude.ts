@@ -71,6 +71,8 @@ export interface Strategie {
   vestigingsplaats: string
   postcode: string
   straal_km: number
+  // Gezet in index.ts: waar de postcode vandaan komt.
+  postcode_bron?: 'vacature' | 'bedrijf' | 'tekst' | null
   vaardigheden: string[]
   jaren_ervaring_min: number
   jaren_ervaring_max: number | null
