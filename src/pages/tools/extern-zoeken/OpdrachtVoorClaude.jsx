@@ -162,6 +162,12 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
             )}
           </p>
         ))}
+        {opdracht.pipeline_teller != null && opdracht.pipeline_teller < inPipeline && (
+          <p className="form-error">
+            Let op: Recruiter toont {opdracht.pipeline_teller} in de pipeline, maar Claude meldde er {inPipeline}. Niet alle
+            kandidaten zijn echt opgeslagen — vraag Claude de ontbrekende alsnog op te slaan.
+          </p>
+        )}
         {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
         {volgendCommando && opdracht.status !== 'bezig' && (
           <ol>

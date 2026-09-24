@@ -6,7 +6,7 @@
  * werkinstructies centraal hier, niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v6-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v7-2026-09-24'
 
 // MVP (2026-09-24): Claude zet berichten alleen klaar in BURG Apps en verstuurt
 // niets, zodat ze eerst gecontroleerd en aan het management getoond kunnen
@@ -86,7 +86,7 @@ BELANGRIJK — beoordeel alleen op wat je op het profiel kunt zien:
 - Scoor dus vooral op: past de huidige/recente functie en de ervaring (jaren, sector) bij deze rol?
 
 - Geef een score 0-100. Open het volledige profiel alleen als het kaartje niet genoeg zegt over functie en ervaring.
-- Score 70 of hoger en geen knock-out: opslaan in de pipeline van dit project (fase "Niet benaderd").
+- Score 70 of hoger en geen knock-out: klik ECHT op "Opslaan in pipeline" bij die kandidaat (fase "Niet benaderd") en controleer dat de knop verandert en de teller naast "Pipeline" in het linkermenu met 1 oploopt. Meld "in_pipeline": true ALLEEN als dat gelukt is; lukt opslaan niet, meld dan "in_pipeline": false en zet de reden in de onderbouwing.
 - Score 50-69 (echte twijfel over de zichtbare functie/ervaring, bijv. aanpalende rol of net te weinig jaren): NIET opslaan, wel rapporteren met "twijfel": true en in de onderbouwing wat de twijfel is — de consultant beslist.
 - Lager dan 50: overslaan en niet rapporteren.
 - Staat er "In Bullhorn" op het kaartje: gewoon beoordelen, en "in_bullhorn": true rapporteren.
@@ -95,10 +95,12 @@ STAP 4 — Doorgaan
 Werk de resultatenpagina's één voor één af (25 per pagina; scroll naar beneden zodat alle kaartjes laden). Stop zodra ${opdracht.doel_aantal} kandidaten in de pipeline staan, of als de resultaten op zijn.
 
 STAP 5 — Na ELKE resultatenpagina terugmelden in BURG Apps
-Ga naar het BURG Apps-tabblad (${opdrachtUrl}), plak in het veld "Resultaten van Claude" één JSON-object in precies dit formaat en klik op "Resultaten opslaan". Controleer de bevestiging en ga dan terug naar LinkedIn.
+Lees eerst het getal naast "Pipeline" in het linkermenu van het project af (pipeline_teller). Dat moet gelijk zijn aan het totaal dat je tot nu toe met "in_pipeline": true hebt gemeld; is het lager, ga dan terug en sla de ontbrekende kandidaten alsnog op vóór je verder gaat.
+Ga dan naar het BURG Apps-tabblad (${opdrachtUrl}), plak in het veld "Resultaten van Claude" één JSON-object in precies dit formaat en klik op "Resultaten opslaan". Controleer de bevestiging en ga dan terug naar LinkedIn.
 {
   "status": "bezig",
   "voortgang": "Pagina 2 van ca. 20 — 31 in pipeline",
+  "pipeline_teller": 31,
   "aantal_resultaten": "487",
   "recruiter_project_url": "https://www.linkedin.com/talent/hire/...",
   "kandidaten": [
@@ -282,6 +284,9 @@ export function leesClaudeResultaten(tekst) {
   }
   if (data.status && !['bezig', 'klaar', 'fout'].includes(data.status)) {
     throw new Error(`Onbekende status "${data.status}" (bezig, klaar of fout).`)
+  }
+  if (data.pipeline_teller != null && !Number.isInteger(data.pipeline_teller)) {
+    throw new Error('"pipeline_teller" moet een geheel getal zijn (het getal naast Pipeline in Recruiter).')
   }
   if (data.fase && !['zoeken', 'berichten'].includes(data.fase)) {
     throw new Error(`Onbekende fase "${data.fase}" (zoeken of berichten).`)

@@ -38,7 +38,7 @@ export async function slaOpdrachtOp(vacatureId, vacaturetekst, strategie) {
 }
 
 const OPDRACHT_VELDEN =
-  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik, fase'
+  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik, fase, pipeline_teller'
 
 /**
  * Verbruik per fase uit de start/eind-metingen: verschil in procentpunten van
@@ -157,6 +157,7 @@ export async function slaClaudeResultatenOp(opdrachtId, melding, promptVersie) {
 
   const update = { status: melding.status ?? 'bezig' }
   if (melding.fase) update.fase = melding.fase
+  if (melding.pipeline_teller != null) update.pipeline_teller = melding.pipeline_teller
   if (melding.voortgang) update.voortgang = String(melding.voortgang)
   if (melding.aantal_resultaten != null) update.aantal_resultaten = String(melding.aantal_resultaten)
   if (melding.recruiter_project_url) update.recruiter_project_id = String(melding.recruiter_project_url)
