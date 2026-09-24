@@ -38,7 +38,7 @@ export async function slaOpdrachtOp(vacatureId, vacaturetekst, strategie) {
 }
 
 const OPDRACHT_VELDEN =
-  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik'
+  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik, fase'
 
 /**
  * Verbruik per fase uit de start/eind-metingen: verschil in procentpunten van
@@ -46,27 +46,59 @@ const OPDRACHT_VELDEN =
  * dan is alleen een ondergrens bekend.
  */
 export function berekenVerbruik(metingen = []) {
-  const fases = [...new Set(metingen.map((m) => m.fase))]
-  return fases.map((fase) => {
-    const start = metingen.find((m) => m.fase === fase && m.moment === 'start')
-    const eind = [...metingen].reverse().find((m) => m.fase === fase && m.moment === 'eind')
-    if (!start || !eind) return { fase, klaar: false, start }
-    const sessieGereset = eind.sessie_pct < start.sessie_pct
-    return {
-      fase,
-      klaar: true,
-      sessie: sessieGereset ? eind.sessie_pct : eind.sessie_pct - start.sessie_pct,
-      sessieGereset,
-      week: eind.week_pct - start.week_pct,
-      minuten: Math.round((new Date(eind.gemeten_op) - new Date(start.gemeten_op)) / 60000),
+  // Een fase kan meerdere runs hebben (bijv. berichten: eerst nieuwe, later de
+  // goedgekeurde); elke start/eind-combinatie telt op.
+  const perFase = new Map()
+  for (const m of metingen) {
+    const f = perFase.get(m.fase) ?? { fase: m.fase, runs: 0, sessie: 0, week: 0, minuten: 0, sessieGereset: false, open: null }
+    if (m.moment === 'start') {
+      f.open = m
+    } else if (m.moment === 'eind' && f.open) {
+      const gereset = m.sessie_pct < f.open.sessie_pct
+      f.sessie += gereset ? m.sessie_pct : m.sessie_pct - f.open.sessie_pct
+      f.sessieGereset ||= gereset
+      f.week += m.week_pct - f.open.week_pct
+      f.minuten += Math.round((new Date(m.gemeten_op) - new Date(f.open.gemeten_op)) / 60000)
+      f.runs += 1
+      f.open = null
     }
-  })
+    perFase.set(m.fase, f)
+  }
+  return [...perFase.values()]
 }
 
 export async function fetchOpdracht(id) {
   const { data, error } = await supabase.from('extern_zoeken_opdrachten').select(OPDRACHT_VELDEN).eq('id', id).single()
   if (error) throw new Error(error.message)
   return data
+}
+
+/** Na het zoeken: opdracht klaarzetten voor de fase berichten (Claude start via hetzelfde commando). */
+export async function startBerichtenFase(opdrachtId) {
+  const { error } = await supabase
+    .from('extern_zoeken_opdrachten')
+    .update({ fase: 'berichten', status: 'concept', voortgang: 'Klaar voor berichten', foutmelding: null })
+    .eq('id', opdrachtId)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Keuze van de consultant bij eerder contact. Na een "ja" (of met een
+ * aangepaste tekst) staat het bericht in lijst B van de volgende Claude-run.
+ */
+export async function neemBerichtBesluit(opdrachtId, resultaatId, versturen, bericht) {
+  const { error } = await supabase
+    .from('extern_zoeken_resultaten')
+    .update(versturen ? { status: 'bericht_goedgekeurd', bericht } : { status: 'bericht_afgewezen' })
+    .eq('id', resultaatId)
+  if (error) throw new Error(error.message)
+  if (versturen) {
+    const { error: fout } = await supabase
+      .from('extern_zoeken_opdrachten')
+      .update({ status: 'concept', voortgang: 'Goedgekeurde berichten wachten op verzending' })
+      .eq('id', opdrachtId)
+    if (fout) throw new Error(fout.message)
+  }
 }
 
 export async function fetchRecenteOpdrachten(aantal = 10) {
@@ -82,7 +114,7 @@ export async function fetchRecenteOpdrachten(aantal = 10) {
 export async function fetchResultaten(opdrachtId) {
   const { data, error } = await supabase
     .from('extern_zoeken_resultaten')
-    .select('id, kaart, in_bullhorn, score, onderbouwing, twijfel, status, created_at')
+    .select('id, kaart, in_bullhorn, score, onderbouwing, twijfel, status, onderwerp, bericht, eerder_contact, verzonden_op, created_at')
     .eq('opdracht_id', opdrachtId)
     .order('score', { ascending: false, nullsFirst: false })
   if (error) throw new Error(error.message)
@@ -113,6 +145,24 @@ export async function slaClaudeResultatenOp(opdrachtId, melding, promptVersie) {
       .upsert(rijen, { onConflict: 'opdracht_id,recruiter_id' })
     if (error) throw new Error(error.message)
   }
+
+  // Fase berichten: rijen bijwerken op het id dat Claude uit de opdrachtlijst kreeg.
+  await Promise.all(
+    melding.berichten.map(async (b) => {
+      const { error } = await supabase
+        .from('extern_zoeken_resultaten')
+        .update({
+          status: b.status,
+          onderwerp: b.onderwerp ?? null,
+          bericht: b.bericht ?? null,
+          eerder_contact: b.eerder_contact ?? null,
+          verzonden_op: b.status === 'verzonden' ? new Date().toISOString() : null,
+        })
+        .eq('id', b.id)
+        .eq('opdracht_id', opdrachtId)
+      if (error) throw new Error(error.message)
+    }),
+  )
 
   const update = { status: melding.status ?? 'bezig' }
   if (melding.voortgang) update.voortgang = String(melding.voortgang)

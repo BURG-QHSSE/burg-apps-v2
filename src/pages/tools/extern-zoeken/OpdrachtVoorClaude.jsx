@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { berekenVerbruik, fetchOpdracht, fetchResultaten, slaClaudeResultatenOp } from '../../../lib/externZoekenApi'
+import {
+  berekenVerbruik,
+  fetchOpdracht,
+  fetchResultaten,
+  neemBerichtBesluit,
+  slaClaudeResultatenOp,
+  startBerichtenFase,
+} from '../../../lib/externZoekenApi'
 import {
   OPDRACHT_VERSIE,
   SNELKOPPELING_NAAM,
@@ -14,7 +21,23 @@ import {
  * en plakt na elke resultatenpagina een JSON-melding in "Resultaten van Claude".
  * Deze pagina ververst zichzelf zolang de opdracht loopt, zodat de consultant
  * de voortgang ook hier ziet.
+ *
+ * Na het zoeken volgt de fase berichten: Claude stuurt InMails aan de
+ * pipeline; bij eerder contact (< 3 maanden) wacht het bericht hier op de
+ * keuze van de consultant, en een volgende run verstuurt de goedgekeurde.
  */
+
+// Alles wat in de Recruiter-pipeline staat, ongeacht waar het bericht is.
+const IN_PIPELINE = ['toegevoegd', 'bericht_klaar', 'bericht_goedgekeurd', 'bericht_afgewezen', 'verzonden', 'fout']
+
+const STATUS_LABEL = {
+  toegevoegd: 'In pipeline',
+  bericht_klaar: 'Wacht op jouw keuze',
+  bericht_goedgekeurd: 'Goedgekeurd, wordt verstuurd',
+  bericht_afgewezen: 'Niet versturen',
+  verzonden: 'Bericht verstuurd',
+  fout: 'Fout bij bericht',
+}
 export default function OpdrachtVoorClaude({ opdrachtId }) {
   const [opdracht, setOpdracht] = useState(null)
   const [resultaten, setResultaten] = useState([])
@@ -23,6 +46,7 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
   const [fout, setFout] = useState('')
   const [bezig, setBezig] = useState(false)
   const [gekopieerd, setGekopieerd] = useState('')
+  const [concepten, setConcepten] = useState({})
 
   async function laad() {
     const [o, r] = await Promise.all([fetchOpdracht(opdrachtId), fetchResultaten(opdrachtId)])
@@ -66,11 +90,35 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
     }
   }
 
+  async function handleStartBerichten() {
+    setFout('')
+    try {
+      await startBerichtenFase(opdrachtId)
+      await laad()
+    } catch (err) {
+      setFout(err.message)
+    }
+  }
+
+  async function handleBesluit(r, versturen) {
+    setFout('')
+    try {
+      await neemBerichtBesluit(opdrachtId, r.id, versturen, concepten[r.id] ?? r.bericht)
+      await laad()
+    } catch (err) {
+      setFout(err.message)
+    }
+  }
+
   if (!opdracht) return fout ? <p className="form-error">{fout}</p> : <p>Laden…</p>
 
-  const opdrachtTekst = maakClaudeOpdracht(opdracht, window.location.href)
-  const inPipeline = resultaten.filter((r) => r.status === 'toegevoegd').length
+  const opdrachtTekst = maakClaudeOpdracht(opdracht, window.location.href, resultaten)
+  const inPipeline = resultaten.filter((r) => IN_PIPELINE.includes(r.status)).length
   const twijfel = resultaten.filter((r) => r.twijfel).length
+  const verzonden = resultaten.filter((r) => r.status === 'verzonden').length
+  const wachtOpKeuze = resultaten.filter((r) => r.status === 'bericht_klaar')
+  const kanBerichtenStarten =
+    opdracht.fase === 'zoeken' && opdracht.status === 'klaar' && resultaten.some((r) => r.status === 'toegevoegd')
   const verbruik = berekenVerbruik(opdracht.verbruik)
 
   return (
@@ -78,11 +126,14 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
       <section className="matcher-setup">
         <h2>{opdracht.strategie.projectnaam}</h2>
         <p>
-          <strong>Status: {opdracht.status}</strong>
+          <strong>
+            {opdracht.fase === 'berichten' ? 'Berichten' : 'Zoeken'} — {opdracht.status}
+          </strong>
           {opdracht.voortgang && <> — {opdracht.voortgang}</>}
         </p>
         <p>
           {inPipeline} van {opdracht.doel_aantal} in pipeline · {twijfel} twijfelgevallen
+          {opdracht.fase === 'berichten' && <> · {verzonden} berichten verstuurd</>}
           {opdracht.aantal_resultaten && <> · {opdracht.aantal_resultaten} resultaten in Recruiter</>}
           {opdracht.recruiter_project_id?.startsWith('https://') && (
             <>
@@ -96,17 +147,25 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
         {verbruik.map((v) => (
           <p key={v.fase}>
             Claude-verbruik ({v.fase}):{' '}
-            {v.klaar ? (
+            {v.runs > 0 && (
               <>
                 {v.sessieGereset ? `minstens ${v.sessie}` : v.sessie}% van de 5-uurslimiet · {v.week}% van de weeklimiet
-                {' '}· {v.minuten} min
+                {' '}· {v.minuten} min{v.runs > 1 && ` (${v.runs} runs)`}
               </>
-            ) : (
-              <>loopt nog (gestart op {v.start.sessie_pct}% sessie / {v.start.week_pct}% week)</>
+            )}
+            {v.open && (
+              <>
+                {v.runs > 0 && ' · '}run loopt nog (gestart op {v.open.sessie_pct}% sessie / {v.open.week_pct}% week)
+              </>
             )}
           </p>
         ))}
         {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
+        {kanBerichtenStarten && (
+          <button type="button" className="btn btn-primary" onClick={handleStartBerichten}>
+            Berichten laten versturen
+          </button>
+        )}
         {opdracht.status === 'concept' && (
           <ol>
             <li>Laat dit tabblad open.</li>
@@ -130,6 +189,47 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
           </button>
         </details>
       </section>
+
+      {wachtOpKeuze.length > 0 && (
+        <section className="matcher-setup">
+          <h2>Wacht op jouw keuze ({wachtOpKeuze.length})</h2>
+          <p className="matcher-dropdown-sub">
+            Deze kandidaten hebben de afgelopen 3 maanden al een bericht gehad. Claude heeft een bericht klaargezet maar
+            nog niet verstuurd. Na je keuzes start je Claude opnieuw met <code>/{SNELKOPPELING_NAAM}</code>; dan worden
+            alleen de goedgekeurde berichten verstuurd.
+          </p>
+          {wachtOpKeuze.map((r) => (
+            <div className="field" key={r.id}>
+              <label htmlFor={`bericht-${r.id}`}>
+                {r.kaart.profiel_url ? (
+                  <a href={r.kaart.profiel_url} target="_blank" rel="noreferrer">
+                    {r.kaart.naam}
+                  </a>
+                ) : (
+                  r.kaart.naam
+                )}{' '}
+                — {r.eerder_contact}
+              </label>
+              <p className="matcher-dropdown-sub">Onderwerp: {r.onderwerp}</p>
+              <textarea
+                id={`bericht-${r.id}`}
+                className="matcher-textarea"
+                rows={7}
+                value={concepten[r.id] ?? r.bericht ?? ''}
+                onChange={(e) => setConcepten((c) => ({ ...c, [r.id]: e.target.value }))}
+              />
+              <div className="matcher-upload-row">
+                <button type="button" className="btn btn-primary" onClick={() => handleBesluit(r, true)}>
+                  Versturen
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => handleBesluit(r, false)}>
+                  Niet versturen
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="matcher-setup">
         <h2>Resultaten van Claude</h2>
@@ -178,7 +278,8 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
                       </div>
                     </td>
                     <td>
-                      {r.status === 'toegevoegd' ? 'In pipeline' : r.twijfel ? 'Twijfel' : 'Niet toegevoegd'}
+                      {STATUS_LABEL[r.status] ?? (r.twijfel ? 'Twijfel' : 'Niet toegevoegd')}
+                      {r.eerder_contact && <div className="matcher-dropdown-sub">{r.eerder_contact}</div>}
                       {r.in_bullhorn && <div className="matcher-dropdown-sub">In Bullhorn</div>}
                     </td>
                     <td>{r.onderbouwing}</td>

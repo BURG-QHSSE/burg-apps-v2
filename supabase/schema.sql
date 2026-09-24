@@ -2479,3 +2479,18 @@ comment on column extern_zoeken_opdrachten.aantal_resultaten is 'Aantal resultat
 -- en eind van elke fase (zoeken, later inmails) en meldt die percentages terug.
 alter table extern_zoeken_opdrachten add column verbruik jsonb not null default '[]'::jsonb;
 comment on column extern_zoeken_opdrachten.verbruik is 'Metingen van het Claude-abonnementsverbruik (claude.ai/settings/usage) door Claude in Chrome: [{fase, moment start|eind, sessie_pct, week_pct, sessie_reset, gemeten_op}]. fase = zoeken, later ook inmails. Verschil eind-start = verbruik van die fase (percentage van de 5-uurs- resp. weeklimiet; ander gelijktijdig gebruik op hetzelfde account telt mee).';
+
+-- Extern Zoeken fase berichten (2026-09-24): Claude in Chrome schrijft en
+-- verstuurt InMails aan de pipeline. Eerder bericht < 3 maanden = eerst de
+-- keuze van de consultant (bericht_klaar → bericht_goedgekeurd/_afgewezen).
+alter table extern_zoeken_opdrachten add column fase text not null default 'zoeken' check (fase in ('zoeken', 'berichten'));
+comment on column extern_zoeken_opdrachten.fase is 'zoeken = pipeline vullen; berichten = Claude in Chrome schrijft/verstuurt InMails naar de kandidaten in de pipeline.';
+
+alter table extern_zoeken_resultaten add column onderwerp text;
+alter table extern_zoeken_resultaten add column eerder_contact text;
+alter table extern_zoeken_resultaten add column verzonden_op timestamptz;
+comment on column extern_zoeken_resultaten.eerder_contact is 'Laatste eerdere bericht aan deze kandidaat volgens Recruiter (afzender + datum), zoals Claude het in de fase berichten aantrof. < 3 maanden oud = eerst keuze consultant (status bericht_klaar).';
+
+alter table extern_zoeken_resultaten drop constraint extern_zoeken_resultaten_status_check;
+alter table extern_zoeken_resultaten add constraint extern_zoeken_resultaten_status_check
+  check (status in ('gevonden', 'gescoord', 'toegevoegd', 'overgeslagen', 'bericht_klaar', 'bericht_goedgekeurd', 'bericht_afgewezen', 'verzonden', 'fout'));
