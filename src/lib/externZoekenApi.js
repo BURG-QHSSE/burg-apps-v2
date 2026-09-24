@@ -38,7 +38,30 @@ export async function slaOpdrachtOp(vacatureId, vacaturetekst, strategie) {
 }
 
 const OPDRACHT_VELDEN =
-  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id'
+  'id, created_at, vacature_id, vacaturetekst, strategie, doel_aantal, status, voortgang, foutmelding, aantal_resultaten, recruiter_project_id, verbruik'
+
+/**
+ * Verbruik per fase uit de start/eind-metingen: verschil in procentpunten van
+ * de 5-uurs- en weeklimiet. Is de 5-uurssessie tussendoor gereset (eind < start),
+ * dan is alleen een ondergrens bekend.
+ */
+export function berekenVerbruik(metingen = []) {
+  const fases = [...new Set(metingen.map((m) => m.fase))]
+  return fases.map((fase) => {
+    const start = metingen.find((m) => m.fase === fase && m.moment === 'start')
+    const eind = [...metingen].reverse().find((m) => m.fase === fase && m.moment === 'eind')
+    if (!start || !eind) return { fase, klaar: false, start }
+    const sessieGereset = eind.sessie_pct < start.sessie_pct
+    return {
+      fase,
+      klaar: true,
+      sessie: sessieGereset ? eind.sessie_pct : eind.sessie_pct - start.sessie_pct,
+      sessieGereset,
+      week: eind.week_pct - start.week_pct,
+      minuten: Math.round((new Date(eind.gemeten_op) - new Date(start.gemeten_op)) / 60000),
+    }
+  })
+}
 
 export async function fetchOpdracht(id) {
   const { data, error } = await supabase.from('extern_zoeken_opdrachten').select(OPDRACHT_VELDEN).eq('id', id).single()
@@ -96,6 +119,12 @@ export async function slaClaudeResultatenOp(opdrachtId, melding, promptVersie) {
   if (melding.aantal_resultaten != null) update.aantal_resultaten = String(melding.aantal_resultaten)
   if (melding.recruiter_project_url) update.recruiter_project_id = String(melding.recruiter_project_url)
   if (melding.status === 'fout') update.foutmelding = String(melding.voortgang ?? 'Gestopt door Claude')
+  if (melding.verbruik) {
+    // Lezen-en-aanvullen is hier veilig: per opdracht meldt maar één Claude-sessie terug.
+    const { data, error } = await supabase.from('extern_zoeken_opdrachten').select('verbruik').eq('id', opdrachtId).single()
+    if (error) throw new Error(error.message)
+    update.verbruik = [...(data.verbruik ?? []), { ...melding.verbruik, gemeten_op: new Date().toISOString() }]
+  }
   const { error } = await supabase.from('extern_zoeken_opdrachten').update(update).eq('id', opdrachtId)
   if (error) throw new Error(error.message)
 }

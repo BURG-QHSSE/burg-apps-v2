@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchOpdracht, fetchResultaten, slaClaudeResultatenOp } from '../../../lib/externZoekenApi'
+import { berekenVerbruik, fetchOpdracht, fetchResultaten, slaClaudeResultatenOp } from '../../../lib/externZoekenApi'
 import {
   OPDRACHT_VERSIE,
   SNELKOPPELING_NAAM,
@@ -71,6 +71,7 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
   const opdrachtTekst = maakClaudeOpdracht(opdracht, window.location.href)
   const inPipeline = resultaten.filter((r) => r.status === 'toegevoegd').length
   const twijfel = resultaten.filter((r) => r.twijfel).length
+  const verbruik = berekenVerbruik(opdracht.verbruik)
 
   return (
     <>
@@ -92,6 +93,19 @@ export default function OpdrachtVoorClaude({ opdrachtId }) {
             </>
           )}
         </p>
+        {verbruik.map((v) => (
+          <p key={v.fase}>
+            Claude-verbruik ({v.fase}):{' '}
+            {v.klaar ? (
+              <>
+                {v.sessieGereset ? `minstens ${v.sessie}` : v.sessie}% van de 5-uurslimiet · {v.week}% van de weeklimiet
+                {' '}· {v.minuten} min
+              </>
+            ) : (
+              <>loopt nog (gestart op {v.start.sessie_pct}% sessie / {v.start.week_pct}% week)</>
+            )}
+          </p>
+        ))}
         {opdracht.foutmelding && <p className="form-error">{opdracht.foutmelding}</p>}
         {opdracht.status === 'concept' && (
           <ol>

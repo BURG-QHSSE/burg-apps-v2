@@ -6,7 +6,7 @@
  * niet in ieders eigen extensie.
  */
 
-export const OPDRACHT_VERSIE = 'claude-chrome-v2-2026-09-24'
+export const OPDRACHT_VERSIE = 'claude-chrome-v3-2026-09-24'
 
 export const SNELKOPPELING_NAAM = 'burg-extern-zoeken'
 
@@ -31,6 +31,10 @@ HARDE REGELS
 - Wijzig, archiveer of verwijder geen andere projecten dan het project dat jij voor deze opdracht aanmaakt.
 - Zet nergens in LinkedIn woorden als "test", "automatisch", "Claude" of "AI" (projectnaam, notities, tags).
 - Werk in een normaal, menselijk tempo. Zie je een waarschuwing, captcha, limietmelding of uitlogscherm van LinkedIn: stop direct en meld dat in BURG Apps (zie stap 5, met "status": "fout").
+
+STAP 0 — Verbruik meten (start)
+Open https://claude.ai/settings/usage en lees af: "Current session" (% used, en wanneer die reset) en onder "Weekly limits" het % bij "All models". Meld dat direct in BURG Apps zoals in stap 5, met "status": "bezig", "voortgang": "Gestart", "kandidaten": [] en:
+"verbruik": { "fase": "zoeken", "moment": "start", "sessie_pct": 28, "week_pct": 32, "sessie_reset": "over 3 uur 10 min" }
 
 STAP 1 — Project aanmaken
 - Ga naar https://www.linkedin.com/talent/home en maak een nieuw project met exact de naam: ${s.projectnaam}
@@ -87,7 +91,10 @@ Ga naar het BURG Apps-tabblad (${opdrachtUrl}), plak in het veld "Resultaten van
     }
   ]
 }
-Zet bij de laatste melding "status": "klaar" (of "fout" met de reden in "voortgang" als je moest stoppen). Sluit af met een korte samenvatting in de chat.`
+STAP 6 — Afronden
+Open aan het eind (ook als je moest stoppen) opnieuw https://claude.ai/settings/usage en doe de laatste melding met "status": "klaar" (of "fout" met de reden in "voortgang") en:
+"verbruik": { "fase": "zoeken", "moment": "eind", "sessie_pct": 61, "week_pct": 35, "sessie_reset": "..." }
+Sluit af met een korte samenvatting in de chat.`
 }
 
 /** Leest de JSON die Claude in het resultatenveld plakt (codeblok-omhulsel mag). */
@@ -104,6 +111,12 @@ export function leesClaudeResultaten(tekst) {
   }
   if (data.status && !['bezig', 'klaar', 'fout'].includes(data.status)) {
     throw new Error(`Onbekende status "${data.status}" (bezig, klaar of fout).`)
+  }
+  if (data.verbruik) {
+    const v = data.verbruik
+    if (!v.fase || !['start', 'eind'].includes(v.moment) || !Number.isFinite(v.sessie_pct) || !Number.isFinite(v.week_pct)) {
+      throw new Error('"verbruik" moet fase, moment (start/eind), sessie_pct en week_pct (getallen) bevatten.')
+    }
   }
   const kandidaten = Array.isArray(data.kandidaten) ? data.kandidaten : []
   for (const k of kandidaten) {

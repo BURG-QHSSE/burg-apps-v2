@@ -2473,3 +2473,9 @@ alter table extern_zoeken_opdrachten add column voortgang text;
 alter table extern_zoeken_opdrachten add column aantal_resultaten text;
 comment on column extern_zoeken_opdrachten.voortgang is 'Laatste statusregel van de BURG-extensie (bijv. "Filters invullen: locaties"), live getoond in BURG Apps.';
 comment on column extern_zoeken_opdrachten.aantal_resultaten is 'Aantal resultaten zoals Recruiter het toont na het invullen van de filters (tekst, bijv. "487" of "2,2K+").';
+
+-- Extern Zoeken via Claude in Chrome (2026-09-24): verbruik van het Claude-
+-- abonnement per opdracht. Claude leest claude.ai/settings/usage aan het begin
+-- en eind van elke fase (zoeken, later inmails) en meldt die percentages terug.
+alter table extern_zoeken_opdrachten add column verbruik jsonb not null default '[]'::jsonb;
+comment on column extern_zoeken_opdrachten.verbruik is 'Metingen van het Claude-abonnementsverbruik (claude.ai/settings/usage) door Claude in Chrome: [{fase, moment start|eind, sessie_pct, week_pct, sessie_reset, gemeten_op}]. fase = zoeken, later ook inmails. Verschil eind-start = verbruik van die fase (percentage van de 5-uurs- resp. weeklimiet; ander gelijktijdig gebruik op hetzelfde account telt mee).';
