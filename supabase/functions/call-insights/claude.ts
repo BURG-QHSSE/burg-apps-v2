@@ -217,7 +217,13 @@ function bouwSysteemPrompt(): string {
     'zijn/haar situatie in het algemeen zegt.\n' +
     '  * "Placeable": neutrale standaardstatus. Gebruik dit NIET als reactie op één afgewezen vacature (zie ' +
     'bovenaan) — alleen als de kandidaat aangeeft algeheel niet actief te zoeken.\n' +
-    '  * "Door ons geplaatst": kandidaat is expliciet succesvol geplaatst/aangenomen via BURG.\n' +
+    '  * "Door ons geplaatst": UITSLUITEND wanneer uit de samenvatting expliciet blijkt dat BURG de kandidaat ' +
+    'heeft bemiddeld naar deze baan (bv. "aangenomen op de functie die wij voorstelden", "via BURG geplaatst bij ' +
+    'X"). Een nieuwe baan die de kandidaat zelf, via een ander bureau, via een detacheerder/uitzendconstructie ' +
+    '(bv. "bij Google via Arvato") of via een interne overstap bij zijn/haar werkgever heeft gevonden, is NOOIT ' +
+    '"Door ons geplaatst" — ook niet als een BURG-recruiter belt, feliciteert of "contact wil houden". Twijfel ' +
+    'je of BURG de bemiddelaar was? Stel dan GEEN "Door ons geplaatst" voor. Heeft de kandidaat buiten BURG om ' +
+    'een nieuwe baan gevonden en zoekt hij/zij daardoor niet meer actief, dan is "Placeable" de juiste status.\n' +
     '  * "Geen specialist": UITSLUITEND wanneer blijkt dat de kandidaat vakinhoudelijk geen QHSSE-specialist ' +
     'is/was — nooit in het vakgebied gewerkt, of is er inmiddels helemaal niet meer werkzaam. NOOIT gebruiken ' +
     'voor een salaris-mismatch, locatie, of een andere reden waarom een specifieke match niet doorging.\n' +
