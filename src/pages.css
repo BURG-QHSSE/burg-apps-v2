@@ -3192,6 +3192,87 @@ a.tool-card:hover .tool-card-hint .arrow {
   color: var(--inkt-60);
 }
 
+/* Prioriteit = gekleurde linkerrand (hoog is de enige alarmkleur),
+   status = groepering + gedimde 'klaar'-kaarten. */
+.dev-project-card {
+  border-left-width: 4px;
+  margin-bottom: 0;
+}
+
+.dev-prio-hoog { border-left-color: var(--brand); }
+.dev-prio-midden { border-left-color: var(--amber); }
+.dev-prio-laag { border-left-color: var(--lijn); }
+
+.dev-status-klaar {
+  opacity: 0.6;
+}
+
+.dev-status-klaar:hover,
+.dev-status-klaar:focus-within {
+  opacity: 1;
+}
+
+.dev-segmented {
+  flex-wrap: wrap;
+}
+
+.btn-group-btn.active.dev-prio-btn-hoog { background: var(--brand); border-color: var(--brand); color: var(--steen); }
+.btn-group-btn.active.dev-prio-btn-midden { background: var(--amber); border-color: var(--amber); color: var(--steen); }
+.btn-group-btn.active.dev-prio-btn-laag { background: var(--blauwgrijs-10); border-color: var(--lijn); color: var(--inkt); }
+.btn-group-btn.active.dev-status-btn-open { background: var(--surface); border-color: var(--inkt); color: var(--inkt); }
+.btn-group-btn.active.dev-status-btn-bezig { background: var(--blauwgrijs); border-color: var(--blauwgrijs); color: var(--steen); }
+.btn-group-btn.active.dev-status-btn-klaar { background: var(--mos); border-color: var(--mos); color: var(--steen); }
+
+.dev-project-verlopen {
+  color: var(--brand);
+  font-weight: 500;
+}
+
+.dev-groepen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.dev-groep-titel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--inkt-60);
+}
+
+.dev-groep-bezig .dev-groep-titel { color: var(--blauwgrijs); }
+
+.dev-groep-aantal {
+  padding: 0 var(--space-2);
+  border-radius: 100px;
+  background: var(--blauwgrijs-10);
+  color: var(--inkt-60);
+}
+
+.dev-groep-toggle {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.dev-groep-leeg {
+  margin: 0;
+  font-size: 13px;
+  color: var(--inkt-60);
+}
+
 /* ---------- Floating helpdesk-widget (TroubleshootWidget.jsx) ---------- */
 
 .helpdesk-widget-btn {
