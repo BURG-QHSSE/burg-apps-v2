@@ -211,6 +211,15 @@ function bouwSysteemPrompt(): string {
     '"Loondienst, Interim". Let op: dit is een aparte, stellige uitspraak over wat de kandidaat DAADWERKELIJK ' +
     'DOET/ACCEPTEERT — niet hetzelfde als de twijfelende taal uit de algemene regels hierboven (die blijft ' +
     'sowieso uitgesloten, voor dit veld net zo goed als voor elk ander veld).\n' +
+    '  * AANVULLEN, NIET VERVANGEN: staat er al een voorkeur in Bullhorn en noemt de kandidaat een ANDERE vorm ' +
+    '(bv. huidige waarde "Loondienst", kandidaat "zoekt als ZZP\'er interim/freelance rollen"), stel dan de ' +
+    'COMBINATIE "Loondienst, Interim" voor — NIET alleen de nieuwe vorm. Dat een kandidaat de ene vorm noemt, ' +
+    'betekent niet dat hij/zij de andere niet meer wil.\n' +
+    '  * Vervang de bestaande vorm ALLEEN als de kandidaat EXPLICIET zegt die niet meer te willen (bv. "ik wil ' +
+    'geen loondienst meer", "ik stop met freelancen en zoek alleen nog een vaste baan"). Alleen dan mag je ' +
+    'bv. "Loondienst" -> "Interim" of "Loondienst, Interim" -> "Loondienst" voorstellen.\n' +
+    '  * Staat er al "Loondienst, Interim", stel dan NOOIT een van beide losse waarden voor tenzij die expliciete ' +
+    'uitsluiting er is.\n' +
     '- "status": de meeste gesprekken geven GEEN reden voor een statuswijziging — dit veld moet je het minst ' +
     'snel voorstellen.\n' +
     '  * BELANGRIJKSTE REGEL: het afwijzen van, niet doorkomen bij, of geen interesse hebben in ÉÉN specifieke ' +
