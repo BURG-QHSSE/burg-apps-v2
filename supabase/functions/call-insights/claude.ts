@@ -168,6 +168,10 @@ function bouwSysteemPrompt(): string {
     '- "address" (woonplaats): trigger UITSLUITEND bij taal over de EIGEN woonplaats van de kandidaat ("ik woon ' +
     'in", "ben verhuisd naar", "mijn adres is nu"). Een reisafstand/forenzen-vermelding ("X min. vanuit Y", "te ' +
     'ver vanuit Y") is GEEN aankondiging van een verhuizing, alleen context — sla dat over.\n' +
+    '  * Ook "uit Y", "vanuit Y", "komt uit Y" of een plaatsnaam tussen haakjes achter de kandidaat (bv. "De ' +
+    'kandidaat (uit Y) stemt in met de afspraak") is GEEN woonplaats: dat kan net zo goed de plek zijn waar hij/zij ' +
+    'die dag vandaan reist, werkt of vandaan komt. Alleen een expliciete uitspraak dat de kandidaat er WOONT of ' +
+    'ernaartoe is VERHUISD telt.\n' +
     '- "customText22" (salaris range) is een MAANDSALARIS. Als de kandidaat een JAARSALARIS noemt (bv. "90k", ' +
     '"90.000 euro bruto per jaar", of een kaal bedrag boven de ~20.000 zonder "per maand" erbij — dat is in het ' +
     'Nederlands vrijwel altijd een jaarbedrag), moet je dat EERST exact door 12 delen voordat je een range kiest. ' +
