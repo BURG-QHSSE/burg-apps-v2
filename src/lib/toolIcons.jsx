@@ -86,6 +86,23 @@ const ICONS = {
       <line x1="7" y1="10" x2="13" y2="10" />
     </svg>
   ),
+  'call-insights': (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <line x1="8" y1="9" x2="8" y2="11" />
+      <line x1="11" y1="7" x2="11" y2="13" />
+      <line x1="14" y1="8.5" x2="14" y2="11.5" />
+      <line x1="17" y1="9" x2="17" y2="11" />
+    </svg>
+  ),
+  'matcher-gebruik': (props) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <line x1="3" y1="21" x2="21" y2="21" />
+      <rect x="5" y="12" width="3" height="6" rx="0.5" />
+      <rect x="10.5" y="7" width="3" height="11" rx="0.5" />
+      <rect x="16" y="3" width="3" height="15" rx="0.5" />
+    </svg>
+  ),
 }
 
 /** Rendert het icoon voor `toolId`, of niets als er (nog) geen mapping is. */
